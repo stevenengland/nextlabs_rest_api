@@ -8,8 +8,6 @@ Usage:
     python ./tools/tests.py --short --e2e
 """
 
-import pytest
-
 # ── Example: WireMock container fixture ──
 # from testcontainers.core.container import DockerContainer
 #
@@ -20,9 +18,3 @@ import pytest
 #     container.start()
 #     yield container
 #     container.stop()
-
-
-@pytest.mark.e2e
-def test_example_e2e() -> None:
-    """Example E2E test — replace with real container-backed tests."""
-    assert True

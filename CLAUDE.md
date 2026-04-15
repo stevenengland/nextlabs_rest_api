@@ -22,7 +22,7 @@ python ./tools/tests.py --short --e2e # + E2E (requires Docker)
 ## Code Standards
 
 - **setup.cfg**: NEVER modify without consulting the user
-- No `noqa` or `type: ignore` suppressions
+- No `noqa`, `type: ignore`, or `--no-verify` suppressions
 - Single class or main component per file
 - Google style docstrings
 - TDD: write tests before or alongside implementation
@@ -30,7 +30,7 @@ python ./tools/tests.py --short --e2e # + E2E (requires Docker)
 - When applicable, use available skills to improve output quality:
   - **tdd** skill — use for all new features and bug fixes
   - **clean-code** skill — use when writing or refactoring production code
-- If you commit, write commit messages as a human developer would.
+- If you commit, ALWAYS use conventional commit messages and write them like a human developer would.
 - Default to NO comments - only add comments when the WHY is not obvious.
 
 
