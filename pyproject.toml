@@ -8,10 +8,7 @@ dynamic = ["version"]
 description = "A typed Python SDK wrapping the NextLabs CloudAz Console API and PDP REST API"
 requires-python = ">=3.11"
 dependencies = [
-    # Add runtime dependencies here, e.g.:
-    # "httpx",
-    # "pydantic",
-    # "typer[all]",
+    "httpx>=0.27,<1.0",
 ]
 # ── Uncomment / fill in before publishing to PyPI ──
 license = {text = "MIT"}
