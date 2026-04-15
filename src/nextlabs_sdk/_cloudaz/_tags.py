@@ -5,7 +5,7 @@ import httpx
 
 from nextlabs_sdk._cloudaz._models import Tag, TagType
 from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
 
@@ -66,3 +66,58 @@ class TagService:
             total_pages=total_pages,
             total_records=total_records,
         )
+
+
+class AsyncTagService:
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._client = client
+
+    def list(self, tag_type: TagType) -> AsyncPaginator[Tag]:
+        async def fetch_page(page_no: int) -> PageResult[Tag]:  # noqa: WPS430
+            response = await self._client.get(
+                f"/console/api/v1/config/tags/list/{tag_type.value}",
+                params={"pageNo": page_no},
+            )
+            raw_items, total_pages, total_records = parse_paginated(response)
+            tags = [Tag.model_validate(entry) for entry in raw_items]
+            return PageResult(
+                entries=tags,
+                page_no=page_no,
+                page_size=len(tags),
+                total_pages=total_pages,
+                total_records=total_records,
+            )
+
+        return AsyncPaginator(fetch_page=fetch_page)
+
+    async def get(self, tag_id: int) -> Tag:
+        response = await self._client.get(
+            f"/console/api/v1/config/tags/{tag_id}",
+        )
+        return Tag.model_validate(parse_data(response))
+
+    async def create(
+        self,
+        tag_type: TagType,
+        *,
+        key: str,
+        label: str,
+    ) -> int:
+        payload = {
+            "key": key,
+            "label": label,
+            "type": tag_type.value,
+            "status": "ACTIVE",
+        }
+        response = await self._client.post(
+            f"/console/api/v1/config/tags/add/{tag_type.value}",
+            json=payload,
+        )
+        return parse_data(response)
+
+    async def delete(self, tag_id: int) -> None:
+        response = await self._client.delete(
+            f"/console/api/v1/config/tags/remove/{tag_id}",
+        )
+        raise_for_status(response)
