@@ -26,10 +26,8 @@ class SyncPaginator(Generic[_ItemT]):
     def __init__(
         self,
         fetch_page: Callable[[int], PageResult[_ItemT]],
-        page_size: int = 20,
     ) -> None:
         self._fetch_page = fetch_page
-        self._page_size = page_size
         self._total: int | None = None
 
     @property
@@ -64,10 +62,8 @@ class AsyncPaginator(Generic[_ItemT]):
     def __init__(
         self,
         fetch_page: _AsyncFetchPage[_ItemT],
-        page_size: int = 20,
     ) -> None:
         self._fetch_page = fetch_page
-        self._page_size = page_size
         self._total: int | None = None
 
     @property

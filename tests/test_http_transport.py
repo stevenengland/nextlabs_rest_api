@@ -192,8 +192,11 @@ def test_respects_retry_after_header() -> None:
 # ── Async AsyncRetryTransport tests ──
 
 
-async def _noop_sleep(delay: float) -> None:
-    """No-op coroutine replacing asyncio.sleep in tests."""
+class _ResolvedAwaitable:
+    """Lightweight awaitable that resolves immediately without coroutine warnings."""
+
+    def __await__(self):
+        return iter(())
 
 
 def test_async_retry_succeeds_after_transient_failure() -> None:
@@ -204,7 +207,7 @@ def test_async_retry_succeeds_after_transient_failure() -> None:
     when(wrapped).handle_async_request(request).thenReturn(fail_resp).thenReturn(
         ok_resp
     )
-    when(asyncio).sleep(...).thenAnswer(lambda *args: _noop_sleep(0))
+    when(asyncio).sleep(...).thenAnswer(lambda *args: _ResolvedAwaitable())
 
     transport = _http_transport.AsyncRetryTransport(wrapped=wrapped, max_retries=3)
     response = asyncio.run(transport.handle_async_request(request))
@@ -218,7 +221,7 @@ def test_async_retry_raises_on_exhausted_connect_errors() -> None:
     when(wrapped).handle_async_request(request).thenRaise(
         httpx.ConnectError("connection refused"),
     )
-    when(asyncio).sleep(...).thenAnswer(lambda *args: _noop_sleep(0))
+    when(asyncio).sleep(...).thenAnswer(lambda *args: _ResolvedAwaitable())
 
     transport = _http_transport.AsyncRetryTransport(wrapped=wrapped, max_retries=2)
     with pytest.raises(httpx.ConnectError):

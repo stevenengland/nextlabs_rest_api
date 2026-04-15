@@ -39,7 +39,7 @@ def test_sync_paginator_single_page() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return page
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
     results = list(paginator)
 
     assert results == ["a", "b"]
@@ -55,7 +55,7 @@ def test_sync_paginator_multiple_pages() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return pages[page_no]
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
     results = list(paginator)
 
     assert results == ["a", "b", "c", "d", "e"]
@@ -67,7 +67,7 @@ def test_sync_paginator_empty_results() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return page
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
     results = list(paginator)
 
     assert results == []
@@ -79,7 +79,7 @@ def test_sync_paginator_total_after_first_page() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return page
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
     paginator.first_page()
 
     assert paginator.total == 42
@@ -89,7 +89,7 @@ def test_sync_paginator_total_before_fetch_raises() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return _make_page(["a"])
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
 
     with pytest.raises(RuntimeError):
         getattr(paginator, "total")
@@ -101,7 +101,7 @@ def test_sync_paginator_first_page_returns_page_result() -> None:
     def fetch(page_no: int) -> PageResult[str]:
         return page
 
-    paginator = SyncPaginator(fetch_page=fetch, page_size=2)
+    paginator = SyncPaginator(fetch_page=fetch)
     first = paginator.first_page()
 
     assert first.entries == ["a", "b"]
@@ -118,7 +118,7 @@ def test_async_paginator_multiple_pages() -> None:
         return pages[page_no]
 
     async def collect() -> list[str]:
-        paginator = AsyncPaginator(fetch_page=fetch, page_size=2)
+        paginator = AsyncPaginator(fetch_page=fetch)
         return [each_item async for each_item in paginator]
 
     results = asyncio.run(collect())
@@ -133,7 +133,7 @@ def test_async_paginator_total_after_first_page() -> None:
         return page
 
     async def run() -> int:
-        paginator = AsyncPaginator(fetch_page=fetch, page_size=2)
+        paginator = AsyncPaginator(fetch_page=fetch)
         await paginator.first_page()
         return paginator.total
 
@@ -147,7 +147,7 @@ def test_async_paginator_empty_results() -> None:
         return page
 
     async def collect() -> list[str]:
-        paginator = AsyncPaginator(fetch_page=fetch, page_size=2)
+        paginator = AsyncPaginator(fetch_page=fetch)
         return [each_item async for each_item in paginator]
 
     assert asyncio.run(collect()) == []
