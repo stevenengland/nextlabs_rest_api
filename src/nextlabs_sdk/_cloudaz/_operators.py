@@ -26,3 +26,29 @@ class OperatorService:
     def list_types(self) -> list[str]:
         response = self._client.get("/console/api/v1/config/dataType/types")
         return parse_data(response)
+
+
+class AsyncOperatorService:
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._client = client
+
+    async def list_all(self) -> list[Operator]:
+        response = await self._client.get(
+            "/console/api/v1/config/dataType/list",
+        )
+        raw = parse_data(response)
+        return [Operator.model_validate(entry) for entry in raw]
+
+    async def list_by_type(self, data_type: str) -> list[Operator]:
+        response = await self._client.get(
+            f"/console/api/v1/config/dataType/list/{data_type}",
+        )
+        raw = parse_data(response)
+        return [Operator.model_validate(entry) for entry in raw]
+
+    async def list_types(self) -> list[str]:
+        response = await self._client.get(
+            "/console/api/v1/config/dataType/types",
+        )
+        return parse_data(response)
