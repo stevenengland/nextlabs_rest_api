@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
-from nextlabs_sdk.exceptions import NotFoundError
+from nextlabs_sdk.exceptions import NotFoundError, ServerError
 
 
 def _make_request() -> httpx.Request:
@@ -75,5 +75,5 @@ def test_parse_paginated_raises_on_http_error() -> None:
         json={"message": "Server error"},
         request=_make_request(),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ServerError):
         parse_paginated(response)

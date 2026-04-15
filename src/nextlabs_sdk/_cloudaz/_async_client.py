@@ -10,6 +10,7 @@ from nextlabs_sdk._config import HttpConfig
 
 
 class AsyncCloudAzClient:
+    """Asynchronous client for the NextLabs CloudAz Console API."""
 
     def __init__(
         self,

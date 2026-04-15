@@ -74,22 +74,9 @@ class AsyncTagService:
         self._client = client
 
     def list(self, tag_type: TagType) -> AsyncPaginator[Tag]:
-        async def fetch_page(page_no: int) -> PageResult[Tag]:  # noqa: WPS430
-            response = await self._client.get(
-                f"/console/api/v1/config/tags/list/{tag_type.value}",
-                params={"pageNo": page_no},
-            )
-            raw_items, total_pages, total_records = parse_paginated(response)
-            tags = [Tag.model_validate(entry) for entry in raw_items]
-            return PageResult(
-                entries=tags,
-                page_no=page_no,
-                page_size=len(tags),
-                total_pages=total_pages,
-                total_records=total_records,
-            )
-
-        return AsyncPaginator(fetch_page=fetch_page)
+        return AsyncPaginator(
+            fetch_page=functools.partial(self._fetch_page, tag_type),
+        )
 
     async def get(self, tag_id: int) -> Tag:
         response = await self._client.get(
@@ -121,3 +108,22 @@ class AsyncTagService:
             f"/console/api/v1/config/tags/remove/{tag_id}",
         )
         raise_for_status(response)
+
+    async def _fetch_page(
+        self,
+        tag_type: TagType,
+        page_no: int,
+    ) -> PageResult[Tag]:
+        response = await self._client.get(
+            f"/console/api/v1/config/tags/list/{tag_type.value}",
+            params={"pageNo": page_no},
+        )
+        raw_items, total_pages, total_records = parse_paginated(response)
+        tags = [Tag.model_validate(entry) for entry in raw_items]
+        return PageResult(
+            entries=tags,
+            page_no=page_no,
+            page_size=len(tags),
+            total_pages=total_pages,
+            total_records=total_records,
+        )
