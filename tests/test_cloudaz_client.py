@@ -1,0 +1,112 @@
+from __future__ import annotations
+
+import httpx
+from mockito import mock, when, any as any_value, verify
+
+from nextlabs_sdk import _http_transport as transport_mod
+from nextlabs_sdk._cloudaz._client import CloudAzClient
+from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk._cloudaz._tags import TagService
+from nextlabs_sdk._config import HttpConfig, RetryConfig
+
+
+def test_client_exposes_operator_service() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.operators, OperatorService)
+
+
+def test_client_exposes_tag_service() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.tags, TagService)
+
+
+def test_client_uses_custom_http_config() -> None:
+    mock_client = mock(httpx.Client)
+    custom_retry = RetryConfig(max_retries=5)
+    custom_config = HttpConfig(timeout=60.0, verify_ssl=False, retry=custom_retry)
+
+    when(transport_mod).create_http_client(
+        base_url="https://cloudaz.example.com",
+        auth=any_value(),
+        timeout=60.0,
+        verify_ssl=False,
+        retry=custom_retry,
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+        http_config=custom_config,
+    )
+
+    assert client.operators is not None
+
+
+def test_client_context_manager_closes() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+    when(mock_client).close().thenReturn(None)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+    client.__enter__()
+    client.__exit__(None, None, None)
+
+    verify(mock_client).close()
+
+
+def test_client_default_client_id() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert client.operators is not None
