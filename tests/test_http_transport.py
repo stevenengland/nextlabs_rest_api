@@ -201,7 +201,9 @@ def test_async_retry_succeeds_after_transient_failure() -> None:
     fail_resp = _make_response(503, request)
     ok_resp = _make_response(200, request)
     wrapped = mock(httpx.AsyncBaseTransport)
-    when(wrapped).handle_async_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
+    when(wrapped).handle_async_request(request).thenReturn(fail_resp).thenReturn(
+        ok_resp
+    )
     when(asyncio).sleep(...).thenAnswer(lambda *args: _noop_sleep(0))
 
     transport = _http_transport.AsyncRetryTransport(wrapped=wrapped, max_retries=3)

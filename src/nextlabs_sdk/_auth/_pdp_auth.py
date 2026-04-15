@@ -51,10 +51,7 @@ class PdpAuth(httpx.Auth):
 
     def _has_valid_token(self) -> bool:
         with self._lock:
-            return (
-                self._token is not None
-                and time.monotonic() < self._token_expiry
-            )
+            return self._token is not None and time.monotonic() < self._token_expiry
 
     def _build_token_request(self) -> httpx.Request:
         return httpx.Request(
@@ -87,6 +84,4 @@ class PdpAuth(httpx.Auth):
         with self._lock:
             self._token = body["access_token"]
             expires_in = int(body["expires_in"])
-            self._token_expiry = (
-                time.monotonic() + expires_in - _EXPIRY_SAFETY_MARGIN
-            )
+            self._token_expiry = time.monotonic() + expires_in - _EXPIRY_SAFETY_MARGIN

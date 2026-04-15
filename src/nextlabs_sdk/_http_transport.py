@@ -65,8 +65,12 @@ class RetryTransport(httpx.BaseTransport):
             delay = _calculate_delay(self._base_delay, self._max_delay, attempt)
             _log_retry(self._max_retries, attempt, delay, error=error)
         else:
-            delay = _get_retry_delay(response, self._base_delay, self._max_delay, attempt)
-            _log_retry(self._max_retries, attempt, delay, status_code=response.status_code)
+            delay = _get_retry_delay(
+                response, self._base_delay, self._max_delay, attempt
+            )
+            _log_retry(
+                self._max_retries, attempt, delay, status_code=response.status_code
+            )
         time.sleep(delay)
 
 
@@ -115,8 +119,12 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
             delay = _calculate_delay(self._base_delay, self._max_delay, attempt)
             _log_retry(self._max_retries, attempt, delay, error=error)
         else:
-            delay = _get_retry_delay(response, self._base_delay, self._max_delay, attempt)
-            _log_retry(self._max_retries, attempt, delay, status_code=response.status_code)
+            delay = _get_retry_delay(
+                response, self._base_delay, self._max_delay, attempt
+            )
+            _log_retry(
+                self._max_retries, attempt, delay, status_code=response.status_code
+            )
         await _asyncio.sleep(delay)
 
 
@@ -210,14 +218,11 @@ def _resolve_final(
 
 
 def _is_retryable_status(status_code: int) -> bool:
-    return (
-        status_code == _RATE_LIMIT_STATUS
-        or status_code >= _RETRYABLE_STATUS_FLOOR
-    )
+    return status_code == _RATE_LIMIT_STATUS or status_code >= _RETRYABLE_STATUS_FLOOR
 
 
 def _calculate_delay(base_delay: float, max_delay: float, attempt: int) -> float:
-    exp_delay = min(base_delay * (_BACKOFF_BASE ** attempt), max_delay)
+    exp_delay = min(base_delay * (_BACKOFF_BASE**attempt), max_delay)
     return _RNG.uniform(0, exp_delay)
 
 
