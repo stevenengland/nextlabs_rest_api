@@ -1,0 +1,20 @@
+# Runtime deps come from pyproject.toml via editable install.
+-e .
+black
+bump-my-version
+faker
+isort
+mockito
+mypy
+pre-commit
+pyright
+pytest
+pytest-cov
+pytest-env
+pytest-mock
+pytest-timeout
+testcontainers
+types-PyYAML
+types-requests
+wemake-python-styleguide
+wiremock

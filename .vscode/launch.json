@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        // ── Uncomment and adapt the configurations you need ──
+
+        // Run as module (most common for src-layout packages):
+        // {
+        //     "name": "Run module",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "module": "nextlabs_sdk",
+        //     "cwd": "${workspaceFolder}",
+        //     "console": "integratedTerminal"
+        // },
+
+        // Run module with arguments (e.g., CLI subcommand):
+        // {
+        //     "name": "Run with args",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "module": "nextlabs_sdk",
+        //     "args": ["--help"],
+        //     "cwd": "${workspaceFolder}",
+        //     "console": "integratedTerminal",
+        // },
+
+        // Run a specific test file:
+        // {
+        //     "name": "Debug test",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "module": "pytest",
+        //     "args": ["tests/test_placeholder.py", "-s", "--no-cov"],
+        //     "cwd": "${workspaceFolder}",
+        //     "console": "integratedTerminal"
+        // }
+    ]
+}

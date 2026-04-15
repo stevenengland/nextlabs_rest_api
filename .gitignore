@@ -1,0 +1,15 @@
+data/config/config.toml
+data/database/*
+data/logs/*.log*
+data/logs/*.jsonl*
+data/secrets/*.json
+data/state/*.json
+plans/
+tests/test_temp/
+validation_projects/
+.coverage
+coverage.xml
+htmlcov/
+__pycache__/
+docker/*.tar.gz
+*.egg-info/
