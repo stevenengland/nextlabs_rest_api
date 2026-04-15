@@ -1,3 +1,4 @@
+import os
 import subprocess  # noqa: S404
 import sys
 
@@ -63,6 +64,7 @@ def call_mypy(directory: str) -> None:
     print("** MYPY **")
     cmd_path = "mypy"
     result_subprocess = None
+    env = {**os.environ, "MYPYPATH": "src"}
     try:
         result_subprocess = subprocess.run(  # noqa: S607, S603
             [
@@ -71,6 +73,7 @@ def call_mypy(directory: str) -> None:
                 "--cache-dir=/dev/null",
             ],  # null on windows to disable cache
             check=True,
+            env=env,
         )
 
     except FileNotFoundError:
