@@ -13,4 +13,8 @@ from nextlabs_sdk._http_transport import (
 from nextlabs_sdk._pagination import AsyncPaginator as AsyncPaginator
 from nextlabs_sdk._pagination import PageResult as PageResult
 from nextlabs_sdk._pagination import SyncPaginator as SyncPaginator
+from nextlabs_sdk._cloudaz._async_client import (
+    AsyncCloudAzClient as AsyncCloudAzClient,
+)
+from nextlabs_sdk._cloudaz._client import CloudAzClient as CloudAzClient
 from nextlabs_sdk._version import __version__ as __version__
