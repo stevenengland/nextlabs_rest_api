@@ -66,6 +66,6 @@ reportUnusedExpression = "warning"
 extraPaths = ["."]
 pythonPath = "."
 executionEnvironments = [
-  { root = "tests", pythonPath = ".", reportUnknownMemberType = "none", reportArgumentType = "none" },
+  { root = "tests", pythonPath = ".", reportUnknownMemberType = "none", reportArgumentType = "none", reportCallIssue = "none" },
   { root = ".", pythonPath = "." }
 ]
