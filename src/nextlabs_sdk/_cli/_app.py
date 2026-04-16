@@ -7,6 +7,7 @@ from nextlabs_sdk._cli._auth_cmd import auth_app
 from nextlabs_sdk._cli._component_types_cmd import component_types_app
 from nextlabs_sdk._cli._components_cmd import components_app
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
 from nextlabs_sdk._cli._pdp_cmd import pdp_app
 from nextlabs_sdk._cli._policies_cmd import policies_app
 from nextlabs_sdk._cli._reports_cmd import reports_app
@@ -22,6 +23,7 @@ app.add_typer(audit_logs_app, name="audit-logs")
 app.add_typer(auth_app, name="auth")
 app.add_typer(component_types_app, name="component-types")
 app.add_typer(components_app, name="components")
+app.add_typer(dashboard_app, name="dashboard")
 app.add_typer(pdp_app, name="pdp")
 app.add_typer(policies_app, name="policies")
 app.add_typer(reports_app, name="reports")
