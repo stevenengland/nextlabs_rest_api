@@ -32,6 +32,9 @@ def cli_error_handler(
     def wrapper(*args: ParamSpec_T.args, **kwargs: ParamSpec_T.kwargs) -> ReturnType_T:
         try:
             return func(*args, **kwargs)
+        except typer.BadParameter as exc:
+            print_error(str(exc))
+            raise typer.Exit(code=1) from exc
         except NextLabsError as exc:
             print_error(f"{_error_prefix(exc)}: {exc.message}")
             raise typer.Exit(code=1) from exc
