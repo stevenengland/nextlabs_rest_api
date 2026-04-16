@@ -1,0 +1,381 @@
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+import httpx
+from mockito import mock, when
+
+from nextlabs_sdk._cloudaz._component_models import (
+    Dependency,
+    DeploymentResult,
+)
+from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
+from nextlabs_sdk._cloudaz._policy_models import (
+    ExportOptions,
+    ImportResult,
+    Policy,
+)
+
+BASE_URL = "https://cloudaz.example.com"
+
+
+def _make_request(path: str = "/api") -> httpx.Request:
+    return httpx.Request("GET", f"{BASE_URL}{path}")
+
+
+def _make_envelope(
+    data: object,
+    status_code: int = 200,
+) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        json={
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": data,
+            "pageNo": 0,
+            "pageSize": 10,
+            "totalPages": 1,
+            "totalNoOfRecords": 1,
+            "additionalAttributes": None,
+        },
+        request=_make_request(),
+    )
+
+
+def _make_policy_data() -> dict[str, Any]:
+    return {
+        "id": 82,
+        "name": "Allow IT Ticket Access",
+        "status": "DRAFT",
+        "effectType": "allow",
+        "tags": [],
+        "subjectComponents": [],
+        "toSubjectComponents": [],
+        "actionComponents": [],
+        "fromResourceComponents": [],
+        "toResourceComponents": [],
+        "allowObligations": [],
+        "denyObligations": [],
+        "subPolicyRefs": [],
+        "attributes": [],
+        "deploymentTime": 0,
+        "deployed": False,
+        "revisionCount": 0,
+        "ownerId": 0,
+        "ownerDisplayName": "Administrator",
+        "createdDate": 1713171640267,
+        "modifiedById": 0,
+        "modifiedBy": "Administrator",
+        "lastUpdatedDate": 1713171640252,
+        "authorities": [],
+        "deploymentTargets": [],
+    }
+
+
+def test_async_get_returns_policy() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(data=_make_policy_data())
+    when(client).get("/console/api/v1/policy/mgmt/82").thenReturn(response)
+
+    async def run() -> Policy:
+        return await service.get(82)
+
+    policy = asyncio.run(run())
+    assert policy.id == 82
+    assert policy.name == "Allow IT Ticket Access"
+
+
+def test_async_get_active_returns_policy() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(data=_make_policy_data())
+    when(client).get("/console/api/v1/policy/mgmt/active/82").thenReturn(response)
+
+    async def run() -> Policy:
+        return await service.get_active(82)
+
+    policy = asyncio.run(run())
+    assert policy.id == 82
+
+
+def test_async_create_returns_id() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    payload: dict[str, object] = {
+        "name": "New",
+        "effectType": "allow",
+        "status": "DRAFT",
+    }
+    response = _make_envelope(data=82)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/add",
+        json=payload,
+    ).thenReturn(response)
+
+    assert asyncio.run(service.create(payload)) == 82
+
+
+def test_async_create_sub_policy_returns_id() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    payload: dict[str, object] = {"name": "Sub", "effectType": "deny", "parentId": 82}
+    response = _make_envelope(data=83)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/addSubPolicy",
+        json=payload,
+    ).thenReturn(response)
+
+    assert asyncio.run(service.create_sub_policy(payload)) == 83
+
+
+def test_async_modify_returns_id() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    payload: dict[str, object] = {"id": 82, "name": "Updated", "effectType": "allow"}
+    response = _make_envelope(data=82)
+    when(client).put(
+        "/console/api/v1/policy/mgmt/modify",
+        json=payload,
+    ).thenReturn(response)
+
+    assert asyncio.run(service.modify(payload)) == 82
+
+
+def test_async_delete_succeeds() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = httpx.Response(200, request=_make_request())
+    when(client).delete(
+        "/console/api/v1/policy/mgmt/remove/82",
+    ).thenReturn(response)
+
+    asyncio.run(service.delete(82))
+
+
+def test_async_bulk_delete_succeeds() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = httpx.Response(200, request=_make_request())
+    when(client).request(
+        "DELETE",
+        "/console/api/v1/policy/mgmt/bulkDelete",
+        json=[82, 83],
+    ).thenReturn(response)
+
+    asyncio.run(service.bulk_delete([82, 83]))
+
+
+def test_async_bulk_delete_xacml_succeeds() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = httpx.Response(200, request=_make_request())
+    when(client).request(
+        "DELETE",
+        "/console/api/v1/policy/mgmt/bulkDeleteXacmlPolicy",
+        json=[82, 83],
+    ).thenReturn(response)
+
+    asyncio.run(service.bulk_delete_xacml([82, 83]))
+
+
+def test_async_deploy_returns_results() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    deploy_requests: list[dict[str, object]] = [
+        {"id": 82, "type": "POLICY", "push": True, "deploymentTime": -1},
+    ]
+    response_data = [
+        {
+            "id": 82,
+            "pushResults": [
+                {
+                    "dpsUrl": "https://cc-prod-01:8443/dps",
+                    "success": True,
+                    "message": "Push Successful",
+                },
+            ],
+        },
+    ]
+    response = _make_envelope(data=response_data)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/deploy",
+        json=deploy_requests,
+    ).thenReturn(response)
+
+    async def run() -> list[DeploymentResult]:
+        return await service.deploy(deploy_requests)
+
+    results = asyncio.run(run())
+    assert len(results) == 1
+    assert results[0].push_results[0].success is True
+
+
+def test_async_undeploy_succeeds() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = httpx.Response(200, request=_make_request())
+    when(client).post(
+        "/console/api/v1/policy/mgmt/unDeploy",
+        json=[82],
+    ).thenReturn(response)
+
+    asyncio.run(service.undeploy([82]))
+
+
+def test_async_find_dependencies_returns_list() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    dep_data = [
+        {
+            "id": 50,
+            "type": "COMPONENT",
+            "group": "RESOURCE",
+            "name": "Security Vulnerabilities",
+        },
+    ]
+    response = _make_envelope(data=dep_data)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/findDependencies",
+        json=[82],
+    ).thenReturn(response)
+
+    async def run() -> list[Dependency]:
+        return await service.find_dependencies([82])
+
+    deps = asyncio.run(run())
+    assert len(deps) == 1
+    assert deps[0].name == "Security Vulnerabilities"
+
+
+def test_async_export_returns_filename() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    entities: list[dict[str, object]] = [{"entityType": "POLICY", "id": 82}]
+    response = _make_envelope(data="export_2024.bin")
+    when(client).post(
+        "/console/api/v1/policy/mgmt/export",
+        json=entities,
+        params={"exportMode": "PLAIN"},
+    ).thenReturn(response)
+
+    assert asyncio.run(service.export(entities)) == "export_2024.bin"
+
+
+def test_async_export_all_returns_filename() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(data="export_all.bin")
+    when(client).get(
+        "/console/api/v1/policy/mgmt/exportAll",
+        params={"exportMode": "PLAIN"},
+    ).thenReturn(response)
+
+    assert asyncio.run(service.export_all()) == "export_all.bin"
+
+
+def test_async_export_options_returns_model() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(
+        data={"sandeEnabled": True, "plainTextEnabled": True},
+    )
+    when(client).get(
+        "/console/api/v1/policy/mgmt/exportOptions",
+    ).thenReturn(response)
+
+    async def run() -> ExportOptions:
+        return await service.export_options()
+
+    opts = asyncio.run(run())
+    assert opts.sande_enabled is True
+
+
+def test_async_generate_xacml_returns_filename() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    entities: list[dict[str, object]] = [{"entityType": "POLICY", "id": 82}]
+    response = _make_envelope(data="policies.xacml")
+    when(client).post(
+        "/console/api/v1/policy/mgmt/generateXACML",
+        json=entities,
+    ).thenReturn(response)
+
+    assert asyncio.run(service.generate_xacml(entities)) == "policies.xacml"
+
+
+def test_async_generate_pdf_returns_filename() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    entities: list[dict[str, object]] = [{"entityType": "POLICY", "id": 82}]
+    response = _make_envelope(data="policies.pdf")
+    when(client).post(
+        "/console/api/v1/policy/mgmt/generatePDF",
+        json=entities,
+    ).thenReturn(response)
+
+    assert asyncio.run(service.generate_pdf(entities)) == "policies.pdf"
+
+
+def test_async_import_policies_returns_result() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    files: dict[str, tuple[str, bytes, str]] = {
+        "policyFiles": ("export.bin", b"binary-data", "application/octet-stream"),
+    }
+    import_data: dict[str, Any] = {
+        "total_components": 5,
+        "total_policies": 3,
+        "total_policy_models": 2,
+        "non_blocking_error": False,
+    }
+    response = _make_envelope(data=import_data)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/import",
+        files=files,
+        params={"importMechanism": "PARTIAL", "cleanup": "false"},
+    ).thenReturn(response)
+
+    async def run() -> ImportResult:
+        return await service.import_policies(files)
+
+    result = asyncio.run(run())
+    assert result.total_policies == 3
+
+
+def test_async_import_xacml_returns_result() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    file_tuple = ("policy.xacml", b"<Policy/>", "application/xml")
+    import_data: dict[str, Any] = {
+        "total_components": 0,
+        "total_policies": 1,
+        "total_policy_models": 0,
+        "non_blocking_error": False,
+    }
+    response = _make_envelope(data=import_data)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/importXacmlPolicy",
+        files={"file": file_tuple},
+    ).thenReturn(response)
+
+    async def run() -> ImportResult:
+        return await service.import_xacml(file_tuple)
+
+    result = asyncio.run(run())
+    assert result.total_policies == 1
+
+
+def test_async_validate_obligations_succeeds() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    payload: dict[str, object] = {"policyId": 82, "obligations": []}
+    response = httpx.Response(200, request=_make_request())
+    when(client).post(
+        "/console/api/v1/policy/mgmt/obligation/daeValidate",
+        json=payload,
+    ).thenReturn(response)
+
+    asyncio.run(service.validate_obligations(payload))
