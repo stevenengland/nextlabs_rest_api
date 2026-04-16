@@ -33,7 +33,10 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: "python ./tools/create_venv.py"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
+          python -m pip install -e . --no-deps
 
       - name: Perform code checks
         shell: bash
@@ -78,7 +81,10 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: "python ./tools/create_venv.py"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
+          python -m pip install -e . --no-deps
 
       - name: Perform Unit tests
         shell: bash
