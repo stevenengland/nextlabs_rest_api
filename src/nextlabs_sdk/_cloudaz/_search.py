@@ -57,6 +57,9 @@ class SavedSearch(BaseModel):
     criteria: dict[str, Any] | None = None
 
 
+_STRING_LABEL = "String"
+
+
 def _typed_payload(label: str, **entries: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"type": label}
     out.update(entries)
@@ -76,7 +79,7 @@ class SearchCriteria:
         self._append_entry(
             "type",
             SearchFieldType.MULTI_EXACT_MATCH,
-            _typed_payload("String", value=list(types)),
+            _typed_payload(_STRING_LABEL, value=list(types)),
         )
         return self
 
@@ -84,7 +87,7 @@ class SearchCriteria:
         self._append_entry(
             "tags",
             SearchFieldType.NESTED_MULTI,
-            _typed_payload("String", value=list(tag_keys)),
+            _typed_payload(_STRING_LABEL, value=list(tag_keys)),
             nestedField="tags.key",
         )
         return self
@@ -131,6 +134,38 @@ class SearchCriteria:
     def filter_field(self, field: SearchField) -> SearchCriteria:
         self._fields.append(
             field.model_dump(by_alias=True, exclude_none=True),
+        )
+        return self
+
+    def filter_group(self, group: str) -> SearchCriteria:
+        self._append_entry(
+            "group",
+            SearchFieldType.SINGLE_EXACT_MATCH,
+            _typed_payload(_STRING_LABEL, value=group),
+        )
+        return self
+
+    def filter_status(self, *statuses: str) -> SearchCriteria:
+        self._append_entry(
+            "status",
+            SearchFieldType.MULTI,
+            _typed_payload(_STRING_LABEL, value=list(statuses)),
+        )
+        return self
+
+    def filter_model_type(self, *types: str) -> SearchCriteria:
+        self._append_entry(
+            "modelType",
+            SearchFieldType.MULTI,
+            _typed_payload(_STRING_LABEL, value=list(types)),
+        )
+        return self
+
+    def filter_exact(self, field: str, match: str) -> SearchCriteria:
+        self._append_entry(
+            field,
+            SearchFieldType.SINGLE_EXACT_MATCH,
+            _typed_payload(_STRING_LABEL, value=match),
         )
         return self
 

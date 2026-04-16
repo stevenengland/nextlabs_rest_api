@@ -248,3 +248,78 @@ def test_search_criteria_chaining() -> None:
     assert len(result["criteria"]["sortFields"]) == 1
     assert result["criteria"]["pageNo"] == 0
     assert result["criteria"]["pageSize"] == 10
+
+
+def test_search_criteria_filter_group() -> None:
+    criteria = SearchCriteria().filter_group("RESOURCE")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "group"
+    assert fields[0]["type"] == "SINGLE_EXACT_MATCH"
+    assert fields[0]["value"] == {"type": "String", "value": "RESOURCE"}
+
+
+def test_search_criteria_filter_status_single() -> None:
+    criteria = SearchCriteria().filter_status("APPROVED")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "status"
+    assert fields[0]["type"] == "MULTI"
+    assert fields[0]["value"] == {"type": "String", "value": ["APPROVED"]}
+
+
+def test_search_criteria_filter_status_multiple() -> None:
+    criteria = SearchCriteria().filter_status("DRAFT", "APPROVED")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["value"] == ["DRAFT", "APPROVED"]
+
+
+def test_search_criteria_filter_model_type() -> None:
+    criteria = SearchCriteria().filter_model_type("Support Tickets")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "modelType"
+    assert fields[0]["type"] == "MULTI"
+    assert fields[0]["value"] == {"type": "String", "value": ["Support Tickets"]}
+
+
+def test_search_criteria_filter_model_type_multiple() -> None:
+    criteria = SearchCriteria().filter_model_type("Support Tickets", "Users")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["value"] == ["Support Tickets", "Users"]
+
+
+def test_search_criteria_filter_exact() -> None:
+    criteria = SearchCriteria().filter_exact("empty", "false")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "empty"
+    assert fields[0]["type"] == "SINGLE_EXACT_MATCH"
+    assert fields[0]["value"] == {"type": "String", "value": "false"}
+
+
+def test_search_criteria_filter_exact_has_included_in() -> None:
+    criteria = SearchCriteria().filter_exact("hasIncludedIn", "true")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["field"] == "hasIncludedIn"
+    assert fields[0]["value"]["value"] == "true"
+
+
+def test_search_criteria_component_chaining() -> None:
+    criteria = (
+        SearchCriteria()
+        .filter_group("RESOURCE")
+        .filter_status("APPROVED")
+        .filter_tags("helpdesk")
+        .sort_by("lastUpdatedDate")
+    )
+    result = criteria.to_dict()
+    assert len(result["criteria"]["fields"]) == 3
+    assert len(result["criteria"]["sortFields"]) == 1
