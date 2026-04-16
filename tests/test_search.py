@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from nextlabs_sdk._cloudaz._search import (
     SavedSearch,
     SavedSearchType,
+    SearchCriteria,
     SearchField,
     SearchFieldType,
     SortField,
@@ -116,3 +117,134 @@ def test_saved_search_is_frozen() -> None:
     ss = SavedSearch(id=1, name="test", type=SavedSearchType.POLICY)
     with pytest.raises(ValidationError):
         ss.name = "changed"  # type: ignore[misc]
+
+
+def test_search_criteria_empty() -> None:
+    criteria = SearchCriteria()
+    result = criteria.to_dict()
+    assert result == {
+        "criteria": {
+            "fields": [],
+            "sortFields": [],
+            "pageNo": 0,
+            "pageSize": 20,
+        },
+    }
+
+
+def test_search_criteria_filter_type_single() -> None:
+    criteria = SearchCriteria().filter_type("RESOURCE")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "type"
+    assert fields[0]["type"] == "MULTI_EXACT_MATCH"
+    assert fields[0]["value"] == {"type": "String", "value": ["RESOURCE"]}
+
+
+def test_search_criteria_filter_type_multiple() -> None:
+    criteria = SearchCriteria().filter_type("RESOURCE", "SUBJECT")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["value"] == ["RESOURCE", "SUBJECT"]
+
+
+def test_search_criteria_filter_tags() -> None:
+    criteria = SearchCriteria().filter_tags("helpdesk", "ops")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "tags"
+    assert fields[0]["nestedField"] == "tags.key"
+    assert fields[0]["type"] == "NESTED_MULTI"
+    assert fields[0]["value"] == {"type": "String", "value": ["helpdesk", "ops"]}
+
+
+def test_search_criteria_filter_text_default_fields() -> None:
+    criteria = SearchCriteria().filter_text("support")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "text"
+    assert fields[0]["type"] == "TEXT"
+    assert fields[0]["value"] == {
+        "type": "Text",
+        "fields": ["name", "description"],
+        "value": "support",
+    }
+
+
+def test_search_criteria_filter_text_custom_fields() -> None:
+    criteria = SearchCriteria().filter_text("ticket", fields=["name"])
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["fields"] == ["name"]
+
+
+def test_search_criteria_filter_date_range() -> None:
+    criteria = SearchCriteria().filter_date(
+        "lastUpdatedDate",
+        from_date=1000,
+        to_date=2000,
+    )
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "lastUpdatedDate"
+    assert fields[0]["type"] == "DATE"
+    assert fields[0]["value"]["type"] == "Date"
+    assert fields[0]["value"]["fromDate"] == 1000
+    assert fields[0]["value"]["toDate"] == 2000
+
+
+def test_search_criteria_filter_date_option() -> None:
+    criteria = SearchCriteria().filter_date(
+        "lastUpdatedDate",
+        date_option="PAST_7_DAYS",
+    )
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["dateOption"] == "PAST_7_DAYS"
+
+
+def test_search_criteria_filter_field_raw() -> None:
+    raw_field = SearchField(
+        field="status",
+        type=SearchFieldType.SINGLE_EXACT_MATCH,
+        value={"type": "String", "value": "ACTIVE"},
+    )
+    criteria = SearchCriteria().filter_field(raw_field)
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "status"
+
+
+def test_search_criteria_sort_by() -> None:
+    criteria = SearchCriteria().sort_by("lastUpdatedDate", SortOrder.DESC)
+    result = criteria.to_dict()
+    sort_fields = result["criteria"]["sortFields"]
+    assert len(sort_fields) == 1
+    assert sort_fields[0] == {"field": "lastUpdatedDate", "order": "DESC"}
+
+
+def test_search_criteria_page() -> None:
+    criteria = SearchCriteria().page(3, 50)
+    result = criteria.to_dict()
+    assert result["criteria"]["pageNo"] == 3
+    assert result["criteria"]["pageSize"] == 50
+
+
+def test_search_criteria_chaining() -> None:
+    criteria = (
+        SearchCriteria()
+        .filter_type("RESOURCE")
+        .filter_tags("helpdesk")
+        .sort_by("lastUpdatedDate")
+        .page(0, 10)
+    )
+    result = criteria.to_dict()
+    assert len(result["criteria"]["fields"]) == 2
+    assert len(result["criteria"]["sortFields"]) == 1
+    assert result["criteria"]["pageNo"] == 0
+    assert result["criteria"]["pageSize"] == 10
