@@ -41,7 +41,7 @@ python ./tools/tests.py --short --e2e # + E2E (requires Docker)
 - Key fixtures: `when`, `unstub` (in `tests/conftest.py`)
 
 ## External APIs
-
+When designing the wrapper, refer to the official NextLabs CloudAz API documentation:
 - https://developer.nextlabs.com/#/product/cc/api
 - https://developer.nextlabs.com/#/product/cc/pdpapi
 - https://developer.nextlabs.com/assets/external/cloudaz/api-docs.json
