@@ -83,6 +83,14 @@ class SearchCriteria:
         )
         return self
 
+    def filter_effect_type(self, *effect_types: str) -> SearchCriteria:
+        self._append_entry(
+            "effectType",
+            SearchFieldType.MULTI_EXACT_MATCH,
+            _typed_payload(_STRING_LABEL, value=list(effect_types)),
+        )
+        return self
+
     def filter_tags(self, *tag_keys: str) -> SearchCriteria:
         self._append_entry(
             "tags",

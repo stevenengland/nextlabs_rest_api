@@ -323,3 +323,31 @@ def test_search_criteria_component_chaining() -> None:
     result = criteria.to_dict()
     assert len(result["criteria"]["fields"]) == 3
     assert len(result["criteria"]["sortFields"]) == 1
+
+
+def test_search_criteria_filter_effect_type_single() -> None:
+    criteria = SearchCriteria().filter_effect_type("allow")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert len(fields) == 1
+    assert fields[0]["field"] == "effectType"
+    assert fields[0]["type"] == "MULTI_EXACT_MATCH"
+    assert fields[0]["value"] == {"type": "String", "value": ["allow"]}
+
+
+def test_search_criteria_filter_effect_type_multiple() -> None:
+    criteria = SearchCriteria().filter_effect_type("allow", "deny")
+    result = criteria.to_dict()
+    fields = result["criteria"]["fields"]
+    assert fields[0]["value"]["value"] == ["allow", "deny"]
+
+
+def test_search_criteria_policy_chaining() -> None:
+    criteria = (
+        SearchCriteria()
+        .filter_effect_type("allow")
+        .filter_status("DRAFT")
+        .filter_tags("helpdesk")
+    )
+    result = criteria.to_dict()
+    assert len(result["criteria"]["fields"]) == 3
