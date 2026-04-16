@@ -5,6 +5,8 @@ from mockito import mock, when, any as any_value, verify
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._cloudaz._client import CloudAzClient
+from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchService
+from nextlabs_sdk._cloudaz._component_types import ComponentTypeService
 from nextlabs_sdk._cloudaz._operators import OperatorService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig, RetryConfig
@@ -110,3 +112,41 @@ def test_client_default_client_id() -> None:
     )
 
     assert client.operators is not None
+
+
+def test_client_exposes_component_type_service() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.component_types, ComponentTypeService)
+
+
+def test_client_exposes_component_type_search_service() -> None:
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.component_type_search, ComponentTypeSearchService)

@@ -7,6 +7,8 @@ from mockito import mock, when, any as any_value, verify
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._cloudaz._async_client import AsyncCloudAzClient
+from nextlabs_sdk._cloudaz._component_type_search import AsyncComponentTypeSearchService
+from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
@@ -95,3 +97,41 @@ def test_async_client_context_manager_closes() -> None:
     asyncio.run(run())
 
     verify(mock_client).aclose()
+
+
+def test_async_client_exposes_component_type_service() -> None:
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.component_types, AsyncComponentTypeService)
+
+
+def test_async_client_exposes_component_type_search_service() -> None:
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.component_type_search, AsyncComponentTypeSearchService)

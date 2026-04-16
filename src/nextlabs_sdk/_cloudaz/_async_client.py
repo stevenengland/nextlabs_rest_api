@@ -4,6 +4,8 @@ from types import TracebackType
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+from nextlabs_sdk._cloudaz._component_type_search import AsyncComponentTypeSearchService
+from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
@@ -37,6 +39,8 @@ class AsyncCloudAzClient:
         )
         self._operators = AsyncOperatorService(self._client)
         self._tags = AsyncTagService(self._client)
+        self._component_types = AsyncComponentTypeService(self._client)
+        self._component_type_search = AsyncComponentTypeSearchService(self._client)
 
     @property
     def operators(self) -> AsyncOperatorService:
@@ -45,6 +49,14 @@ class AsyncCloudAzClient:
     @property
     def tags(self) -> AsyncTagService:
         return self._tags
+
+    @property
+    def component_types(self) -> AsyncComponentTypeService:
+        return self._component_types
+
+    @property
+    def component_type_search(self) -> AsyncComponentTypeSearchService:
+        return self._component_type_search
 
     async def close(self) -> None:
         await self._client.aclose()
