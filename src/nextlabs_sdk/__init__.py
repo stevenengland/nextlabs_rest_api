@@ -17,4 +17,6 @@ from nextlabs_sdk._cloudaz._async_client import (
     AsyncCloudAzClient as AsyncCloudAzClient,
 )
 from nextlabs_sdk._cloudaz._client import CloudAzClient as CloudAzClient
+from nextlabs_sdk._pdp._async_client import AsyncPdpClient as AsyncPdpClient
+from nextlabs_sdk._pdp._client import PdpClient as PdpClient
 from nextlabs_sdk._version import __version__ as __version__
