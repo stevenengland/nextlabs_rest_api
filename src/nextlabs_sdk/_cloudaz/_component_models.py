@@ -196,7 +196,7 @@ class Dependency(BaseModel):
 
     id: int  # noqa: WPS125
     type: str  # noqa: WPS125
-    group: str
+    group: str | None = None
     name: str
     folder_path: str | None = Field(default=None, alias="folderPath")
     optional: bool = False

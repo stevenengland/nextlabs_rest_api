@@ -408,6 +408,30 @@ def test_dependency_is_frozen() -> None:
         dep.name = "changed"  # type: ignore[misc]
 
 
+def test_dependency_with_null_group() -> None:
+    raw = {
+        "id": 60,
+        "type": "POLICY",
+        "group": None,
+        "name": "Allow IT Access",
+    }
+    dep = Dependency.model_validate(raw)
+    assert dep.id == 60
+    assert dep.type == "POLICY"
+    assert dep.group is None
+    assert dep.name == "Allow IT Access"
+
+
+def test_dependency_without_group_field() -> None:
+    raw = {
+        "id": 61,
+        "type": "POLICY",
+        "name": "Deny External Access",
+    }
+    dep = Dependency.model_validate(raw)
+    assert dep.group is None
+
+
 def test_component_name_data_from_api_payload() -> None:
     raw = {"policy_model_id": 42, "policy_model_name": "Support Tickets"}
     cnd = ComponentNameData.model_validate(raw)
