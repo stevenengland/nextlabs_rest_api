@@ -24,6 +24,7 @@ from nextlabs_sdk._pdp import (
     Resource,
 )
 from nextlabs_sdk._pdp import Obligation, PolicyRef, ResourceDimension, Subject
+from nextlabs_sdk._pdp import PermissionsRequest, PermissionsResponse
 
 pdp_app = typer.Typer(help="PDP evaluation commands")
 
@@ -70,6 +71,29 @@ def _render_eval_response(response: EvalResponse) -> None:
         _print_obligations(console, evaluation.obligations)
     if evaluation.policy_refs:
         _print_policy_refs(console, evaluation.policy_refs)
+
+
+def _render_permissions_response(response: PermissionsResponse) -> None:
+    console = Console()
+    sections = [
+        ("Allowed", response.allowed),
+        ("Denied", response.denied),
+        ("Don't Care", response.dont_care),
+    ]
+    any_shown = False
+    for label, actions in sections:
+        if not actions:
+            continue
+        any_shown = True
+        console.print(f"\n{label} ({len(actions)}):")
+        table = Table()
+        table.add_column("Action")
+        table.add_column("Obligations")
+        for action_perm in actions:
+            table.add_row(action_perm.name, str(len(action_perm.obligations)))
+        console.print(table)
+    if not any_shown:
+        console.print("No action permissions returned.")
 
 
 @pdp_app.command(name="eval")
@@ -159,3 +183,95 @@ def evaluate(
         render_json(response)
     else:
         _render_eval_response(response)
+
+
+@pdp_app.command()
+@cli_error_handler
+def permissions(
+    ctx: typer.Context,
+    subject_id: Annotated[str, typer.Option("--subject", help="Subject ID")],
+    resource_id: Annotated[str, typer.Option("--resource", help="Resource ID")],
+    resource_type: Annotated[
+        str, typer.Option("--resource-type", help="Resource type")
+    ],
+    application_id: Annotated[
+        str, typer.Option("--application", help="Application ID")
+    ] = "",
+    subject_attrs: Annotated[
+        list[str] | None,
+        typer.Option("--subject-attr", help="Subject attribute (key=value)"),
+    ] = None,
+    resource_attrs: Annotated[
+        list[str] | None,
+        typer.Option("--resource-attr", help="Resource attribute (key=value)"),
+    ] = None,
+    app_attrs: Annotated[
+        list[str] | None,
+        typer.Option("--app-attr", help="Application attribute (key=value)"),
+    ] = None,
+    env_attrs: Annotated[
+        list[str] | None,
+        typer.Option("--env-attr", help="Environment attribute (key=value)"),
+    ] = None,
+    resource_dimension: Annotated[
+        str | None,
+        typer.Option("--resource-dimension", help="Resource dimension (from/to)"),
+    ] = None,
+    resource_nocache: Annotated[
+        bool, typer.Option("--resource-nocache", help="Disable resource caching")
+    ] = False,
+    return_policy_ids: Annotated[
+        bool, typer.Option("--return-policy-ids", help="Include matched policy IDs")
+    ] = False,
+    record_matching_policies: Annotated[
+        bool,
+        typer.Option("--record-matching-policies", help="Record matching policies"),
+    ] = False,
+    wire_format: Annotated[
+        str, typer.Option("--content-type", help="Wire format (json or xml)")
+    ] = "json",
+) -> None:
+    """Get allowed and denied actions for a subject-resource pair."""
+    cli_ctx: CliContext = ctx.obj
+    subject = Subject(
+        id=subject_id,
+        attributes=parse_key_value_attrs(subject_attrs or []),
+    )
+    dimension = None
+    if resource_dimension:
+        try:
+            dimension = ResourceDimension(resource_dimension)
+        except ValueError:
+            raise typer.BadParameter(
+                f"Invalid resource dimension: {resource_dimension}. "
+                f"Must be 'from' or 'to'",
+            )
+    resource = Resource(
+        id=resource_id,
+        type=resource_type,
+        dimension=dimension,
+        nocache=resource_nocache,
+        attributes=parse_key_value_attrs(resource_attrs or []),
+    )
+    application = Application(
+        id=application_id,
+        attributes=parse_key_value_attrs(app_attrs or []),
+    )
+    environment = (
+        Environment(attributes=parse_key_value_attrs(env_attrs)) if env_attrs else None
+    )
+    ct_enum = ContentType.XML if wire_format == "xml" else ContentType.JSON
+    request = PermissionsRequest(
+        subject=subject,
+        resource=resource,
+        application=application,
+        environment=environment,
+        return_policy_ids=return_policy_ids,
+        record_matching_policies=record_matching_policies,
+    )
+    client = _client_factory.make_pdp_client(cli_ctx)
+    response = client.permissions(request, content_type=ct_enum)
+    if cli_ctx.json_output:
+        render_json(response)
+    else:
+        _render_permissions_response(response)

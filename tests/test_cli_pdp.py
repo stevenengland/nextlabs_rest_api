@@ -9,12 +9,14 @@ from typer.testing import CliRunner
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._pdp import (
+    ActionPermission,
     Decision,
     EvalResponse,
     EvalResult,
     Obligation,
     ObligationAttribute,
     PdpClient,
+    PermissionsResponse,
     PolicyRef,
     Status,
 )
@@ -181,3 +183,94 @@ def test_pdp_eval_missing_credentials() -> None:
     )
     assert result.exit_code == 1
     assert "client-secret" in result.output.lower() or "CLIENT_SECRET" in result.output
+
+
+_PERMS_ARGS = (
+    "pdp",
+    "permissions",
+    "--subject",
+    "user1",
+    "--resource",
+    "doc1",
+    "--resource-type",
+    "file",
+)
+
+
+def _make_permissions_response(
+    allowed: list[ActionPermission] | None = None,
+    denied: list[ActionPermission] | None = None,
+    dont_care: list[ActionPermission] | None = None,
+) -> PermissionsResponse:
+    return PermissionsResponse(
+        allowed=allowed or [],
+        denied=denied or [],
+        dont_care=dont_care or [],
+    )
+
+
+def test_pdp_permissions_allowed() -> None:
+    mock_client = _stub_client()
+    response = _make_permissions_response(
+        allowed=[
+            ActionPermission(name="VIEW"),
+            ActionPermission(name="EDIT"),
+        ],
+    )
+    when(mock_client).permissions(...).thenReturn(response)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
+    assert result.exit_code == 0
+    assert "VIEW" in result.output
+    assert "EDIT" in result.output
+    assert "Allowed" in result.output
+
+
+def test_pdp_permissions_denied() -> None:
+    mock_client = _stub_client()
+    response = _make_permissions_response(
+        denied=[ActionPermission(name="DELETE")],
+    )
+    when(mock_client).permissions(...).thenReturn(response)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
+    assert result.exit_code == 0
+    assert "DELETE" in result.output
+    assert "Denied" in result.output
+
+
+def test_pdp_permissions_json() -> None:
+    mock_client = _stub_client()
+    response = _make_permissions_response(
+        allowed=[ActionPermission(name="VIEW")],
+    )
+    when(mock_client).permissions(...).thenReturn(response)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", *_PERMS_ARGS])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["allowed"][0]["name"] == "VIEW"
+
+
+def test_pdp_permissions_with_matching_policies() -> None:
+    mock_client = _stub_client()
+    response = _make_permissions_response(
+        allowed=[
+            ActionPermission(
+                name="VIEW",
+                policy_refs=[PolicyRef(id="AllowAll", version="1.0")],
+            ),
+        ],
+    )
+    when(mock_client).permissions(...).thenReturn(response)
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, *_PERMS_ARGS, "--record-matching-policies"],
+    )
+    assert result.exit_code == 0
+    assert "VIEW" in result.output
+
+
+def test_pdp_permissions_empty() -> None:
+    mock_client = _stub_client()
+    response = _make_permissions_response()
+    when(mock_client).permissions(...).thenReturn(response)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
+    assert result.exit_code == 0
