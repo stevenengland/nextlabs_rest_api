@@ -20,9 +20,12 @@ def parse_json_payload(raw: str) -> dict[str, object]:
     return parsed
 
 
-def parse_key_value_attrs(attrs: list[str]) -> dict[str, str]:
+AttrDict = dict[str, str | int | float | bool]
+
+
+def parse_key_value_attrs(attrs: list[str]) -> AttrDict:
     """Parse a list of 'key=value' strings into a dict."""
-    parsed: dict[str, str] = {}
+    parsed: AttrDict = {}
     for attr in attrs:
         if "=" not in attr:
             print_error(f"Invalid attribute format: {attr}. Expected key=value")
