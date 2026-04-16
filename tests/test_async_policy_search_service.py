@@ -106,6 +106,40 @@ def test_async_search_returns_paginator() -> None:
     assert results[0].name == "Allow IT Ticket Access"
 
 
+def test_async_search_paginates_multiple_pages() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicySearchService(client)
+    criteria = SearchCriteria().filter_effect_type("allow")
+
+    lite1 = _make_policy_lite_data()
+    lite2 = dict(
+        _make_policy_lite_data(),
+        id=83,
+        name="Allow External Access",
+        policyFullName="Allow External Access",
+    )
+
+    page0 = _make_envelope(data=[lite1], total_pages=2, total_records=2)
+    page1 = _make_envelope(data=[lite2], page_no=1, total_pages=2, total_records=2)
+
+    when(client).post(
+        "/console/api/v1/policy/search",
+        json=criteria.page(0).to_dict(),
+    ).thenReturn(page0)
+    when(client).post(
+        "/console/api/v1/policy/search",
+        json=criteria.page(1).to_dict(),
+    ).thenReturn(page1)
+
+    async def run() -> list[PolicyLite]:
+        return [item async for item in service.search(criteria)]
+
+    results = asyncio.run(run())
+    assert len(results) == 2
+    assert results[0].name == "Allow IT Ticket Access"
+    assert results[1].name == "Allow External Access"
+
+
 def test_async_save_search_returns_id() -> None:
     client = mock(httpx.AsyncClient)
     service = AsyncPolicySearchService(client)

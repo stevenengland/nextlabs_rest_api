@@ -10,12 +10,15 @@ from nextlabs_sdk._cloudaz._component_models import (
     Dependency,
     DeploymentResult,
 )
+import pytest
+
 from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
 from nextlabs_sdk._cloudaz._policy_models import (
     ExportOptions,
     ImportResult,
     Policy,
 )
+from nextlabs_sdk.exceptions import NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"
 
@@ -379,3 +382,63 @@ def test_async_validate_obligations_succeeds() -> None:
     ).thenReturn(response)
 
     asyncio.run(service.validate_obligations(payload))
+
+
+def test_async_export_with_sande_mode() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    entities: list[dict[str, object]] = [{"entityType": "POLICY", "id": 82}]
+    response = _make_envelope(data="export_enc.bin")
+    when(client).post(
+        "/console/api/v1/policy/mgmt/export",
+        json=entities,
+        params={"exportMode": "SANDE"},
+    ).thenReturn(response)
+
+    async def run() -> str:
+        return await service.export(entities, export_mode="SANDE")
+
+    assert asyncio.run(run()) == "export_enc.bin"
+
+
+def test_async_import_policies_with_overwrite() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    files: dict[str, tuple[str, bytes, str]] = {
+        "policyFiles": ("export.bin", b"data", "application/octet-stream"),
+    }
+    import_data: dict[str, Any] = {
+        "total_components": 1,
+        "total_policies": 1,
+        "total_policy_models": 1,
+        "non_blocking_error": True,
+    }
+    response = _make_envelope(data=import_data)
+    when(client).post(
+        "/console/api/v1/policy/mgmt/import",
+        files=files,
+        params={"importMechanism": "OVERWRITE", "cleanup": "true"},
+    ).thenReturn(response)
+
+    async def run() -> ImportResult:
+        return await service.import_policies(
+            files,
+            import_mechanism="OVERWRITE",
+            cleanup=True,
+        )
+
+    assert asyncio.run(run()).non_blocking_error is True
+
+
+def test_async_get_raises_not_found() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = httpx.Response(
+        404,
+        json={"message": "Not found"},
+        request=_make_request(),
+    )
+    when(client).get("/console/api/v1/policy/mgmt/999").thenReturn(response)
+
+    with pytest.raises(NotFoundError):
+        asyncio.run(service.get(999))
