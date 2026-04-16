@@ -4,6 +4,7 @@ import typer
 
 from nextlabs_sdk._cli._auth_cmd import auth_app
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._tags_cmd import tags_app
 
 app = typer.Typer(
     name="nextlabs",
@@ -12,6 +13,7 @@ app = typer.Typer(
 )
 
 app.add_typer(auth_app, name="auth")
+app.add_typer(tags_app, name="tags")
 
 
 @app.callback()
