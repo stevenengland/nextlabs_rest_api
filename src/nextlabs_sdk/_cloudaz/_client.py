@@ -4,8 +4,10 @@ from types import TracebackType
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+from nextlabs_sdk._cloudaz._component_search import ComponentSearchService
 from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchService
 from nextlabs_sdk._cloudaz._component_types import ComponentTypeService
+from nextlabs_sdk._cloudaz._components import ComponentService
 from nextlabs_sdk._cloudaz._operators import OperatorService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig
@@ -41,6 +43,8 @@ class CloudAzClient:
         self._tags = TagService(self._client)
         self._component_types = ComponentTypeService(self._client)
         self._component_type_search = ComponentTypeSearchService(self._client)
+        self._components = ComponentService(self._client)
+        self._component_search = ComponentSearchService(self._client)
 
     @property
     def operators(self) -> OperatorService:
@@ -57,6 +61,14 @@ class CloudAzClient:
     @property
     def component_type_search(self) -> ComponentTypeSearchService:
         return self._component_type_search
+
+    @property
+    def components(self) -> ComponentService:
+        return self._components
+
+    @property
+    def component_search(self) -> ComponentSearchService:
+        return self._component_search
 
     def close(self) -> None:
         self._client.close()
