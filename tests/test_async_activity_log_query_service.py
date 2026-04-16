@@ -99,7 +99,7 @@ def test_async_search_returns_paginator() -> None:
         async for entry in paginator:
             entries.append(entry)
 
-    asyncio.get_event_loop().run_until_complete(collect())
+    asyncio.run(collect())
     assert len(entries) == 1
     assert entries[0].row_id == 2
 
@@ -127,7 +127,10 @@ def test_async_get_by_row_id_returns_attributes() -> None:
     response = _make_data_envelope(raw_attrs)
     when(client).get(f"{_BASE_PATH}/42").thenReturn(response)
 
-    attrs = asyncio.get_event_loop().run_until_complete(service.get_by_row_id(42))
+    async def run() -> list[ActivityLogAttribute]:
+        return await service.get_by_row_id(42)
+
+    attrs = asyncio.run(run())
     assert len(attrs) == 2
     assert isinstance(attrs[0], ActivityLogAttribute)
     assert attrs[0].name == "DATE"
@@ -143,7 +146,10 @@ def test_async_export_returns_bytes() -> None:
     response = httpx.Response(200, content=csv_content, request=_make_request())
     when(client).post(f"{_BASE_PATH}/export", json=payload).thenReturn(response)
 
-    result = asyncio.get_event_loop().run_until_complete(service.export(query))
+    async def run() -> bytes:
+        return await service.export(query)
+
+    result = asyncio.run(run())
     assert result == csv_content
 
 
@@ -155,5 +161,8 @@ def test_async_export_by_row_id_returns_bytes() -> None:
     response = httpx.Response(200, content=csv_content, request=_make_request())
     when(client).post(f"{_BASE_PATH}/99/export").thenReturn(response)
 
-    result = asyncio.get_event_loop().run_until_complete(service.export_by_row_id(99))
+    async def run() -> bytes:
+        return await service.export_by_row_id(99)
+
+    result = asyncio.run(run())
     assert result == csv_content
