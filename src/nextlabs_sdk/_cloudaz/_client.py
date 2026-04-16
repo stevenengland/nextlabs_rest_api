@@ -12,6 +12,7 @@ from nextlabs_sdk._cloudaz._operators import OperatorService
 from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
 from nextlabs_sdk._cloudaz._audit_logs import EntityAuditLogService
+from nextlabs_sdk._cloudaz._reports import PolicyActivityReportService
 from nextlabs_sdk._cloudaz._system_config import SystemConfigService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig
@@ -53,6 +54,7 @@ class CloudAzClient:
         self._policy_search = PolicySearchService(self._client)
         self._audit_logs = EntityAuditLogService(self._client)
         self._system_config = SystemConfigService(self._client)
+        self._reports = PolicyActivityReportService(self._client)
 
     @property
     def operators(self) -> OperatorService:
@@ -93,6 +95,10 @@ class CloudAzClient:
     @property
     def system_config(self) -> SystemConfigService:
         return self._system_config
+
+    @property
+    def reports(self) -> PolicyActivityReportService:
+        return self._reports
 
     def close(self) -> None:
         self._client.close()

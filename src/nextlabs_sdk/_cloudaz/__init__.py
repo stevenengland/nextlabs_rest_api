@@ -14,6 +14,72 @@ from nextlabs_sdk._cloudaz._audit_log_models import (
     ExportAuditLogsRequest as ExportAuditLogsRequest,
 )
 from nextlabs_sdk._cloudaz._client import CloudAzClient as CloudAzClient
+from nextlabs_sdk._cloudaz._report_models import (
+    ApplicationUser as ApplicationUser,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    AttributeMapping as AttributeMapping,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    AttributeMappings as AttributeMappings,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    CachedPolicy as CachedPolicy,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    CachedUser as CachedUser,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    DeleteReportsRequest as DeleteReportsRequest,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    EnforcementEntry as EnforcementEntry,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    EnforcementTimeBucket as EnforcementTimeBucket,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    FilterCriteria as FilterCriteria,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    FilterField as FilterField,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    PolicyActivityReport as PolicyActivityReport,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    PolicyActivityReportDetail as PolicyActivityReportDetail,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    PolicyActivityReportRequest as PolicyActivityReportRequest,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    PolicyModelAction as PolicyModelAction,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ReportCriteria as ReportCriteria,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ReportFilterGeneral as ReportFilterGeneral,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ReportFilters as ReportFilters,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ReportOrderBy as ReportOrderBy,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ReportWidget as ReportWidget,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    ResourceActions as ResourceActions,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    UserGroup as UserGroup,
+)
+from nextlabs_sdk._cloudaz._report_models import (
+    WidgetData as WidgetData,
+)
 from nextlabs_sdk._cloudaz._system_config_models import (
     SystemConfig as SystemConfig,
 )
