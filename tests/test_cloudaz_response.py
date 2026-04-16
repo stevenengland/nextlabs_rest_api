@@ -3,7 +3,12 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
+from nextlabs_sdk._cloudaz._response import (
+    parse_data,
+    parse_paginated,
+    parse_raw,
+    parse_reporter_paginated,
+)
 from nextlabs_sdk.exceptions import NotFoundError, ServerError
 
 
@@ -77,3 +82,71 @@ def test_parse_paginated_raises_on_http_error() -> None:
     )
     with pytest.raises(ServerError):
         parse_paginated(response)
+
+
+def test_parse_reporter_paginated_extracts_content() -> None:
+    response = httpx.Response(
+        200,
+        json={
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": {
+                "content": [{"id": 1}, {"id": 2}],
+                "totalPages": 3,
+                "totalElements": 25,
+            },
+        },
+        request=_make_request(),
+    )
+    items, total_pages, total_records = parse_reporter_paginated(response)
+    assert items == [{"id": 1}, {"id": 2}]
+    assert total_pages == 3
+    assert total_records == 25
+
+
+def test_parse_reporter_paginated_defaults_missing_totals() -> None:
+    response = httpx.Response(
+        200,
+        json={
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": {
+                "content": [{"id": 1}],
+            },
+        },
+        request=_make_request(),
+    )
+    items, total_pages, total_records = parse_reporter_paginated(response)
+    assert items == [{"id": 1}]
+    assert total_pages == 1
+    assert total_records == 1
+
+
+def test_parse_reporter_paginated_raises_on_http_error() -> None:
+    response = httpx.Response(
+        500,
+        json={"message": "Server error"},
+        request=_make_request(),
+    )
+    with pytest.raises(ServerError):
+        parse_reporter_paginated(response)
+
+
+def test_parse_raw_returns_json_body() -> None:
+    response = httpx.Response(
+        200,
+        json={"key1": "value1", "key2": "value2"},
+        request=_make_request(),
+    )
+    result = parse_raw(response)
+    assert result == {"key1": "value1", "key2": "value2"}
+
+
+def test_parse_raw_raises_on_http_error() -> None:
+    response = httpx.Response(
+        404,
+        json={"message": "Not found"},
+        request=_make_request(),
+    )
+    with pytest.raises(NotFoundError):
+        parse_raw(response)
