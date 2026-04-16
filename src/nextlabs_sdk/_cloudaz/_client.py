@@ -9,6 +9,8 @@ from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchServ
 from nextlabs_sdk._cloudaz._component_types import ComponentTypeService
 from nextlabs_sdk._cloudaz._components import ComponentService
 from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk._cloudaz._policies import PolicyService
+from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig
 
@@ -45,6 +47,8 @@ class CloudAzClient:
         self._component_type_search = ComponentTypeSearchService(self._client)
         self._components = ComponentService(self._client)
         self._component_search = ComponentSearchService(self._client)
+        self._policies = PolicyService(self._client)
+        self._policy_search = PolicySearchService(self._client)
 
     @property
     def operators(self) -> OperatorService:
@@ -69,6 +73,14 @@ class CloudAzClient:
     @property
     def component_search(self) -> ComponentSearchService:
         return self._component_search
+
+    @property
+    def policies(self) -> PolicyService:
+        return self._policies
+
+    @property
+    def policy_search(self) -> PolicySearchService:
+        return self._policy_search
 
     def close(self) -> None:
         self._client.close()

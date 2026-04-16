@@ -12,6 +12,8 @@ from nextlabs_sdk._cloudaz._component_type_search import AsyncComponentTypeSearc
 from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
 from nextlabs_sdk._cloudaz._components import AsyncComponentService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
+from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
+from nextlabs_sdk._cloudaz._policy_search import AsyncPolicySearchService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
 
@@ -175,3 +177,41 @@ def test_async_client_exposes_component_search_service() -> None:
     )
 
     assert isinstance(client.component_search, AsyncComponentSearchService)
+
+
+def test_async_client_exposes_policy_service() -> None:
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.policies, AsyncPolicyService)
+
+
+def test_async_client_exposes_policy_search_service() -> None:
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.policy_search, AsyncPolicySearchService)
