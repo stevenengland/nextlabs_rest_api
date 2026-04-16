@@ -11,6 +11,8 @@ from nextlabs_sdk._cloudaz._components import AsyncComponentService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
 from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
 from nextlabs_sdk._cloudaz._policy_search import AsyncPolicySearchService
+from nextlabs_sdk._cloudaz._audit_logs import AsyncEntityAuditLogService
+from nextlabs_sdk._cloudaz._system_config import AsyncSystemConfigService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
 
@@ -49,6 +51,8 @@ class AsyncCloudAzClient:
         self._component_search = AsyncComponentSearchService(self._client)
         self._policies = AsyncPolicyService(self._client)
         self._policy_search = AsyncPolicySearchService(self._client)
+        self._audit_logs = AsyncEntityAuditLogService(self._client)
+        self._system_config = AsyncSystemConfigService(self._client)
 
     @property
     def operators(self) -> AsyncOperatorService:
@@ -81,6 +85,14 @@ class AsyncCloudAzClient:
     @property
     def policy_search(self) -> AsyncPolicySearchService:
         return self._policy_search
+
+    @property
+    def audit_logs(self) -> AsyncEntityAuditLogService:
+        return self._audit_logs
+
+    @property
+    def system_config(self) -> AsyncSystemConfigService:
+        return self._system_config
 
     async def close(self) -> None:
         await self._client.aclose()
