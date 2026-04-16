@@ -13,6 +13,7 @@ from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
 from nextlabs_sdk.exceptions import raise_for_status
 
 _PDP_ENDPOINT = "/dpc/authorization/pdp"
+_CONTENT_TYPE = "Content-Type"
 
 
 class PdpClient:
@@ -53,7 +54,7 @@ class PdpClient:
             response = self._client.post(
                 _PDP_ENDPOINT,
                 content=body_bytes,
-                headers={"Content-Type": content_type.value},
+                headers={_CONTENT_TYPE: content_type.value},
             )
             raise_for_status(response)
             return xml_ser.deserialize_eval_response(response.content)
@@ -62,7 +63,7 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={"Content-Type": content_type.value},
+            headers={_CONTENT_TYPE: content_type.value},
         )
         raise_for_status(response)
         return json_ser.deserialize_eval_response(response.json())
@@ -78,7 +79,7 @@ class PdpClient:
             response = self._client.post(
                 _PDP_ENDPOINT,
                 content=body_bytes,
-                headers={"Content-Type": content_type.value},
+                headers={_CONTENT_TYPE: content_type.value},
             )
             raise_for_status(response)
             return xml_ser.deserialize_permissions_response(response.content)
@@ -87,7 +88,7 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={"Content-Type": content_type.value},
+            headers={_CONTENT_TYPE: content_type.value},
         )
         raise_for_status(response)
         return json_ser.deserialize_permissions_response(response.json())

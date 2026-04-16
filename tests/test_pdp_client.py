@@ -126,7 +126,7 @@ def test_evaluate_returns_permit() -> None:
     )
     response = pdp.evaluate(_make_eval_request())
 
-    assert response.result.decision == Decision.PERMIT
+    assert response.first_result.decision == Decision.PERMIT
 
 
 def test_evaluate_posts_to_correct_endpoint() -> None:
@@ -337,4 +337,4 @@ def test_evaluate_with_xml_content_type() -> None:
         content_type=ContentType.XML,
     )
 
-    assert response.result.decision == Decision.PERMIT
+    assert response.first_result.decision == Decision.PERMIT

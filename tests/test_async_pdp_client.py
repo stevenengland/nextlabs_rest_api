@@ -103,7 +103,7 @@ def test_async_evaluate_returns_permit() -> None:
 
     async def run() -> None:
         response = await pdp.evaluate(_make_eval_request())
-        assert response.result.decision == Decision.PERMIT
+        assert response.first_result.decision == Decision.PERMIT
 
     asyncio.run(run())
 
@@ -209,6 +209,6 @@ def test_async_evaluate_with_xml() -> None:
             _make_eval_request(),
             content_type=ContentType.XML,
         )
-        assert response.result.decision == Decision.DENY
+        assert response.first_result.decision == Decision.DENY
 
     asyncio.run(run())

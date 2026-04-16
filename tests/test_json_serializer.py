@@ -18,28 +18,7 @@ from nextlabs_sdk._pdp._request_models import (
     Resource,
     Subject,
 )
-from nextlabs_sdk._pdp._urns import (
-    ACTION_CATEGORY,
-    ACTION_ID,
-    APPLICATION_CATEGORY,
-    APPLICATION_ID,
-    APPLICATION_PREFIX,
-    BOOLEAN_DATATYPE,
-    DOUBLE_DATATYPE,
-    ENVIRONMENT_CATEGORY,
-    ENVIRONMENT_PREFIX,
-    INTEGER_DATATYPE,
-    RESOURCE_CATEGORY,
-    RESOURCE_DIMENSION,
-    RESOURCE_ID,
-    RESOURCE_NOCACHE,
-    RESOURCE_PREFIX,
-    RESOURCE_TYPE,
-    STRING_DATATYPE,
-    SUBJECT_CATEGORY,
-    SUBJECT_ID,
-    SUBJECT_PREFIX,
-)
+from nextlabs_sdk._pdp import _urns as urns
 
 
 def _find_category(body: Any, category_id: str) -> dict[str, object]:
@@ -82,20 +61,20 @@ def test_serialize_minimal_eval_request() -> None:
     body = cast(dict[str, Any], body_raw)
 
     assert body["Request"]["ReturnPolicyIdList"] is False
-    subject_cat = _find_category(body, SUBJECT_CATEGORY)
-    attr = _find_attribute(subject_cat, SUBJECT_ID)
+    subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
+    attr = _find_attribute(subject_cat, urns.SUBJECT_ID)
     assert attr["Value"] == "user@example.com"
-    assert attr["DataType"] == STRING_DATATYPE
+    assert attr["DataType"] == urns.STRING_DATATYPE
 
-    action_cat = _find_category(body, ACTION_CATEGORY)
-    assert _find_attribute(action_cat, ACTION_ID)["Value"] == "VIEW"
+    action_cat = _find_category(body, urns.ACTION_CATEGORY)
+    assert _find_attribute(action_cat, urns.ACTION_ID)["Value"] == "VIEW"
 
-    resource_cat = _find_category(body, RESOURCE_CATEGORY)
-    assert _find_attribute(resource_cat, RESOURCE_ID)["Value"] == "doc:1"
-    assert _find_attribute(resource_cat, RESOURCE_TYPE)["Value"] == "documents"
+    resource_cat = _find_category(body, urns.RESOURCE_CATEGORY)
+    assert _find_attribute(resource_cat, urns.RESOURCE_ID)["Value"] == "doc:1"
+    assert _find_attribute(resource_cat, urns.RESOURCE_TYPE)["Value"] == "documents"
 
-    app_cat = _find_category(body, APPLICATION_CATEGORY)
-    assert _find_attribute(app_cat, APPLICATION_ID)["Value"] == "my-app"
+    app_cat = _find_category(body, urns.APPLICATION_CATEGORY)
+    assert _find_attribute(app_cat, urns.APPLICATION_ID)["Value"] == "my-app"
 
 
 def test_serialize_return_policy_ids() -> None:
@@ -123,15 +102,15 @@ def test_serialize_subject_extra_kwargs_auto_prefixed() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    subject_cat = _find_category(body, SUBJECT_CATEGORY)
+    subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
 
-    dept = _find_attribute(subject_cat, f"{SUBJECT_PREFIX}department")
+    dept = _find_attribute(subject_cat, f"{urns.SUBJECT_PREFIX}department")
     assert dept["Value"] == "IT"
-    assert dept["DataType"] == STRING_DATATYPE
+    assert dept["DataType"] == urns.STRING_DATATYPE
 
-    level = _find_attribute(subject_cat, f"{SUBJECT_PREFIX}level")
+    level = _find_attribute(subject_cat, f"{urns.SUBJECT_PREFIX}level")
     assert level["Value"] == 3
-    assert level["DataType"] == INTEGER_DATATYPE
+    assert level["DataType"] == urns.INTEGER_DATATYPE
 
 
 def test_serialize_subject_attributes_dict_not_prefixed() -> None:
@@ -147,7 +126,7 @@ def test_serialize_subject_attributes_dict_not_prefixed() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    subject_cat = _find_category(body, SUBJECT_CATEGORY)
+    subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
 
     custom = _find_attribute(subject_cat, "custom:vendor:field")
     assert custom["Value"] == "value"
@@ -168,14 +147,14 @@ def test_serialize_resource_dimension_and_nocache() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    resource_cat = _find_category(body, RESOURCE_CATEGORY)
+    resource_cat = _find_category(body, urns.RESOURCE_CATEGORY)
 
-    dim = _find_attribute(resource_cat, RESOURCE_DIMENSION)
+    dim = _find_attribute(resource_cat, urns.RESOURCE_DIMENSION)
     assert dim["Value"] == "from"
 
-    nc = _find_attribute(resource_cat, RESOURCE_NOCACHE)
+    nc = _find_attribute(resource_cat, urns.RESOURCE_NOCACHE)
     assert nc["Value"] is True
-    assert nc["DataType"] == BOOLEAN_DATATYPE
+    assert nc["DataType"] == urns.BOOLEAN_DATATYPE
 
 
 def test_serialize_resource_extra_kwargs_auto_prefixed() -> None:
@@ -188,8 +167,8 @@ def test_serialize_resource_extra_kwargs_auto_prefixed() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    resource_cat = _find_category(body, RESOURCE_CATEGORY)
-    cat_attr = _find_attribute(resource_cat, f"{RESOURCE_PREFIX}category")
+    resource_cat = _find_category(body, urns.RESOURCE_CATEGORY)
+    cat_attr = _find_attribute(resource_cat, f"{urns.RESOURCE_PREFIX}category")
     assert cat_attr["Value"] == "security"
 
 
@@ -203,8 +182,8 @@ def test_serialize_application_extra_kwargs() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    app_cat = _find_category(body, APPLICATION_CATEGORY)
-    ver = _find_attribute(app_cat, f"{APPLICATION_PREFIX}version")
+    app_cat = _find_category(body, urns.APPLICATION_CATEGORY)
+    ver = _find_attribute(app_cat, f"{urns.APPLICATION_PREFIX}version")
     assert ver["Value"] == "2.0"
 
 
@@ -222,10 +201,10 @@ def test_serialize_environment() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    env_cat = _find_category(body, ENVIRONMENT_CATEGORY)
+    env_cat = _find_category(body, urns.ENVIRONMENT_CATEGORY)
     ip_attr = _find_attribute(env_cat, "ip")
     assert ip_attr["Value"] == "10.0.0.1"
-    tod = _find_attribute(env_cat, f"{ENVIRONMENT_PREFIX}time_of_day")
+    tod = _find_attribute(env_cat, f"{urns.ENVIRONMENT_PREFIX}time_of_day")
     assert tod["Value"] == "morning"
 
 
@@ -240,7 +219,7 @@ def test_serialize_no_environment_category_when_none() -> None:
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
     category_ids = [c["CategoryId"] for c in body["Request"]["Category"]]
-    assert ENVIRONMENT_CATEGORY not in category_ids
+    assert urns.ENVIRONMENT_CATEGORY not in category_ids
 
 
 def test_serialize_permissions_request_no_action_category() -> None:
@@ -253,7 +232,7 @@ def test_serialize_permissions_request_no_action_category() -> None:
     body_raw = serialize_permissions_request(request)
     body = cast(dict[str, Any], body_raw)
     category_ids = [c["CategoryId"] for c in body["Request"]["Category"]]
-    assert ACTION_CATEGORY not in category_ids
+    assert urns.ACTION_CATEGORY not in category_ids
 
 
 def test_serialize_permissions_request_with_record_matching() -> None:
@@ -270,8 +249,9 @@ def test_serialize_permissions_request_with_record_matching() -> None:
 
 
 def test_serialize_data_type_float() -> None:
+    expected_score = 9.5
     request = EvalRequest(
-        subject=Subject(id="u", score=9.5),
+        subject=Subject(id="u", score=expected_score),
         action=Action(id="a"),
         resource=Resource(id="r", type="t"),
         application=Application(id="app"),
@@ -279,10 +259,10 @@ def test_serialize_data_type_float() -> None:
 
     body_raw = serialize_eval_request(request)
     body = cast(dict[str, Any], body_raw)
-    subject_cat = _find_category(body, SUBJECT_CATEGORY)
-    score = _find_attribute(subject_cat, f"{SUBJECT_PREFIX}score")
-    assert score["Value"] == 9.5
-    assert score["DataType"] == DOUBLE_DATATYPE
+    subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
+    score = _find_attribute(subject_cat, f"{urns.SUBJECT_PREFIX}score")
+    assert score["Value"] == expected_score
+    assert score["DataType"] == urns.DOUBLE_DATATYPE
 
 
 def test_deserialize_permit_eval_response() -> None:
@@ -301,11 +281,11 @@ def test_deserialize_permit_eval_response() -> None:
 
     response = deserialize_eval_response(cast(dict[str, object], body))
 
-    assert len(response.results) == 1
-    assert response.result.decision == Decision.PERMIT
-    assert response.result.status.code == "urn:oasis:names:tc:xacml:1.0:status:ok"
-    assert response.result.obligations == []
-    assert response.result.policy_refs == []
+    assert len(response.eval_results) == 1
+    assert response.first_result.decision == Decision.PERMIT
+    assert response.first_result.status.code == "urn:oasis:names:tc:xacml:1.0:status:ok"
+    assert response.first_result.obligations == []
+    assert response.first_result.policy_refs == []
 
 
 def test_deserialize_deny_with_obligations() -> None:
@@ -335,11 +315,11 @@ def test_deserialize_deny_with_obligations() -> None:
 
     response = deserialize_eval_response(cast(dict[str, object], body))
 
-    assert response.result.decision == Decision.DENY
-    assert len(response.result.obligations) == 1
-    assert response.result.obligations[0].id == "log-access"
-    assert response.result.obligations[0].attributes[0].id == "log-level"
-    assert response.result.obligations[0].attributes[0].value == "warn"
+    assert response.first_result.decision == Decision.DENY
+    assert len(response.first_result.obligations) == 1
+    assert response.first_result.obligations[0].id == "log-access"
+    assert response.first_result.obligations[0].attributes[0].id == "log-level"
+    assert response.first_result.obligations[0].attributes[0].attr_value == "warn"
 
 
 def test_deserialize_with_policy_refs() -> None:
@@ -362,10 +342,10 @@ def test_deserialize_with_policy_refs() -> None:
 
     response = deserialize_eval_response(cast(dict[str, object], body))
 
-    assert len(response.result.policy_refs) == 2
-    assert response.result.policy_refs[0].id == "allow-view"
-    assert response.result.policy_refs[0].version == "1.0"
-    assert response.result.policy_refs[1].id == "allow-edit"
+    assert len(response.first_result.policy_refs) == 2
+    assert response.first_result.policy_refs[0].id == "allow-view"
+    assert response.first_result.policy_refs[0].version == "1.0"
+    assert response.first_result.policy_refs[1].id == "allow-edit"
 
 
 def test_deserialize_with_status_message() -> None:
@@ -383,8 +363,8 @@ def test_deserialize_with_status_message() -> None:
 
     response = deserialize_eval_response(cast(dict[str, object], body))
 
-    assert response.result.decision == Decision.INDETERMINATE
-    assert response.result.status.message == "Policy evaluation error"
+    assert response.first_result.decision == Decision.INDETERMINATE
+    assert response.first_result.status.message == "Policy evaluation error"
 
 
 def test_deserialize_permissions_response() -> None:

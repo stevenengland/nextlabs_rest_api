@@ -4,9 +4,11 @@ from pydantic import BaseModel, ConfigDict
 
 from nextlabs_sdk._pdp._enums import ResourceDimension
 
+_EXTRA_CONFIG = ConfigDict(frozen=True, extra="allow")
+
 
 class Subject(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+    model_config = _EXTRA_CONFIG
 
     id: str
     attributes: dict[str, str | int | float | bool] = {}
@@ -17,7 +19,7 @@ class Subject(BaseModel):
 
 
 class Resource(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+    model_config = _EXTRA_CONFIG
 
     id: str
     type: str
@@ -37,14 +39,14 @@ class Action(BaseModel):
 
 
 class Application(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+    model_config = _EXTRA_CONFIG
 
     id: str
     attributes: dict[str, str | int | float | bool] = {}
 
 
 class Environment(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="allow")
+    model_config = _EXTRA_CONFIG
 
     attributes: dict[str, str | int | float | bool] = {}
 

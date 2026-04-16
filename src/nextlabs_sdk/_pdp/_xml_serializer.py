@@ -53,7 +53,7 @@ def serialize_permissions_request(request: PermissionsRequest) -> bytes:
 def deserialize_eval_response(body: bytes) -> EvalResponse:
     root = DefusedET.fromstring(body)
     parsed = [_parse_result(result_el) for result_el in root.findall(_ns("Result"))]
-    return EvalResponse(results=parsed)
+    return EvalResponse(eval_results=parsed)
 
 
 def deserialize_permissions_response(body: bytes) -> PermissionsResponse:
@@ -105,7 +105,7 @@ def _make_request_element(return_policy_ids: bool) -> ET.Element:
 def _add_attributes_element(
     parent: ET.Element,
     category: str,
-    attrs: list[tuple[str, str | int | float | bool]],
+    attrs: list[AttrPair],
 ) -> None:
     attrs_el = ET.SubElement(parent, _ns("Attributes"))
     attrs_el.set("Category", category)
@@ -117,19 +117,41 @@ def _add_attributes_element(
         value_el.text = _serialize_value(attr_value)
 
 
+AttrValue = str | int | float | bool
+AttrPair = tuple[str, AttrValue]
+
+
+def _coerce_attr(raw: object) -> AttrValue:
+    if isinstance(raw, (str, int, float, bool)):
+        return raw
+    return str(raw)
+
+
+def _collect_extra_attrs(
+    model_extra: dict[str, object] | None,
+    prefix: str,
+) -> list[AttrPair]:
+    collected: list[AttrPair] = []
+    for key, attr_value in (model_extra or {}).items():
+        collected.append((f"{prefix}{key}", _coerce_attr(attr_value)))
+    return collected
+
+
+def _collect_dict_attrs(
+    attributes: dict[str, str | int | float | bool],
+) -> list[AttrPair]:
+    return list(attributes.items())
+
+
 def _add_subject(parent: ET.Element, subject: Subject) -> None:
-    attrs: list[tuple[str, str | int | float | bool]] = [
-        (urns.SUBJECT_ID, subject.id),
-    ]
-    for key, attr_value in (subject.model_extra or {}).items():
-        attrs.append((f"{urns.SUBJECT_PREFIX}{key}", attr_value))
-    for key, attr_value in subject.attributes.items():
-        attrs.append((key, attr_value))
+    attrs: list[AttrPair] = [(urns.SUBJECT_ID, subject.id)]
+    attrs.extend(_collect_extra_attrs(subject.model_extra, urns.SUBJECT_PREFIX))
+    attrs.extend(_collect_dict_attrs(subject.attributes))
     _add_attributes_element(parent, urns.SUBJECT_CATEGORY, attrs)
 
 
 def _add_resource(parent: ET.Element, resource: Resource) -> None:
-    attrs: list[tuple[str, str | int | float | bool]] = [
+    attrs: list[AttrPair] = [
         (urns.RESOURCE_ID, resource.id),
         (urns.RESOURCE_TYPE, resource.type),
     ]
@@ -137,10 +159,8 @@ def _add_resource(parent: ET.Element, resource: Resource) -> None:
         attrs.append((urns.RESOURCE_DIMENSION, resource.dimension.value))
     if resource.nocache:
         attrs.append((urns.RESOURCE_NOCACHE, True))
-    for key, attr_value in (resource.model_extra or {}).items():
-        attrs.append((f"{urns.RESOURCE_PREFIX}{key}", attr_value))
-    for key, attr_value in resource.attributes.items():
-        attrs.append((key, attr_value))
+    attrs.extend(_collect_extra_attrs(resource.model_extra, urns.RESOURCE_PREFIX))
+    attrs.extend(_collect_dict_attrs(resource.attributes))
     _add_attributes_element(parent, urns.RESOURCE_CATEGORY, attrs)
 
 
@@ -153,13 +173,11 @@ def _add_action(parent: ET.Element, action: Action) -> None:
 
 
 def _add_application(parent: ET.Element, application: Application) -> None:
-    attrs: list[tuple[str, str | int | float | bool]] = [
-        (urns.APPLICATION_ID, application.id),
-    ]
-    for key, attr_value in (application.model_extra or {}).items():
-        attrs.append((f"{urns.APPLICATION_PREFIX}{key}", attr_value))
-    for key, attr_value in application.attributes.items():
-        attrs.append((key, attr_value))
+    attrs: list[AttrPair] = [(urns.APPLICATION_ID, application.id)]
+    attrs.extend(
+        _collect_extra_attrs(application.model_extra, urns.APPLICATION_PREFIX),
+    )
+    attrs.extend(_collect_dict_attrs(application.attributes))
     _add_attributes_element(parent, urns.APPLICATION_CATEGORY, attrs)
 
 
@@ -167,11 +185,11 @@ def _add_environment(
     parent: ET.Element,
     environment: Environment,
 ) -> None:
-    attrs: list[tuple[str, str | int | float | bool]] = []
-    for key, attr_value in (environment.model_extra or {}).items():
-        attrs.append((f"{urns.ENVIRONMENT_PREFIX}{key}", attr_value))
-    for key, attr_value in environment.attributes.items():
-        attrs.append((key, attr_value))
+    attrs: list[AttrPair] = []
+    attrs.extend(
+        _collect_extra_attrs(environment.model_extra, urns.ENVIRONMENT_PREFIX),
+    )
+    attrs.extend(_collect_dict_attrs(environment.attributes))
     _add_attributes_element(parent, urns.ENVIRONMENT_CATEGORY, attrs)
 
 
@@ -227,7 +245,7 @@ def _parse_obligations_xml(result_el: ET.Element) -> list[Obligation]:
         attrs = [
             ObligationAttribute(
                 id=aa_el.get("AttributeId", ""),
-                value=(aa_el.text or "").strip(),
+                attr_value=(aa_el.text or "").strip(),
             )
             for aa_el in obl_el.findall(_ns("AttributeAssignment"))
         ]

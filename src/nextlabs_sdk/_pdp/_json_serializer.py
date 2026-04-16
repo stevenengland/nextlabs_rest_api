@@ -22,6 +22,35 @@ from nextlabs_sdk._pdp._response_models import (
     Status,
 )
 
+_CATEGORY_ID_KEY = "CategoryId"
+_ATTRIBUTE_KEY = "Attribute"
+_VALUE_KEY = "Value"
+
+AttrValue = str | int | float | bool
+AttrPair = tuple[str, AttrValue]
+
+
+def _collect_extra_attrs(
+    model_extra: dict[str, object] | None,
+    prefix: str,
+) -> list[AttrPair]:
+    collected: list[AttrPair] = []
+    for key, extra_val in (model_extra or {}).items():
+        collected.append((f"{prefix}{key}", _coerce_attr(extra_val)))
+    return collected
+
+
+def _coerce_attr(raw: object) -> AttrValue:
+    if isinstance(raw, (str, int, float, bool)):
+        return raw
+    return str(raw)
+
+
+def _collect_dict_attrs(
+    attributes: dict[str, str | int | float | bool],
+) -> list[AttrPair]:
+    return list(attributes.items())
+
 
 def serialize_eval_request(request: EvalRequest) -> dict[str, object]:
     categories: list[dict[str, object]] = [
@@ -65,10 +94,10 @@ def serialize_permissions_request(
 
 def deserialize_eval_response(body: dict[str, object]) -> EvalResponse:
     raw_results = body["Response"]
-    result_list: list[EvalResult] = []
+    parsed: list[EvalResult] = []
     if isinstance(raw_results, list):
-        result_list = [_parse_eval_result(item) for item in raw_results]
-    return EvalResponse(results=result_list)
+        parsed = [_parse_eval_result(entry) for entry in raw_results]
+    return EvalResponse(eval_results=parsed)
 
 
 def deserialize_permissions_response(
@@ -113,76 +142,59 @@ def deserialize_permissions_response(
 
 
 def _serialize_subject(subject: Subject) -> dict[str, object]:
-    attrs: list[dict[str, object]] = [
-        _make_attr(urns.SUBJECT_ID, subject.id),
-    ]
-    for key, attr_value in (subject.model_extra or {}).items():
-        attrs.append(
-            _make_attr(f"{urns.SUBJECT_PREFIX}{key}", attr_value),
-        )
-    for key, attr_value in subject.attributes.items():
-        attrs.append(_make_attr(key, attr_value))
-    return {
-        "CategoryId": urns.SUBJECT_CATEGORY,
-        "Attribute": attrs,
-    }
+    pairs: list[AttrPair] = [(urns.SUBJECT_ID, subject.id)]
+    pairs.extend(_collect_extra_attrs(subject.model_extra, urns.SUBJECT_PREFIX))
+    pairs.extend(_collect_dict_attrs(subject.attributes))
+    return _build_category(urns.SUBJECT_CATEGORY, pairs)
 
 
 def _serialize_resource(resource: Resource) -> dict[str, object]:
-    attrs: list[dict[str, object]] = [
-        _make_attr(urns.RESOURCE_ID, resource.id),
-        _make_attr(urns.RESOURCE_TYPE, resource.type),
+    pairs: list[AttrPair] = [
+        (urns.RESOURCE_ID, resource.id),
+        (urns.RESOURCE_TYPE, resource.type),
     ]
     if resource.dimension is not None:
-        attrs.append(_make_attr(urns.RESOURCE_DIMENSION, resource.dimension.value))
+        pairs.append((urns.RESOURCE_DIMENSION, resource.dimension.value))
     if resource.nocache:
-        attrs.append(_make_attr(urns.RESOURCE_NOCACHE, True))
-    for key, attr_value in (resource.model_extra or {}).items():
-        attrs.append(
-            _make_attr(f"{urns.RESOURCE_PREFIX}{key}", attr_value),
-        )
-    for key, attr_value in resource.attributes.items():
-        attrs.append(_make_attr(key, attr_value))
-    return {
-        "CategoryId": urns.RESOURCE_CATEGORY,
-        "Attribute": attrs,
-    }
+        pairs.append((urns.RESOURCE_NOCACHE, True))
+    pairs.extend(_collect_extra_attrs(resource.model_extra, urns.RESOURCE_PREFIX))
+    pairs.extend(_collect_dict_attrs(resource.attributes))
+    return _build_category(urns.RESOURCE_CATEGORY, pairs)
 
 
 def _serialize_action(action: Action) -> dict[str, object]:
-    return {
-        "CategoryId": urns.ACTION_CATEGORY,
-        "Attribute": [_make_attr(urns.ACTION_ID, action.id)],
-    }
+    return _build_category(
+        urns.ACTION_CATEGORY,
+        [(urns.ACTION_ID, action.id)],
+    )
 
 
 def _serialize_application(application: Application) -> dict[str, object]:
-    attrs: list[dict[str, object]] = [
-        _make_attr(urns.APPLICATION_ID, application.id),
-    ]
-    for key, attr_value in (application.model_extra or {}).items():
-        attrs.append(
-            _make_attr(f"{urns.APPLICATION_PREFIX}{key}", attr_value),
-        )
-    for key, attr_value in application.attributes.items():
-        attrs.append(_make_attr(key, attr_value))
-    return {
-        "CategoryId": urns.APPLICATION_CATEGORY,
-        "Attribute": attrs,
-    }
+    pairs: list[AttrPair] = [(urns.APPLICATION_ID, application.id)]
+    pairs.extend(
+        _collect_extra_attrs(application.model_extra, urns.APPLICATION_PREFIX),
+    )
+    pairs.extend(_collect_dict_attrs(application.attributes))
+    return _build_category(urns.APPLICATION_CATEGORY, pairs)
 
 
 def _serialize_environment(environment: Environment) -> dict[str, object]:
-    attrs: list[dict[str, object]] = []
-    for key, attr_value in (environment.model_extra or {}).items():
-        attrs.append(
-            _make_attr(f"{urns.ENVIRONMENT_PREFIX}{key}", attr_value),
-        )
-    for key, attr_value in environment.attributes.items():
-        attrs.append(_make_attr(key, attr_value))
+    pairs: list[AttrPair] = []
+    pairs.extend(
+        _collect_extra_attrs(environment.model_extra, urns.ENVIRONMENT_PREFIX),
+    )
+    pairs.extend(_collect_dict_attrs(environment.attributes))
+    return _build_category(urns.ENVIRONMENT_CATEGORY, pairs)
+
+
+def _build_category(
+    category_id: str,
+    pairs: list[AttrPair],
+) -> dict[str, object]:
+    attrs = [_make_attr(attr_id, attr_val) for attr_id, attr_val in pairs]
     return {
-        "CategoryId": urns.ENVIRONMENT_CATEGORY,
-        "Attribute": attrs,
+        _CATEGORY_ID_KEY: category_id,
+        _ATTRIBUTE_KEY: attrs,
     }
 
 
@@ -192,7 +204,7 @@ def _make_attr(
 ) -> dict[str, object]:
     return {
         "AttributeId": attr_id,
-        "Value": attr_value,
+        _VALUE_KEY: attr_value,
         "DataType": _infer_datatype(attr_value),
     }
 
@@ -244,9 +256,12 @@ def _parse_obligations(
         if not isinstance(raw, dict):
             continue
         attrs = [
-            ObligationAttribute(id=str(a["AttributeId"]), value=str(a["Value"]))
-            for a in raw.get("AttributeAssignment", [])
-            if isinstance(a, dict)
+            ObligationAttribute(
+                id=str(assignment["AttributeId"]),
+                attr_value=str(assignment[_VALUE_KEY]),
+            )
+            for assignment in raw.get("AttributeAssignment", [])
+            if isinstance(assignment, dict)
         ]
         obligations.append(Obligation(id=str(raw["Id"]), attributes=attrs))
     return obligations
@@ -259,17 +274,17 @@ def _parse_policy_refs(raw: dict[str, object]) -> list[PolicyRef]:
     raw_refs = policy_id_list.get("PolicyIdReference", [])
     if not isinstance(raw_refs, list):
         return []
-    result: list[PolicyRef] = []
+    refs: list[PolicyRef] = []
     for ref_item in raw_refs:
         if not isinstance(ref_item, dict):
             continue
-        result.append(
+        refs.append(
             PolicyRef(
                 id=str(ref_item["Id"]),
                 version=str(ref_item.get("Version", "")),
             ),
         )
-    return result
+    return refs
 
 
 def _extract_action_name(raw_result: dict[str, object]) -> str:
@@ -279,13 +294,16 @@ def _extract_action_name(raw_result: dict[str, object]) -> str:
     for category in categories:
         if not isinstance(category, dict):
             continue
-        if category["CategoryId"] == urns.ACTION_CATEGORY:
-            attributes = category.get("Attribute", [])
-            if not isinstance(attributes, list):
-                continue
-            for attr in attributes:
-                if not isinstance(attr, dict):
-                    continue
-                if attr["AttributeId"] == urns.ACTION_ID:
-                    return str(attr["Value"])
+        if category[_CATEGORY_ID_KEY] == urns.ACTION_CATEGORY:
+            return _find_action_id_in_category(category)
+    return ""
+
+
+def _find_action_id_in_category(category: dict[str, object]) -> str:
+    attributes = category.get(_ATTRIBUTE_KEY, [])
+    if not isinstance(attributes, list):
+        return ""
+    for attr in attributes:
+        if isinstance(attr, dict) and attr["AttributeId"] == urns.ACTION_ID:
+            return str(attr[_VALUE_KEY])
     return ""

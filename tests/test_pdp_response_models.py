@@ -29,17 +29,17 @@ def test_status_with_message() -> None:
 
 
 def test_obligation_attribute() -> None:
-    attr = ObligationAttribute(id="log-level", value="info")
+    attr = ObligationAttribute(id="log-level", attr_value="info")
 
     assert attr.id == "log-level"
-    assert attr.value == "info"
+    assert attr.attr_value == "info"
 
 
 def test_obligation_with_attributes() -> None:
     obligation = Obligation(
         id="obligation-1",
         attributes=[
-            ObligationAttribute(id="key", value="val"),
+            ObligationAttribute(id="key", attr_value="val"),
         ],
     )
 
@@ -85,7 +85,7 @@ def test_eval_result_with_obligations_and_policies() -> None:
         obligations=[
             Obligation(
                 id="log",
-                attributes=[ObligationAttribute(id="level", value="warn")],
+                attributes=[ObligationAttribute(id="level", attr_value="warn")],
             ),
         ],
         policy_refs=[PolicyRef(id="deny-policy", version="2.0")],
@@ -100,7 +100,7 @@ def test_eval_result_with_obligations_and_policies() -> None:
 
 def test_eval_response_result_property() -> None:
     response = EvalResponse(
-        results=[
+        eval_results=[
             EvalResult(
                 decision=Decision.PERMIT,
                 status=Status(code="ok"),
@@ -108,14 +108,14 @@ def test_eval_response_result_property() -> None:
         ],
     )
 
-    assert response.result.decision == Decision.PERMIT
+    assert response.first_result.decision == Decision.PERMIT
 
 
 def test_eval_response_result_raises_on_empty() -> None:
-    response = EvalResponse(results=[])
+    response = EvalResponse(eval_results=[])
 
     with pytest.raises(IndexError):
-        response.result
+        response.first_result
 
 
 def test_action_permission() -> None:

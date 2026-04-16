@@ -125,8 +125,8 @@ def test_xml_deserialize_permit_response() -> None:
 
     response = deserialize_eval_response(xml_data)
 
-    assert len(response.results) == 1
-    assert response.result.decision == Decision.PERMIT
+    assert len(response.eval_results) == 1
+    assert response.first_result.decision == Decision.PERMIT
 
 
 def test_xml_deserialize_with_obligations() -> None:
@@ -149,10 +149,10 @@ def test_xml_deserialize_with_obligations() -> None:
 
     response = deserialize_eval_response(xml_data)
 
-    assert response.result.decision == Decision.DENY
-    assert len(response.result.obligations) == 1
-    assert response.result.obligations[0].id == "log"
-    assert response.result.obligations[0].attributes[0].value == "warn"
+    assert response.first_result.decision == Decision.DENY
+    assert len(response.first_result.obligations) == 1
+    assert response.first_result.obligations[0].id == "log"
+    assert response.first_result.obligations[0].attributes[0].attr_value == "warn"
 
 
 def test_xml_deserialize_permissions_response() -> None:

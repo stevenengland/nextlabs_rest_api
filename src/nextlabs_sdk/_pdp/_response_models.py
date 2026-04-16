@@ -16,7 +16,7 @@ class ObligationAttribute(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: str
-    value: str
+    attr_value: str
 
 
 class Obligation(BaseModel):
@@ -45,11 +45,11 @@ class EvalResult(BaseModel):
 class EvalResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    results: list[EvalResult]
+    eval_results: list[EvalResult]
 
     @property
-    def result(self) -> EvalResult:
-        return self.results[0]
+    def first_result(self) -> EvalResult:
+        return self.eval_results[0]
 
 
 class ActionPermission(BaseModel):

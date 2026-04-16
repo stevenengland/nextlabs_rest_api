@@ -50,7 +50,7 @@ def test_subject_is_frozen() -> None:
     subject = Subject(id="user@example.com")
 
     with pytest.raises(ValidationError):
-        subject.id = "other"  # type: ignore[misc]
+        subject.id = "other"
 
 
 def test_resource_with_all_fields() -> None:
