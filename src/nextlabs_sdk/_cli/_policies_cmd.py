@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json as json_mod
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +9,7 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
+from nextlabs_sdk._cli._parsing import parse_json_payload
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
 policies_app = typer.Typer(help="Policy management commands")
@@ -21,18 +21,6 @@ _POLICY_COLUMNS = (
     ColumnDef("Effect", "effect_type"),
     ColumnDef("Deployed", "deployed"),
 )
-
-
-def _parse_json(raw: str) -> dict[str, object]:
-    try:
-        parsed = json_mod.loads(raw)
-    except json_mod.JSONDecodeError:
-        print_error("Invalid JSON payload")
-        raise typer.Exit(code=1)
-    if not isinstance(parsed, dict):
-        print_error("JSON payload must be an object")
-        raise typer.Exit(code=1)
-    return parsed
 
 
 @policies_app.command()
@@ -56,7 +44,7 @@ def create(
 ) -> None:
     """Create a policy from a JSON payload."""
     cli_ctx: CliContext = ctx.obj
-    payload = _parse_json(raw_body)
+    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     policy_id = client.policies.create(payload)
     print_success(f"Created policy with ID {policy_id}")
@@ -70,7 +58,7 @@ def modify(
 ) -> None:
     """Modify a policy from a JSON payload."""
     cli_ctx: CliContext = ctx.obj
-    payload = _parse_json(raw_body)
+    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.policies.modify(payload)
     print_success("Modified policy")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json as json_mod
 from typing import Annotated
 
 import typer
@@ -8,7 +7,8 @@ import typer
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
+from nextlabs_sdk._cli._output import ColumnDef, print_success, render
+from nextlabs_sdk._cli._parsing import parse_json_payload
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
 components_app = typer.Typer(help="Component management commands")
@@ -28,18 +28,6 @@ _COMP_SEARCH_COLUMNS = (
     ColumnDef("Status", "status"),
     ColumnDef("Deployed", "deployed"),
 )
-
-
-def _parse_json(raw: str) -> dict[str, object]:
-    try:
-        parsed = json_mod.loads(raw)
-    except json_mod.JSONDecodeError:
-        print_error("Invalid JSON payload")
-        raise typer.Exit(code=1)
-    if not isinstance(parsed, dict):
-        print_error("JSON payload must be an object")
-        raise typer.Exit(code=1)
-    return parsed
 
 
 @components_app.command()
@@ -63,7 +51,7 @@ def create(
 ) -> None:
     """Create a component from a JSON payload."""
     cli_ctx: CliContext = ctx.obj
-    payload = _parse_json(raw_body)
+    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     comp_id = client.components.create(payload)
     print_success(f"Created component with ID {comp_id}")
@@ -77,7 +65,7 @@ def modify(
 ) -> None:
     """Modify a component from a JSON payload."""
     cli_ctx: CliContext = ctx.obj
-    payload = _parse_json(raw_body)
+    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.components.modify(payload)
     print_success("Modified component")
