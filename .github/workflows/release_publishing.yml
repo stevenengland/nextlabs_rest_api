@@ -1,0 +1,159 @@
+name: Release Publishing
+
+"on":
+  push:
+    branches:
+      - main
+
+jobs:
+  detect-and-tag-new-version:
+    name: Detect and tag new version.
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      new_tag: ${{ steps.check-for-new-version.outputs.tag }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if there is a parent commit
+        id: check-parent-commit
+        run: |
+          echo "sha=$(git rev-parse --verify --quiet HEAD^)" >> $GITHUB_OUTPUT
+
+      - name: Detect and tag new version
+        id: check-for-new-version
+        if: steps.check-parent-commit.outputs.sha
+        uses: salsify/action-detect-and-tag-new-version@v2
+        with:
+          tag-template: "{VERSION}"
+          version-command: |
+            cat version.txt
+
+  build-and-upload-artifacts:
+    name: Build and upload artifacts
+    needs: [detect-and-tag-new-version]
+    runs-on: ubuntu-latest
+    env:
+      FORCE_COLOR: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create test release version in the current version file
+        if: ${{ contains(github.event.head_commit.message, '[test-release]') && needs.detect-and-tag-new-version.outputs.new_tag == '' }}
+        run: |
+          response=$(curl -s https://test.pypi.org/pypi/nextlabs-sdk/json || echo "{}")
+          latest_previous_version=$(echo $response | jq --raw-output "select(.releases != null) | .releases | keys_unsorted | last")
+          new_version=''
+          if [ -z "$latest_previous_version" ]; then
+            echo "Package not found on Test PyPI."
+            exit 1
+          fi
+
+          echo "Latest version on PyPI: ->$latest_previous_version"
+
+          if [[ $latest_previous_version =~ ^([0-9]+\.[0-9]+\.[0-9]+)\.dev([0-9]+)$ ]]; then
+            base_version=${BASH_REMATCH[1]}
+            dev_num=${BASH_REMATCH[2]}
+            new_dev_num=$((dev_num + 1))
+            new_version="${base_version}.dev${new_dev_num}"
+          elif [[ $latest_previous_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            new_version="${latest_previous_version}.dev1"
+          else
+            echo "Error: Invalid version format" >&2
+            exit 1
+          fi
+
+          echo "New version: $new_version"
+          echo "$new_version" > version.txt
+
+      - name: Install dependencies
+        shell: bash
+        run: "python ./tools/create_venv.py"
+
+      - name: Perform code checks
+        shell: bash
+        run: "python ./tools/checks.py"
+
+      - name: Perform Unit and Coverage tests
+        shell: bash
+        run: "python ./tools/tests.py --short"
+
+      - name: Perform E2E tests
+        shell: bash
+        run: "python ./tools/tests.py --short --e2e"
+
+      - name: Build and check package
+        shell: bash
+        run: "python ./tools/build.py"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi-test-publish:
+    name: Publish to Test PyPI
+    needs: [build-and-upload-artifacts, detect-and-tag-new-version]
+    if: ${{ contains(github.event.head_commit.message, '[test-release]') || needs.detect-and-tag-new-version.outputs.new_tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish distribution to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi-publish:
+    name: Publish to PyPI
+    needs: [detect-and-tag-new-version, build-and-upload-artifacts]
+    if: needs.detect-and-tag-new-version.outputs.new_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  release-notes:
+    name: Create release notes
+    needs: [detect-and-tag-new-version, pypi-publish]
+    if: needs.detect-and-tag-new-version.outputs.new_tag != ''
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release notes
+        uses: release-drafter/release-drafter@v6
+        with:
+          publish: ${{ needs.detect-and-tag-new-version.outputs.new_tag != '' }}
+          tag: ${{ needs.detect-and-tag-new-version.outputs.new_tag }}
+          config-name: release_drafting_config.yml
+          disable-autolabeler: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_GENERAL_RW }}

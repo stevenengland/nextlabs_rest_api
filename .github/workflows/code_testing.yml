@@ -1,0 +1,85 @@
+name: Code Testing
+
+"on":
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 7 * * 5"
+
+env:
+  FORCE_COLOR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check_and_coverage:
+    if: contains(github.event.pull_request.title, '[skip ci]') == false
+    name: "Check and Coverage Test"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        shell: bash
+        run: "python ./tools/create_venv.py"
+
+      - name: Perform code checks
+        shell: bash
+        run: "python ./tools/checks.py"
+
+      - name: Perform Unit and Coverage tests
+        shell: bash
+        run: "python ./tools/tests.py --short"
+
+      - name: Perform E2E tests
+        shell: bash
+        run: "python ./tools/tests.py --short --e2e"
+
+      - name: Build and check package
+        shell: bash
+        run: "python ./tools/build.py"
+
+  platform_testing:
+    if: contains(github.event.pull_request.title, '[skip ci]') == false
+    needs: check_and_coverage
+    strategy:
+      matrix:
+        py:
+          - "3.11"
+          - "3.12"
+          - "3.13"
+        os:
+          - "ubuntu-latest"
+          - "windows-latest"
+          - "macos-latest"
+
+    name: "Python: ${{ matrix.py }} on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+
+      - name: Install dependencies
+        shell: bash
+        run: "python ./tools/create_venv.py"
+
+      - name: Perform Unit tests
+        shell: bash
+        run: "python ./tools/tests.py --short --no-cov"

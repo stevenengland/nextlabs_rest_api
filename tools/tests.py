@@ -3,6 +3,21 @@ import subprocess  # noqa: S404
 import sys
 
 
+def _extract_no_cov(argv: list[str]) -> bool:
+    """Extract standalone --no-cov flag from argv.
+
+    Args:
+        argv: Command-line arguments (mutated to remove --no-cov).
+
+    Returns:
+        True if --no-cov was present.
+    """
+    if "--no-cov" in argv:
+        argv.remove("--no-cov")
+        return True
+    return False
+
+
 def _build_marker_args(argv: list[str]) -> list[str]:
     """Build pytest marker arguments based on --e2e flag.
 
@@ -15,11 +30,15 @@ def _build_marker_args(argv: list[str]) -> list[str]:
     Returns:
         Extra pytest arguments for marker selection.
     """
+    no_cov = _extract_no_cov(argv)
     if "--e2e" in argv:
         argv.remove("--e2e")
         os.environ["E2E_COLLECT"] = "1"
         return ["-m", "e2e", "--no-cov"]
-    return ["-m", "not e2e"]
+    extra = ["-m", "not e2e"]
+    if no_cov:
+        extra.append("--no-cov")
+    return extra
 
 
 def _is_relevant_pytest_line(line: str) -> bool:
