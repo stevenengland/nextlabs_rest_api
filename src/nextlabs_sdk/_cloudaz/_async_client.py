@@ -11,7 +11,9 @@ from nextlabs_sdk._cloudaz._components import AsyncComponentService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
 from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
 from nextlabs_sdk._cloudaz._policy_search import AsyncPolicySearchService
+from nextlabs_sdk._cloudaz._activity_logs_service import AsyncReportActivityLogService
 from nextlabs_sdk._cloudaz._audit_logs import AsyncEntityAuditLogService
+from nextlabs_sdk._cloudaz._dashboard import AsyncDashboardService
 from nextlabs_sdk._cloudaz._reports import AsyncPolicyActivityReportService
 from nextlabs_sdk._cloudaz._system_config import AsyncSystemConfigService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
@@ -55,6 +57,8 @@ class AsyncCloudAzClient:
         self._audit_logs = AsyncEntityAuditLogService(self._client)
         self._system_config = AsyncSystemConfigService(self._client)
         self._reports = AsyncPolicyActivityReportService(self._client)
+        self._activity_logs = AsyncReportActivityLogService(self._client)
+        self._dashboard = AsyncDashboardService(self._client)
 
     @property
     def operators(self) -> AsyncOperatorService:
@@ -99,6 +103,14 @@ class AsyncCloudAzClient:
     @property
     def reports(self) -> AsyncPolicyActivityReportService:
         return self._reports
+
+    @property
+    def activity_logs(self) -> AsyncReportActivityLogService:
+        return self._activity_logs
+
+    @property
+    def dashboard(self) -> AsyncDashboardService:
+        return self._dashboard
 
     async def close(self) -> None:
         await self._client.aclose()

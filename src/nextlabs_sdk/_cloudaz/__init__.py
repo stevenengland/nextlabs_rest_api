@@ -83,3 +83,24 @@ from nextlabs_sdk._cloudaz._report_models import (
 from nextlabs_sdk._cloudaz._system_config_models import (
     SystemConfig as SystemConfig,
 )
+from nextlabs_sdk._cloudaz._activity_log_query_models import (
+    ActivityLogAttribute as ActivityLogAttribute,
+)
+from nextlabs_sdk._cloudaz._activity_log_query_models import (
+    ActivityLogQuery as ActivityLogQuery,
+)
+from nextlabs_sdk._cloudaz._dashboard_models import (
+    ActivityByEntity as ActivityByEntity,
+)
+from nextlabs_sdk._cloudaz._dashboard_models import (
+    Alert as Alert,
+)
+from nextlabs_sdk._cloudaz._dashboard_models import (
+    MonitorTagAlert as MonitorTagAlert,
+)
+from nextlabs_sdk._cloudaz._dashboard_models import (
+    PolicyActivity as PolicyActivity,
+)
+from nextlabs_sdk._cloudaz._dashboard_models import (
+    PolicyDayBucket as PolicyDayBucket,
+)
