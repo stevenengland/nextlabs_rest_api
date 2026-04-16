@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from nextlabs_sdk._cli._audit_logs_cmd import audit_logs_app
 from nextlabs_sdk._cli._auth_cmd import auth_app
 from nextlabs_sdk._cli._component_types_cmd import component_types_app
 from nextlabs_sdk._cli._components_cmd import components_app
@@ -17,6 +18,7 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 
+app.add_typer(audit_logs_app, name="audit-logs")
 app.add_typer(auth_app, name="auth")
 app.add_typer(component_types_app, name="component-types")
 app.add_typer(components_app, name="components")
