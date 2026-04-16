@@ -8,9 +8,19 @@ from nextlabs_sdk._cloudaz._component_models import (
     Component,
     ComponentCondition,
     ComponentGroupType,
+    ComponentLite,
+    ComponentNameData,
+    ComponentNameEntry,
+)
+from nextlabs_sdk._cloudaz._component_models import (
     ComponentStatus,
+    Dependency,
     DeploymentRequestInfo,
+    DeploymentResult,
     PolicyModelRef,
+    PredicateAttribute,
+    PredicateData,
+    PushResult,
 )
 from nextlabs_sdk._cloudaz._models import TagType
 
@@ -233,3 +243,197 @@ def test_component_rejects_invalid_type() -> None:
         Component.model_validate(
             {"id": 1, "name": "X", "type": "INVALID", "status": "DRAFT"},
         )
+
+
+def _make_component_lite_data() -> dict[str, object]:
+    return {
+        "id": 101,
+        "folderId": -1,
+        "folderPath": None,
+        "name": "Security Vulnerabilities",
+        "lowercase_name": "security vulnerabilities",
+        "fullName": "RESOURCE/Security Vulnerabilities",
+        "description": "Tickets categorized as security vulnerabilities.",
+        "status": "APPROVED",
+        "modelId": 42,
+        "modelType": "Support Tickets",
+        "group": "RESOURCE",
+        "lastUpdatedDate": 1713173211329,
+        "createdDate": 1713171640267,
+        "ownerId": 0,
+        "ownerDisplayName": "Administrator",
+        "modifiedById": 0,
+        "modifiedBy": "Administrator",
+        "hasIncludedIn": False,
+        "hasSubComponents": False,
+        "predicateData": {
+            "operator": None,
+            "referenceIds": [],
+            "attributes": [
+                {"lhs": "category", "operator": "=", "rhs": "security"},
+            ],
+            "actions": [],
+        },
+        "tags": [
+            {
+                "id": 21,
+                "key": "helpdesk_component",
+                "label": "Helpdesk_Component",
+                "type": "COMPONENT_TAG",
+                "status": "ACTIVE",
+            },
+        ],
+        "includedInComponents": [],
+        "subComponents": [],
+        "deploymentTime": 1713173211332,
+        "deployed": True,
+        "actionType": "DE",
+        "revisionCount": 1,
+        "empty": False,
+        "version": 2,
+        "authorities": [{"authority": "VIEW_COMPONENT"}],
+        "preCreated": False,
+        "referedInPolicies": False,
+        "deploymentPending": False,
+    }
+
+
+def test_predicate_attribute_from_api_payload() -> None:
+    raw = {"lhs": "category", "operator": "=", "rhs": "security"}
+    pa = PredicateAttribute.model_validate(raw)
+    assert pa.lhs == "category"
+    assert pa.operator == "="
+    assert pa.rhs == "security"
+
+
+def test_predicate_data_from_api_payload() -> None:
+    raw = {
+        "operator": None,
+        "referenceIds": [1, 2],
+        "attributes": [{"lhs": "x", "operator": "=", "rhs": "y"}],
+        "actions": ["VIEW"],
+    }
+    pd = PredicateData.model_validate(raw)
+    assert pd.operator is None
+    assert pd.reference_ids == [1, 2]
+    assert len(pd.attributes) == 1
+    assert pd.actions == ["VIEW"]
+
+
+def test_component_lite_from_api_payload() -> None:
+    raw = _make_component_lite_data()
+    cl = ComponentLite.model_validate(raw)
+    assert cl.id == 101
+    assert cl.name == "Security Vulnerabilities"
+    assert cl.full_name == "RESOURCE/Security Vulnerabilities"
+    assert cl.status == ComponentStatus.APPROVED
+    assert cl.model_id == 42
+    assert cl.model_type == "Support Tickets"
+    assert cl.group == ComponentGroupType.RESOURCE
+    assert cl.deployed is True
+    assert cl.predicate_data is not None
+    assert len(cl.predicate_data.attributes) == 1
+    assert cl.predicate_data.attributes[0].lhs == "category"
+    assert len(cl.tags) == 1
+    assert cl.referred_in_policies is False
+    assert cl.empty is False
+
+
+def test_component_lite_is_frozen() -> None:
+    cl = ComponentLite.model_validate(_make_component_lite_data())
+    with pytest.raises(ValidationError):
+        cl.name = "changed"  # type: ignore[misc]
+
+
+def test_push_result_from_api_payload() -> None:
+    raw = {
+        "dpsUrl": "https://cc-prod-01:8443/dps",
+        "success": True,
+        "message": "Push Successful",
+    }
+    pr = PushResult.model_validate(raw)
+    assert pr.dps_url == "https://cc-prod-01:8443/dps"
+    assert pr.success is True
+    assert pr.message == "Push Successful"
+
+
+def test_deployment_result_from_api_payload() -> None:
+    raw = {
+        "id": 101,
+        "pushResults": [
+            {
+                "dpsUrl": "https://cc-prod-01:8443/dps",
+                "success": True,
+                "message": "Push Successful",
+            },
+        ],
+    }
+    dr = DeploymentResult.model_validate(raw)
+    assert dr.id == 101
+    assert len(dr.push_results) == 1
+    assert dr.push_results[0].success is True
+
+
+def test_deployment_result_empty_push_results() -> None:
+    raw = {"id": 101}
+    dr = DeploymentResult.model_validate(raw)
+    assert dr.push_results == []
+
+
+def test_dependency_from_api_payload() -> None:
+    raw = {
+        "id": 50,
+        "type": "COMPONENT",
+        "group": "RESOURCE",
+        "name": "Security Vulnerabilities",
+        "folderPath": None,
+        "optional": False,
+        "provided": True,
+        "sub": False,
+    }
+    dep = Dependency.model_validate(raw)
+    assert dep.id == 50
+    assert dep.type == "COMPONENT"
+    assert dep.group == "RESOURCE"
+    assert dep.name == "Security Vulnerabilities"
+    assert dep.provided is True
+    assert dep.sub is False
+
+
+def test_dependency_is_frozen() -> None:
+    dep = Dependency.model_validate(
+        {"id": 1, "type": "COMPONENT", "group": "RESOURCE", "name": "X"},
+    )
+    with pytest.raises(ValidationError):
+        dep.name = "changed"  # type: ignore[misc]
+
+
+def test_component_name_data_from_api_payload() -> None:
+    raw = {"policy_model_id": 42, "policy_model_name": "Support Tickets"}
+    cnd = ComponentNameData.model_validate(raw)
+    assert cnd.policy_model_id == 42
+    assert cnd.policy_model_name == "Support Tickets"
+
+
+def test_component_name_entry_from_api_payload() -> None:
+    raw = {
+        "id": 101,
+        "name": "Security Vulnerabilities",
+        "empty": False,
+        "status": "APPROVED",
+        "data": {"policy_model_id": 42, "policy_model_name": "Support Tickets"},
+    }
+    cne = ComponentNameEntry.model_validate(raw)
+    assert cne.id == 101
+    assert cne.name == "Security Vulnerabilities"
+    assert cne.empty is False
+    assert cne.status == "APPROVED"
+    assert cne.data is not None
+    assert cne.data.policy_model_id == 42
+
+
+def test_component_name_entry_without_data() -> None:
+    raw = {"id": 1, "name": "X", "status": "DRAFT"}
+    cne = ComponentNameEntry.model_validate(raw)
+    assert cne.data is None
+    assert cne.empty is False

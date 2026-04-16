@@ -107,3 +107,115 @@ class Component(BaseModel):
         alias="hasInactiveSubComponets",
     )
     deployment_pending: bool = Field(default=False, alias="deploymentPending")
+
+
+class PredicateAttribute(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    lhs: str
+    operator: str
+    rhs: str
+
+
+class PredicateData(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    operator: str | None = None
+    reference_ids: list[int] = Field(default_factory=list, alias="referenceIds")
+    attributes: list[PredicateAttribute] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=list)
+
+
+class ComponentLite(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    folder_id: int = Field(default=-1, alias="folderId")
+    folder_path: str | None = Field(default=None, alias="folderPath")
+    name: str
+    lowercase_name: str = Field(default="", alias="lowercase_name")
+    full_name: str = Field(default="", alias="fullName")
+    description: str | None = None
+    status: ComponentStatus
+    model_id: int = Field(alias="modelId")
+    model_type: str = Field(alias="modelType")
+    group: ComponentGroupType
+    last_updated_date: int = Field(alias="lastUpdatedDate")
+    created_date: int = Field(alias="createdDate")
+    owner_id: int = Field(default=0, alias="ownerId")
+    owner_display_name: str = Field(default="", alias="ownerDisplayName")
+    modified_by_id: int = Field(default=0, alias="modifiedById")
+    modified_by: str = Field(default="", alias="modifiedBy")
+    has_included_in: bool = Field(default=False, alias="hasIncludedIn")
+    has_sub_components: bool = Field(default=False, alias="hasSubComponents")
+    predicate_data: PredicateData | None = Field(
+        default=None,
+        alias="predicateData",
+    )
+    tags: list[Tag] = Field(default_factory=list)
+    included_in_components: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="includedInComponents",
+    )
+    sub_components: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="subComponents",
+    )
+    deployment_time: int = Field(default=0, alias="deploymentTime")
+    deployed: bool = False
+    action_type: str | None = Field(default=None, alias="actionType")
+    revision_count: int = Field(default=0, alias="revisionCount")
+    empty: bool = False
+    version: int | None = None
+    authorities: list[Authority] = Field(default_factory=list)
+    pre_created: bool = Field(default=False, alias="preCreated")
+    referred_in_policies: bool = Field(default=False, alias="referedInPolicies")
+    deployment_pending: bool = Field(default=False, alias="deploymentPending")
+
+
+class PushResult(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    dps_url: str = Field(alias="dpsUrl")
+    success: bool
+    message: str
+
+
+class DeploymentResult(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    push_results: list[PushResult] = Field(
+        default_factory=list,
+        alias="pushResults",
+    )
+
+
+class Dependency(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    type: str  # noqa: WPS125
+    group: str
+    name: str
+    folder_path: str | None = Field(default=None, alias="folderPath")
+    optional: bool = False
+    provided: bool = False
+    sub: bool = False
+
+
+class ComponentNameData(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    policy_model_id: int
+    policy_model_name: str
+
+
+class ComponentNameEntry(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    name: str
+    empty: bool = False
+    status: str
+    data: ComponentNameData | None = None  # noqa: WPS110
