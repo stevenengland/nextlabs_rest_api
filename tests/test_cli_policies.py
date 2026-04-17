@@ -300,6 +300,42 @@ def test_policies_undeploy_success(stub: tuple[Any, Any, Any]) -> None:
     assert "Undeployed" in result.output
 
 
+def test_policies_get_wide_includes_extra_columns(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).get(82).thenReturn(_make_policy())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "policies", "get", "82"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "Created" in result.output
+    assert "Updated" in result.output
+    assert "Owner" in result.output
+    assert "Version" in result.output
+
+
+def test_policies_search_wide_includes_extra_columns(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    _, _, mock_search = stub
+    when(mock_search).search(...).thenReturn(_make_paginator([_make_policy_lite()]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "policies", "search"],
+        env={"COLUMNS": "200"},
+    )
+
+    assert result.exit_code == 0
+    assert "Created" in result.output
+    assert "Updated" in result.output
+    assert "Owner" in result.output
+    assert "Version" in result.output
+
+
 # --- export / import ---
 
 
