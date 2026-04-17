@@ -116,7 +116,7 @@ def test_pdp_eval_decision(
 def test_pdp_eval_json() -> None:
     mock_client = _stub_client()
     when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", *_EVAL_ARGS])
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_EVAL_ARGS])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["eval_results"][0]["decision"] == "Permit"
@@ -241,7 +241,7 @@ def test_pdp_permissions_json() -> None:
             allowed=[ActionPermission(name="VIEW")],
         )
     )
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", *_PERMS_ARGS])
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_PERMS_ARGS])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["allowed"][0]["name"] == "VIEW"

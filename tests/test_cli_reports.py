@@ -117,7 +117,7 @@ def _make_widget_data() -> WidgetData:
 def _invoke(json_mode: bool, tail: list[str]) -> Any:
     args = list(_GLOBAL_OPTS)
     if json_mode:
-        args.append("--json")
+        args.extend(["--output", "json"])
     args.extend(tail)
     return runner.invoke(app, args)
 
@@ -199,7 +199,7 @@ def test_reports_list(
 # ── get ──
 
 
-def test_reports_get_json_output(mock_reports: Any):
+def test_reports_get_json_format(mock_reports: Any):
     when(mock_reports).get(1).thenReturn(_make_report_detail())
 
     result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "get", "1"])
@@ -292,7 +292,7 @@ def test_reports_delete_success(mock_reports: Any):
 # ── widgets ──
 
 
-def test_reports_widgets_json_output(mock_reports: Any):
+def test_reports_widgets_json_format(mock_reports: Any):
     when(mock_reports).get_widgets(1).thenReturn(_make_widget_data())
 
     result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "widgets", "1"])

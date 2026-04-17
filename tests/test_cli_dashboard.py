@@ -69,7 +69,14 @@ def _make_policy_activity() -> PolicyActivity:
 def _invoke(command: str, *, json_flag: bool, extra: tuple[str, ...] = ()) -> Any:
     prefix = (
         *_GLOBAL_OPTS,
-        *(("--json",) if json_flag else ()),
+        *(
+            (
+                "--output",
+                "json",
+            )
+            if json_flag
+            else ()
+        ),
         "dashboard",
         command,
         *_DATE_OPTS,
@@ -146,7 +153,7 @@ def test_top_users_custom_decision():
     assert "admin_user" in result.output
 
 
-def test_top_policies_json_output():
+def test_top_policies_json_format():
     _, mock_dashboard = _stub_client()
     when(mock_dashboard).top_policies(...).thenReturn([_make_policy_activity()])
 

@@ -107,7 +107,10 @@ def _make_paginator(items: list[PolicyLite]) -> SyncPaginator[PolicyLite]:
             id="table",
         ),
         pytest.param(
-            ("--json",),
+            (
+                "--output",
+                "json",
+            ),
             lambda out: json.loads(out)["name"] == "Allow IT Access",
             id="json",
         ),
@@ -211,7 +214,10 @@ def test_policies_delete_success(stub: tuple[Any, Any, Any]) -> None:
             id="table",
         ),
         pytest.param(
-            ("--json",),
+            (
+                "--output",
+                "json",
+            ),
             lambda out: json.loads(out)[0]["name"] == "Allow IT Access",
             id="json",
         ),
@@ -243,8 +249,8 @@ def test_policies_search(
     _, _, mock_search = stub
     when(mock_search).search(...).thenReturn(_make_paginator([_make_policy_lite()]))
 
-    json_flag = ("--json",) if "--json" in extra_args else ()
-    positional_args = tuple(a for a in extra_args if a != "--json")
+    json_flag = ("--output", "json") if "--output" in extra_args else ()
+    positional_args = tuple(a for a in extra_args if a not in ("--output", "json"))
 
     result = runner.invoke(
         app,
@@ -297,7 +303,17 @@ def test_policies_undeploy_success(stub: tuple[Any, Any, Any]) -> None:
 # --- export / import ---
 
 
-@pytest.mark.parametrize("json_flag", [(), ("--json",)], ids=["plain", "json-flag"])
+@pytest.mark.parametrize(
+    "json_flag",
+    [
+        (),
+        (
+            "--output",
+            "json",
+        ),
+    ],
+    ids=["plain", "json-flag"],
+)
 def test_policies_export_success(
     stub: tuple[Any, Any, Any],
     json_flag: tuple[str, ...],

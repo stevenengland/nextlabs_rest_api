@@ -98,7 +98,14 @@ def _check_json(output: str) -> bool:
     "extra_global,check",
     [
         pytest.param((), _check_table, id="table"),
-        pytest.param(("--json",), _check_json, id="json"),
+        pytest.param(
+            (
+                "--output",
+                "json",
+            ),
+            _check_json,
+            id="json",
+        ),
     ],
 )
 def test_search_output_formats(stubbed_audit, extra_global, check):

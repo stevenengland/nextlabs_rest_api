@@ -65,10 +65,15 @@ def main(
         envvar="NEXTLABS_PDP_URL",
         help="PDP base URL (defaults to --base-url)",
     ),
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        help="Output JSON instead of Rich tables",
+    output: OutputFormat = typer.Option(
+        OutputFormat.TABLE,
+        "-o",
+        "--output",
+        case_sensitive=False,
+        help=(
+            "Output format: table (default compact), wide (extra columns), "
+            "detail (sectioned per-item), json (raw JSON)."
+        ),
     ),
     verify: bool | None = typer.Option(
         None,
@@ -113,7 +118,7 @@ def main(
         client_id=client_id,
         client_secret=client_secret,
         pdp_url=pdp_url,
-        output_format=OutputFormat.JSON if json_output else OutputFormat.TABLE,
+        output_format=output,
         verify=verify,
         timeout=timeout,
         token=token,

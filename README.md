@@ -175,8 +175,11 @@ nextlabs tags list --type COMPONENT_TAG
 nextlabs policies list
 nextlabs pdp eval --subject alice --resource doc-42 --action read \
                   --resource-type document --application wiki
-nextlabs --json components list          # machine-readable output
+nextlabs --output json components list   # machine-readable output
 ```
+
+Output formats (via `-o` / `--output`): `table` (default compact),
+`wide` (extra columns), `detail` (sectioned per-item), `json` (raw JSON).
 
 Command groups: `auth`, `tags`, `components`, `component-types`, `policies`,
 `audit-logs`, `reports`, `dashboard`, `pdp`.

@@ -19,7 +19,7 @@ def test_cli_context_defaults_to_table_output() -> None:
     assert ctx.output_format is OutputFormat.TABLE
 
 
-def test_cli_context_accepts_json_output_format() -> None:
+def test_cli_context_accepts_json_format() -> None:
     ctx = CliContext(
         base_url=None,
         username=None,

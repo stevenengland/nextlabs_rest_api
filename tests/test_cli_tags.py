@@ -73,7 +73,10 @@ def _make_paginator(tags: list[Tag]) -> SyncPaginator[Tag]:
             id="table-output",
         ),
         pytest.param(
-            ("--json",),
+            (
+                "--output",
+                "json",
+            ),
             lambda out: json.loads(out)[0]["key"] == "dept",
             id="json-output",
         ),
@@ -117,7 +120,10 @@ def test_tags_list_invalid_type():
     [
         pytest.param((), lambda out: "dept" in out, id="table-output"),
         pytest.param(
-            ("--json",),
+            (
+                "--output",
+                "json",
+            ),
             lambda out: json.loads(out)["id"] == 10,
             id="json-output",
         ),

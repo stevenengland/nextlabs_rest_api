@@ -98,7 +98,7 @@ def _invoke(*extra: str) -> Any:
             id="table",
         ),
         pytest.param(
-            ("--json", "components", "get", "1"),
+            ("--output", "json", "components", "get", "1"),
             lambda r: json.loads(r.output)["name"] == "Host Name",
             id="json",
         ),
@@ -174,7 +174,7 @@ def test_components_delete_success(stub: tuple[Any, Any, Any]):
             id="table",
         ),
         pytest.param(
-            ("--json", "components", "search"),
+            ("--output", "json", "components", "search"),
             lambda r: json.loads(r.output)[0]["name"] == "Resource Comp",
             id="json",
         ),

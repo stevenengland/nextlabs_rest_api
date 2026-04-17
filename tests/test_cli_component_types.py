@@ -94,7 +94,7 @@ def test_component_types_get(stub_client, as_json, check):
 
     args = list(_GLOBAL_OPTS)
     if as_json:
-        args.append("--json")
+        args.extend(["--output", "json"])
     args.extend(["component-types", "get", "1"])
 
     result = runner.invoke(app, args)
@@ -196,7 +196,7 @@ def test_component_types_search(stub_client, extra_args, as_json, check):
 
     args = list(_GLOBAL_OPTS)
     if as_json:
-        args.append("--json")
+        args.extend(["--output", "json"])
     args.extend(["component-types", "search", *extra_args])
 
     result = runner.invoke(app, args)
