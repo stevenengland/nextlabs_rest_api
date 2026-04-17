@@ -3,12 +3,15 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
+from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
-from nextlabs_sdk._cloudaz._models import TagType
+from nextlabs_sdk._cloudaz._models import Tag, TagType
 
 tags_app = typer.Typer(help="Tag management commands")
 
@@ -84,3 +87,15 @@ def delete(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.tags.delete(tag_id)
     print_success(f"Deleted tag {tag_id}")
+
+
+def _render_tag_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, Tag)
+    console.print(f"[bold]Tag[/bold] {model.id}")
+    console.print(f"  [bold]Key[/bold]:    {model.key}")
+    console.print(f"  [bold]Label[/bold]:  {model.label}")
+    console.print(f"  [bold]Type[/bold]:   {model.type.value}")
+    console.print(f"  [bold]Status[/bold]: {model.status}")
+
+
+register_detail_renderer(Tag, _render_tag_detail)
