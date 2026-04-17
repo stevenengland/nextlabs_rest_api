@@ -1,3 +1,8 @@
+"""Public CloudAz Console API surface (clients, models, enums).
+
+Re-exports the curated CloudAz API from the internal ``_cloudaz`` package.
+"""
+
 from nextlabs_sdk._cloudaz._async_client import (
     AsyncCloudAzClient as AsyncCloudAzClient,
 )
