@@ -113,3 +113,42 @@ def test_render_dispatches_to_table_when_flag_unset(
     render(_make_ctx(output_format=OutputFormat.TABLE), _make_tag(), TAG_COLUMNS)
 
     assert "dept" in capsys.readouterr().out
+
+
+def test_render_table_wraps_long_values_without_truncation() -> None:
+    long_label = "x" * 200
+    tag = Tag(
+        id=10, key="dept", label=long_label, type=TagType.COMPONENT, status="ACTIVE"
+    )
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=80)
+    render_table([tag], TAG_COLUMNS, console=console)
+    output = buf.getvalue()
+    assert "…" not in output
+    assert "..." not in output
+    assert output.count("x") >= 200
+
+
+def test_render_wide_concatenates_columns(capsys: CaptureFixture[str]) -> None:
+    wide = (ColumnDef("Status", "status"),)
+    base = (ColumnDef("ID", "id"), ColumnDef("Key", "key"))
+    render(
+        _make_ctx(output_format=OutputFormat.WIDE),
+        _make_tag(),
+        base,
+        wide_columns=wide,
+    )
+    output = capsys.readouterr().out
+    assert "ID" in output
+    assert "Key" in output
+    assert "Status" in output
+    assert "ACTIVE" in output
+
+
+def test_render_detail_dispatches_to_detail_renderer(
+    capsys: CaptureFixture[str],
+) -> None:
+    render(_make_ctx(output_format=OutputFormat.DETAIL), _make_tag(), TAG_COLUMNS)
+    output = capsys.readouterr().out
+    assert "dept" in output
+    assert "Department" in output
