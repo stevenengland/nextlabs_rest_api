@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_menu import (
     AccountIdentifier,
@@ -21,6 +22,7 @@ from nextlabs_sdk._cli._account_resolver import (
 )
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._output import print_success
 
 auth_app = typer.Typer(help="Authentication commands")
@@ -120,12 +122,12 @@ def _account_validity(cli_ctx: CliContext, account: AccountIdentifier) -> str:
     entry = cache.load(cache_key_for(account))
     if entry is None:
         return "no cached token"
-    if entry.is_expired():
-        return "expired"
-    base = f"valid (expires_at={entry.expires_at}"
-    if entry.refresh_expires_at is None:
-        return f"{base})"
-    return f"{base}, refresh_expires_at={entry.refresh_expires_at})"
+    qualifier = "expired" if entry.is_expired() else "valid"
+    parts = [f"{qualifier} (expires {format_expiry(entry.expires_at)}"]
+    if entry.refresh_expires_at is not None:
+        parts.append(f"; refresh expires {format_expiry(entry.refresh_expires_at)}")
+    parts.append(")")
+    return "".join(parts)
 
 
 def _render_accounts_table(
@@ -240,6 +242,32 @@ def logout(ctx: typer.Context) -> None:
     print_success("Logged out; cache entry removed")
 
 
+_STATUS_TITLE = "Auth status"
+_STATUS_NONE = "—"
+
+
+def _render_status_detail(
+    target: AccountIdentifier,
+    entry: CachedToken,
+) -> None:
+    status_text = "expired" if entry.is_expired() else "valid"
+    refresh_text = (
+        _STATUS_NONE
+        if entry.refresh_expires_at is None
+        else format_expiry(entry.refresh_expires_at)
+    )
+    table = Table(title=_STATUS_TITLE, show_header=False)
+    table.add_column("Field")
+    table.add_column("Value")
+    table.add_row("Username", target.username)
+    table.add_row("Base URL", target.base_url)
+    table.add_row("Client ID", target.client_id)
+    table.add_row("Status", status_text)
+    table.add_row("Expires", format_expiry(entry.expires_at))
+    table.add_row("Refresh expires", refresh_text)
+    Console().print(table)
+
+
 @auth_app.command(name="status")
 @cli_error_handler
 def status(
@@ -257,16 +285,9 @@ def status(
     if entry is None:
         typer.echo("No cached token.")
         raise _EXIT_FAILURE
+    _render_status_detail(target, entry)
     if entry.is_expired():
-        typer.echo("Cached token is expired.")
         raise _EXIT_FAILURE
-    if entry.refresh_expires_at is None:
-        typer.echo(f"Cached token is valid (expires_at={entry.expires_at}).")
-        return
-    typer.echo(
-        f"Cached token is valid (expires_at={entry.expires_at}, "
-        f"refresh_expires_at={entry.refresh_expires_at}).",
-    )
 
 
 def _status_all(cli_ctx: CliContext) -> None:

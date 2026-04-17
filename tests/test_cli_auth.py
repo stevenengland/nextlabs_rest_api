@@ -266,7 +266,8 @@ def test_status_shows_refresh_expires_when_known(
     result = runner.invoke(app, ["auth", "status"])
 
     assert result.exit_code == 0, result.output
-    assert "refresh_expires_at=8888888888" in result.output
+    # Refresh expires epoch 8_888_888_888 -> 2251-09-05 UTC
+    assert "2251-09-05" in result.output
 
 
 def test_status_omits_refresh_expires_when_unknown(
@@ -279,5 +280,77 @@ def test_status_omits_refresh_expires_when_unknown(
     result = runner.invoke(app, ["auth", "status"])
 
     assert result.exit_code == 0, result.output
-    assert "refresh_expires_at" not in result.output
-    assert "Cached token is valid (expires_at=9999999999" in result.output
+    assert "2251-09-05" not in result.output
+    # Expires epoch 9_999_999_999 -> 2286-11-20 UTC
+    assert "2286-11-20" in result.output
+    assert "Refresh expires" in result.output
+    assert "\u2014" in result.output  # em-dash placeholder
+
+
+def test_status_shows_account_details(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "admin" in result.output
+    assert "https://example.com" in result.output
+    assert "ControlCenterOIDCClient" in result.output
+    assert "valid" in result.output
+
+
+def test_status_expired_exits_with_details(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    _isolate_cache(tmp_path, monkeypatch)
+    FileTokenCache(path=f"{tmp_path}/tokens.json").save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=1_000.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=None,
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 1
+    assert "expired" in result.output
+    assert "admin" in result.output
+
+
+def test_status_all_humanizes_expiry(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
+
+    result = runner.invoke(app, ["auth", "status", "--all"])
+
+    assert result.exit_code == 0, result.output
+    assert "expires_at=" not in result.output
+    # Accept wrapping within the Rich table column
+    assert "2286" in result.output
