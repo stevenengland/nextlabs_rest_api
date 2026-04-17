@@ -5,7 +5,9 @@ from collections.abc import Callable
 from typing import ParamSpec, TypeVar
 
 import typer
+from rich.console import Console
 
+from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_error
 from nextlabs_sdk.exceptions import (
     AuthenticationError,
@@ -17,6 +19,8 @@ from nextlabs_sdk.exceptions import (
 
 ParamSpec_T = ParamSpec("ParamSpec_T")
 ReturnType_T = TypeVar("ReturnType_T")
+
+_BODY_PREVIEW_LIMIT = 2000
 
 
 def _error_prefix(exc: NextLabsError) -> str:
@@ -39,6 +43,42 @@ def _format_error_message(exc: BaseException) -> str:
     return f"Unexpected error: {exc}"
 
 
+def _extract_cli_context(args: tuple[object, ...]) -> CliContext | None:
+    for arg in args:
+        if isinstance(arg, typer.Context) and isinstance(arg.obj, CliContext):
+            return arg.obj
+    return None
+
+
+def _print_verbose_context(exc: NextLabsError) -> None:
+    stderr = Console(stderr=True)
+    if exc.request_url:
+        method = exc.request_method or ""
+        stderr.print(f"  request: {method} {exc.request_url}".rstrip())
+    if exc.status_code is not None:
+        stderr.print(f"  status:  {exc.status_code}")
+    body = exc.response_body
+    if body is not None:
+        if body == "":
+            stderr.print("  body:    <empty>")
+        else:
+            if len(body) > _BODY_PREVIEW_LIMIT:
+                body = (
+                    f"{body[:_BODY_PREVIEW_LIMIT]}"
+                    f"… (truncated, {len(exc.response_body or '')} bytes total)"
+                )
+            stderr.print(f"  body:    {body}")
+
+
+def _maybe_print_verbose(exc: BaseException, args: tuple[object, ...]) -> None:
+    if not isinstance(exc, NextLabsError):
+        return
+    cli_ctx = _extract_cli_context(args)
+    if cli_ctx is None or cli_ctx.verbose < 1:
+        return
+    _print_verbose_context(exc)
+
+
 def cli_error_handler(
     func: Callable[ParamSpec_T, ReturnType_T],
 ) -> Callable[ParamSpec_T, ReturnType_T]:
@@ -50,6 +90,7 @@ def cli_error_handler(
             raise
         except Exception as exc:
             print_error(_format_error_message(exc))
+            _maybe_print_verbose(exc, args)
             raise typer.Exit(code=1) from exc
 
     return wrapper

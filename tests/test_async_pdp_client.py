@@ -84,9 +84,7 @@ def test_async_evaluate_returns_permit() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -113,9 +111,7 @@ def test_async_permissions_returns_grouped() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -148,9 +144,7 @@ def test_async_context_manager_closes() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
     when(mock_client).aclose().thenReturn(None)
 
@@ -174,9 +168,7 @@ def test_async_evaluate_with_xml() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     xml_response = (
@@ -222,9 +214,7 @@ def test_async_evaluate_raises_api_error_on_non_json_response() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     bad_response = httpx.Response(
@@ -256,9 +246,7 @@ def test_async_permissions_raises_api_error_on_unexpected_shape() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     bad_response = httpx.Response(

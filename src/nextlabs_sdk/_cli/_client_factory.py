@@ -37,6 +37,7 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
     config = HttpConfig(
         timeout=ctx.timeout,
         verify_ssl=not ctx.no_verify,
+        verbose=ctx.verbose,
     )
 
     if ctx.token:
@@ -75,6 +76,7 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
     config = HttpConfig(
         timeout=ctx.timeout,
         verify_ssl=not ctx.no_verify,
+        verbose=ctx.verbose,
     )
     return PdpClient(
         base_url=ctx.pdp_url or ctx.base_url,

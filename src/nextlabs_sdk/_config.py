@@ -15,3 +15,4 @@ class HttpConfig:
     timeout: float = 30.0
     verify_ssl: bool = True
     retry: RetryConfig = field(default_factory=RetryConfig)
+    verbose: int = 0

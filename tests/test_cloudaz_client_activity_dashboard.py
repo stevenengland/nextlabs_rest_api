@@ -21,9 +21,7 @@ def test_cloudaz_client_has_activity_logs() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = CloudAzClient(
@@ -39,9 +37,7 @@ def test_cloudaz_client_has_dashboard() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = CloudAzClient(
@@ -57,9 +53,7 @@ def test_async_cloudaz_client_has_activity_logs() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -75,9 +69,7 @@ def test_async_cloudaz_client_has_dashboard() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(

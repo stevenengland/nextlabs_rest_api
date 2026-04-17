@@ -18,3 +18,4 @@ class CliContext:
     timeout: float
     token: str | None = None
     cache_dir: str | None = None
+    verbose: int = 0

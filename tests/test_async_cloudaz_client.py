@@ -23,9 +23,7 @@ def test_async_client_exposes_operator_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -42,9 +40,7 @@ def test_async_client_exposes_tag_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -63,9 +59,7 @@ def test_async_client_uses_custom_config() -> None:
     when(transport_mod).create_async_http_client(
         base_url="https://cloudaz.example.com",
         auth=any_value(),
-        timeout=60.0,
-        verify_ssl=False,
-        retry=any_value(),
+        http_config=custom_config,
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -83,9 +77,7 @@ def test_async_client_context_manager_closes() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
     when(mock_client).aclose().thenReturn(None)
 
@@ -108,9 +100,7 @@ def test_async_client_exposes_component_type_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -127,9 +117,7 @@ def test_async_client_exposes_component_type_search_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -146,9 +134,7 @@ def test_async_client_exposes_component_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -165,9 +151,7 @@ def test_async_client_exposes_component_search_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -184,9 +168,7 @@ def test_async_client_exposes_policy_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -203,9 +185,7 @@ def test_async_client_exposes_policy_search_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(
@@ -224,9 +204,7 @@ def test_async_client_exposes_reporter_audit_log_service() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     client = AsyncCloudAzClient(

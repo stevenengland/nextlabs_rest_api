@@ -8,6 +8,7 @@ from nextlabs_sdk._cli._component_types_cmd import component_types_app
 from nextlabs_sdk._cli._components_cmd import components_app
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
+from nextlabs_sdk._cli._logging_setup import configure_cli_logging
 from nextlabs_sdk._cli._pdp_cmd import pdp_app
 from nextlabs_sdk._cli._policies_cmd import policies_app
 from nextlabs_sdk._cli._reports_cmd import reports_app
@@ -87,8 +88,19 @@ def main(
         envvar="NEXTLABS_CACHE_DIR",
         help="Override the token cache directory.",
     ),
+    verbose: int = typer.Option(
+        0,
+        "-v",
+        "--verbose",
+        count=True,
+        help=(
+            "Increase verbosity. -v: show request context on errors; "
+            "-vv: trace every HTTP request/response."
+        ),
+    ),
 ) -> None:
     """NextLabs CloudAz SDK CLI."""
+    configure_cli_logging(verbose)
     ctx.obj = CliContext(
         base_url=base_url,
         username=username,
@@ -101,6 +113,7 @@ def main(
         timeout=timeout,
         token=token,
         cache_dir=cache_dir,
+        verbose=verbose,
     )
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())

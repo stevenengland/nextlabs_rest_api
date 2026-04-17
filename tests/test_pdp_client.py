@@ -108,9 +108,7 @@ def test_evaluate_returns_permit() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -134,9 +132,7 @@ def test_evaluate_posts_to_correct_endpoint() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -164,9 +160,7 @@ def test_evaluate_sets_json_content_type_header() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -194,9 +188,7 @@ def test_permissions_returns_grouped_actions() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -226,9 +218,7 @@ def test_client_uses_custom_http_config() -> None:
     when(transport_mod).create_http_client(
         base_url=BASE_URL,
         auth=any_value(),
-        timeout=60.0,
-        verify_ssl=False,
-        retry=custom_retry,
+        http_config=custom_config,
     ).thenReturn(mock_client)
 
     pdp = PdpClient(
@@ -246,9 +236,7 @@ def test_client_context_manager_closes() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
     when(mock_client).close().thenReturn(None)
 
@@ -268,9 +256,7 @@ def test_evaluate_raises_on_400() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     when(mock_client).post(
@@ -300,9 +286,7 @@ def test_evaluate_with_xml_content_type() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     xml_response_body = (
@@ -347,9 +331,7 @@ def test_evaluate_raises_api_error_on_non_json_response() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     bad_response = httpx.Response(
@@ -376,9 +358,7 @@ def test_evaluate_raises_api_error_on_unexpected_shape() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     bad_response = httpx.Response(
@@ -405,9 +385,7 @@ def test_permissions_raises_api_error_on_non_json_response() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        timeout=any_value(),
-        verify_ssl=any_value(),
-        retry=any_value(),
+        http_config=any_value(),
     ).thenReturn(mock_client)
 
     bad_response = httpx.Response(200, content=b"x", request=_make_request())

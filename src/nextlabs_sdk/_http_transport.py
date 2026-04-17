@@ -7,7 +7,7 @@ import time
 
 import httpx
 
-from nextlabs_sdk._config import RetryConfig
+from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk.exceptions import (
     NextLabsError,
     RequestTimeoutError,
@@ -143,21 +143,24 @@ def create_http_client(
     *,
     base_url: str,
     auth: httpx.Auth,
-    timeout: float = 30.0,
-    verify_ssl: bool = True,
-    retry: RetryConfig | None = None,
+    http_config: HttpConfig | None = None,
 ) -> httpx.Client:
-    effective_retry = retry or RetryConfig()
+    effective = http_config or HttpConfig()
+    inner: httpx.BaseTransport = httpx.HTTPTransport(verify=effective.verify_ssl)
+    if effective.verbose >= 2:
+        from nextlabs_sdk._http_transport_logging import LoggingTransport
+
+        inner = LoggingTransport(wrapped=inner)
     transport = RetryTransport(
-        wrapped=httpx.HTTPTransport(verify=verify_ssl),
-        max_retries=effective_retry.max_retries,
-        base_delay=effective_retry.base_delay,
-        max_delay=effective_retry.max_delay,
+        wrapped=inner,
+        max_retries=effective.retry.max_retries,
+        base_delay=effective.retry.base_delay,
+        max_delay=effective.retry.max_delay,
     )
     return httpx.Client(
         base_url=base_url,
         auth=auth,
-        timeout=timeout,
+        timeout=effective.timeout,
         transport=transport,
     )
 
@@ -166,21 +169,26 @@ def create_async_http_client(
     *,
     base_url: str,
     auth: httpx.Auth,
-    timeout: float = 30.0,
-    verify_ssl: bool = True,
-    retry: RetryConfig | None = None,
+    http_config: HttpConfig | None = None,
 ) -> httpx.AsyncClient:
-    effective_retry = retry or RetryConfig()
+    effective = http_config or HttpConfig()
+    inner: httpx.AsyncBaseTransport = httpx.AsyncHTTPTransport(
+        verify=effective.verify_ssl,
+    )
+    if effective.verbose >= 2:
+        from nextlabs_sdk._http_transport_logging_async import AsyncLoggingTransport
+
+        inner = AsyncLoggingTransport(wrapped=inner)
     transport = AsyncRetryTransport(
-        wrapped=httpx.AsyncHTTPTransport(verify=verify_ssl),
-        max_retries=effective_retry.max_retries,
-        base_delay=effective_retry.base_delay,
-        max_delay=effective_retry.max_delay,
+        wrapped=inner,
+        max_retries=effective.retry.max_retries,
+        base_delay=effective.retry.base_delay,
+        max_delay=effective.retry.max_delay,
     )
     return httpx.AsyncClient(
         base_url=base_url,
         auth=auth,
-        timeout=timeout,
+        timeout=effective.timeout,
         transport=transport,
     )
 

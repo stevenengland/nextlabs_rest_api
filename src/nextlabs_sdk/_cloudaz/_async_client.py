@@ -56,9 +56,7 @@ class AsyncCloudAzClient:
         self._client = transport_mod.create_async_http_client(
             base_url=base_url,
             auth=auth,
-            timeout=config.timeout,
-            verify_ssl=config.verify_ssl,
-            retry=config.retry,
+            http_config=config,
         )
         self._operators = AsyncOperatorService(self._client)
         self._tags = AsyncTagService(self._client)

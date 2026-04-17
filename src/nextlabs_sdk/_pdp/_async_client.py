@@ -39,9 +39,7 @@ class AsyncPdpClient:
         self._client = transport_mod.create_async_http_client(
             base_url=base_url,
             auth=auth,
-            timeout=config.timeout,
-            verify_ssl=config.verify_ssl,
-            retry=config.retry,
+            http_config=config,
         )
 
     async def evaluate(

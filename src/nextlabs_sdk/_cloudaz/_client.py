@@ -56,9 +56,7 @@ class CloudAzClient:
         self._client = transport_mod.create_http_client(
             base_url=base_url,
             auth=auth,
-            timeout=config.timeout,
-            verify_ssl=config.verify_ssl,
-            retry=config.retry,
+            http_config=config,
         )
         self._operators = OperatorService(self._client)
         self._tags = TagService(self._client)

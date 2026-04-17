@@ -9,6 +9,7 @@ import pytest
 from mockito import mock, when
 
 from nextlabs_sdk import _http_transport
+from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk.exceptions import RequestTimeoutError, TransportError
 
 
@@ -324,7 +325,7 @@ def test_create_http_client_returns_configured_client() -> None:
     client = _http_transport.create_http_client(
         base_url="https://api.example.com",
         auth=auth,
-        timeout=15.0,
+        http_config=HttpConfig(timeout=15.0),
     )
     assert str(client.base_url) == "https://api.example.com"
     assert client.timeout == httpx.Timeout(15.0)
@@ -336,7 +337,7 @@ def test_create_async_http_client_returns_configured_client() -> None:
     client = _http_transport.create_async_http_client(
         base_url="https://api.example.com",
         auth=auth,
-        timeout=15.0,
+        http_config=HttpConfig(timeout=15.0),
     )
     assert str(client.base_url) == "https://api.example.com"
     assert client.timeout == httpx.Timeout(15.0)
