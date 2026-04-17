@@ -215,3 +215,24 @@ def test_async_client_exposes_policy_search_service() -> None:
     )
 
     assert isinstance(client.policy_search, AsyncPolicySearchService)
+
+
+def test_async_client_exposes_reporter_audit_log_service() -> None:
+    from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogService
+
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client.reporter_audit_logs, AsyncReporterAuditLogService)

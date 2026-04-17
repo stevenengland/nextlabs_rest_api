@@ -128,6 +128,13 @@ class PolicyService:
         )
         return parse_data(response)
 
+    def retrieve_all_policies(self, *, export_mode: str = _PLAIN_MODE) -> str:
+        response = self._client.get(
+            "/console/api/v1/policy/mgmt/retrieveAllPolicies",
+            params={_EXPORT_MODE_PARAM: export_mode},
+        )
+        return parse_data(response)
+
     def export_options(self) -> ExportOptions:
         response = self._client.get(
             "/console/api/v1/policy/mgmt/exportOptions",
@@ -297,6 +304,13 @@ class AsyncPolicyService:
     async def export_all(self, *, export_mode: str = _PLAIN_MODE) -> str:
         resp = await self._client.get(
             "/console/api/v1/policy/mgmt/exportAll",
+            params={_EXPORT_MODE_PARAM: export_mode},
+        )
+        return parse_data(resp)
+
+    async def retrieve_all_policies(self, *, export_mode: str = _PLAIN_MODE) -> str:
+        resp = await self._client.get(
+            "/console/api/v1/policy/mgmt/retrieveAllPolicies",
             params={_EXPORT_MODE_PARAM: export_mode},
         )
         return parse_data(resp)

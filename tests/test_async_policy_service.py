@@ -442,3 +442,30 @@ def test_async_get_raises_not_found() -> None:
 
     with pytest.raises(NotFoundError):
         asyncio.run(service.get(999))
+
+
+def test_async_retrieve_all_policies_returns_filename() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(data="Policy_Export_ASYNC.bin")
+    when(client).get(
+        "/console/api/v1/policy/mgmt/retrieveAllPolicies",
+        params={"exportMode": "PLAIN"},
+    ).thenReturn(response)
+
+    assert asyncio.run(service.retrieve_all_policies()) == "Policy_Export_ASYNC.bin"
+
+
+def test_async_retrieve_all_policies_passes_export_mode() -> None:
+    client = mock(httpx.AsyncClient)
+    service = AsyncPolicyService(client)
+    response = _make_envelope(data="Policy_Export_SANDE.bin")
+    when(client).get(
+        "/console/api/v1/policy/mgmt/retrieveAllPolicies",
+        params={"exportMode": "SANDE"},
+    ).thenReturn(response)
+
+    assert (
+        asyncio.run(service.retrieve_all_policies(export_mode="SANDE"))
+        == "Policy_Export_SANDE.bin"
+    )

@@ -473,3 +473,31 @@ def test_get_raises_not_found() -> None:
 
     with pytest.raises(NotFoundError):
         service.get(999)
+
+
+def test_retrieve_all_policies_returns_filename() -> None:
+    client = mock(httpx.Client)
+    service = PolicyService(client)
+    response = _make_envelope(data="Policy_Export_20260417.bin")
+    when(client).get(
+        "/console/api/v1/policy/mgmt/retrieveAllPolicies",
+        params={"exportMode": "PLAIN"},
+    ).thenReturn(response)
+
+    result = service.retrieve_all_policies()
+
+    assert result == "Policy_Export_20260417.bin"
+
+
+def test_retrieve_all_policies_passes_export_mode() -> None:
+    client = mock(httpx.Client)
+    service = PolicyService(client)
+    response = _make_envelope(data="Policy_Export_SANDE.bin")
+    when(client).get(
+        "/console/api/v1/policy/mgmt/retrieveAllPolicies",
+        params={"exportMode": "SANDE"},
+    ).thenReturn(response)
+
+    result = service.retrieve_all_policies(export_mode="SANDE")
+
+    assert result == "Policy_Export_SANDE.bin"

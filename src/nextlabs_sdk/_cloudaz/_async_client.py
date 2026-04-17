@@ -15,6 +15,7 @@ from nextlabs_sdk._cloudaz._activity_logs_service import AsyncReportActivityLogS
 from nextlabs_sdk._cloudaz._audit_logs import AsyncEntityAuditLogService
 from nextlabs_sdk._cloudaz._dashboard import AsyncDashboardService
 from nextlabs_sdk._cloudaz._reports import AsyncPolicyActivityReportService
+from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogService
 from nextlabs_sdk._cloudaz._system_config import AsyncSystemConfigService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
@@ -59,6 +60,7 @@ class AsyncCloudAzClient:
         self._reports = AsyncPolicyActivityReportService(self._client)
         self._activity_logs = AsyncReportActivityLogService(self._client)
         self._dashboard = AsyncDashboardService(self._client)
+        self._reporter_audit_logs = AsyncReporterAuditLogService(self._client)
 
     @property
     def operators(self) -> AsyncOperatorService:
@@ -111,6 +113,10 @@ class AsyncCloudAzClient:
     @property
     def dashboard(self) -> AsyncDashboardService:
         return self._dashboard
+
+    @property
+    def reporter_audit_logs(self) -> AsyncReporterAuditLogService:
+        return self._reporter_audit_logs
 
     async def close(self) -> None:
         await self._client.aclose()

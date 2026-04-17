@@ -23,6 +23,25 @@ class PolicySearchService:
             fetch_page=functools.partial(self._fetch_search_page, criteria),
         )
 
+    def search_named(
+        self,
+        search: str,
+        criteria: SearchCriteria,
+    ) -> SyncPaginator[PolicyLite]:
+        """Search policies via the path-parameterised ``/policy/search/{search}`` variant.
+
+        The semantics of ``search`` are not documented in the official OpenAPI
+        spec; this method forwards the value as a raw path segment. Request
+        body and response shape are identical to :py:meth:`search`.
+        """
+        return SyncPaginator(
+            fetch_page=functools.partial(
+                self._fetch_search_named_page,
+                search,
+                criteria,
+            ),
+        )
+
     def save_search(self, payload: dict[str, object]) -> int:
         response = self._client.post(
             "/console/api/v1/policy/search/add",
@@ -62,6 +81,26 @@ class PolicySearchService:
     ) -> PageResult[PolicyLite]:
         response = self._client.post(
             "/console/api/v1/policy/search",
+            json=criteria.page(page_no).to_dict(),
+        )
+        raw_items, total_pages, total_records = parse_paginated(response)
+        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
+        return PageResult(
+            entries=entries,
+            page_no=page_no,
+            page_size=len(entries),
+            total_pages=total_pages,
+            total_records=total_records,
+        )
+
+    def _fetch_search_named_page(
+        self,
+        search: str,
+        criteria: SearchCriteria,
+        page_no: int,
+    ) -> PageResult[PolicyLite]:
+        response = self._client.post(
+            f"/console/api/v1/policy/search/{search}",
             json=criteria.page(page_no).to_dict(),
         )
         raw_items, total_pages, total_records = parse_paginated(response)
@@ -122,6 +161,20 @@ class AsyncPolicySearchService:
             fetch_page=functools.partial(self._fetch_search_page, criteria),
         )
 
+    def search_named(
+        self,
+        search: str,
+        criteria: SearchCriteria,
+    ) -> AsyncPaginator[PolicyLite]:
+        """Async variant of :py:meth:`PolicySearchService.search_named`."""
+        return AsyncPaginator(
+            fetch_page=functools.partial(
+                self._fetch_search_named_page,
+                search,
+                criteria,
+            ),
+        )
+
     async def save_search(self, payload: dict[str, object]) -> int:
         response = await self._client.post(
             "/console/api/v1/policy/search/add",
@@ -161,6 +214,26 @@ class AsyncPolicySearchService:
     ) -> PageResult[PolicyLite]:
         response = await self._client.post(
             "/console/api/v1/policy/search",
+            json=criteria.page(page_no).to_dict(),
+        )
+        raw_items, total_pages, total_records = parse_paginated(response)
+        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
+        return PageResult(
+            entries=entries,
+            page_no=page_no,
+            page_size=len(entries),
+            total_pages=total_pages,
+            total_records=total_records,
+        )
+
+    async def _fetch_search_named_page(
+        self,
+        search: str,
+        criteria: SearchCriteria,
+        page_no: int,
+    ) -> PageResult[PolicyLite]:
+        response = await self._client.post(
+            f"/console/api/v1/policy/search/{search}",
             json=criteria.page(page_no).to_dict(),
         )
         raw_items, total_pages, total_records = parse_paginated(response)

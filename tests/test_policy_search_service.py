@@ -211,3 +211,26 @@ def test_delete_search_succeeds() -> None:
     ).thenReturn(response)
 
     service.delete_search(20)
+
+
+def test_search_named_returns_paginator() -> None:
+    client = mock(httpx.Client)
+    service = PolicySearchService(client)
+    criteria = SearchCriteria().filter_effect_type("allow")
+    response = _make_envelope(
+        data=[_make_policy_lite_data()],
+        total_pages=1,
+        total_records=1,
+    )
+    when(client).post(
+        "/console/api/v1/policy/search/custom-scope",
+        json=criteria.page(0).to_dict(),
+    ).thenReturn(response)
+
+    paginator = service.search_named("custom-scope", criteria)
+
+    assert isinstance(paginator, SyncPaginator)
+    results = list(paginator)
+    assert len(results) == 1
+    assert isinstance(results[0], PolicyLite)
+    assert results[0].name == "Allow IT Ticket Access"

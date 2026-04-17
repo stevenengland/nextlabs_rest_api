@@ -15,6 +15,7 @@ from nextlabs_sdk._cloudaz._activity_logs_service import ReportActivityLogServic
 from nextlabs_sdk._cloudaz._audit_logs import EntityAuditLogService
 from nextlabs_sdk._cloudaz._dashboard import DashboardService
 from nextlabs_sdk._cloudaz._reports import PolicyActivityReportService
+from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
 from nextlabs_sdk._cloudaz._system_config import SystemConfigService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig
@@ -59,6 +60,7 @@ class CloudAzClient:
         self._reports = PolicyActivityReportService(self._client)
         self._activity_logs = ReportActivityLogService(self._client)
         self._dashboard = DashboardService(self._client)
+        self._reporter_audit_logs = ReporterAuditLogService(self._client)
 
     @property
     def operators(self) -> OperatorService:
@@ -111,6 +113,10 @@ class CloudAzClient:
     @property
     def dashboard(self) -> DashboardService:
         return self._dashboard
+
+    @property
+    def reporter_audit_logs(self) -> ReporterAuditLogService:
+        return self._reporter_audit_logs
 
     def close(self) -> None:
         self._client.close()
