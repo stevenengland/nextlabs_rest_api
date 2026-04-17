@@ -50,6 +50,16 @@ def _extract_cli_context(args: tuple[object, ...]) -> CliContext | None:
     return None
 
 
+def _format_body_preview(body: str, total_length: int) -> str:
+    if body == "":
+        return "<empty>"
+    if total_length > _BODY_PREVIEW_LIMIT:
+        return (
+            f"{body[:_BODY_PREVIEW_LIMIT]}" f"… (truncated, {total_length} bytes total)"
+        )
+    return body
+
+
 def _print_verbose_context(exc: NextLabsError) -> None:
     stderr = Console(stderr=True)
     if exc.request_url:
@@ -57,17 +67,11 @@ def _print_verbose_context(exc: NextLabsError) -> None:
         stderr.print(f"  request: {method} {exc.request_url}".rstrip())
     if exc.status_code is not None:
         stderr.print(f"  status:  {exc.status_code}")
+    if exc.envelope_status_code is not None:
+        stderr.print(f"  envelope: statusCode={exc.envelope_status_code}")
     body = exc.response_body
     if body is not None:
-        if body == "":
-            stderr.print("  body:    <empty>")
-        else:
-            if len(body) > _BODY_PREVIEW_LIMIT:
-                body = (
-                    f"{body[:_BODY_PREVIEW_LIMIT]}"
-                    f"… (truncated, {len(exc.response_body or '')} bytes total)"
-                )
-            stderr.print(f"  body:    {body}")
+        stderr.print(f"  body:    {_format_body_preview(body, len(body))}")
 
 
 def _maybe_print_verbose(exc: BaseException, args: tuple[object, ...]) -> None:

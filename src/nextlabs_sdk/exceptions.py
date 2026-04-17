@@ -18,6 +18,8 @@ class NextLabsError(Exception):
         response_body: str | None = None,
         request_method: str | None = None,
         request_url: str | None = None,
+        envelope_status_code: str | None = None,
+        envelope_message: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -25,6 +27,8 @@ class NextLabsError(Exception):
         self.response_body = response_body
         self.request_method = request_method
         self.request_url = request_url
+        self.envelope_status_code = envelope_status_code
+        self.envelope_message = envelope_message
 
 
 class AuthenticationError(NextLabsError):

@@ -28,6 +28,18 @@ def test_base_exception_defaults_to_none():
     assert exc.response_body is None
     assert exc.request_method is None
     assert exc.request_url is None
+    assert exc.envelope_status_code is None
+    assert exc.envelope_message is None
+
+
+def test_base_exception_carries_envelope_fields():
+    exc = exceptions.NextLabsError(
+        "No data found",
+        envelope_status_code="5000",
+        envelope_message="No data found",
+    )
+    assert exc.envelope_status_code == "5000"
+    assert exc.envelope_message == "No data found"
 
 
 @pytest.mark.parametrize(

@@ -177,3 +177,116 @@ def test_parse_data_raises_api_error_on_missing_data_key():
     with pytest.raises(ApiError) as exc_info:
         parse_data(response)
     assert "missing 'data'" in exc_info.value.message
+
+
+_ENVELOPE_PARSERS = (
+    pytest.param(parse_data, id="parse_data"),
+    pytest.param(parse_paginated, id="parse_paginated"),
+    pytest.param(parse_reporter_paginated, id="parse_reporter_paginated"),
+)
+
+
+@pytest.mark.parametrize("parser", _ENVELOPE_PARSERS)
+def test_envelope_error_surfaces_server_message(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000", "message": "No data found"},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "No data found"
+    assert exc_info.value.envelope_status_code == "5000"
+    assert exc_info.value.envelope_message == "No data found"
+    assert exc_info.value.status_code == 200
+
+
+@pytest.mark.parametrize("parser", _ENVELOPE_PARSERS)
+def test_envelope_error_without_message_uses_fallback(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000"},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parser(response)
+    assert "5000" in exc_info.value.message
+    assert "CloudAz error" in exc_info.value.message
+    assert exc_info.value.envelope_status_code == "5000"
+    assert exc_info.value.envelope_message is None
+
+
+@pytest.mark.parametrize("parser", _ENVELOPE_PARSERS)
+def test_envelope_error_with_empty_string_message_uses_fallback(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000", "message": ""},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parser(response)
+    assert "5000" in exc_info.value.message
+    assert exc_info.value.envelope_status_code == "5000"
+
+
+def test_envelope_error_wins_over_missing_pagination_keys():
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000", "message": "No data found"},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parse_paginated(response)
+    assert exc_info.value.message == "No data found"
+    assert "totalPages" not in exc_info.value.message
+
+
+def test_envelope_error_wins_over_missing_data_key_on_reporter():
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000", "message": "No data found"},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parse_reporter_paginated(response)
+    assert exc_info.value.message == "No data found"
+
+
+def test_parse_data_without_statusCode_falls_through_to_missing_data():
+    response = httpx.Response(
+        200,
+        json={"message": "legacy body without statusCode"},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parse_data(response)
+    assert "missing 'data'" in exc_info.value.message
+    assert exc_info.value.envelope_status_code is None
+
+
+@pytest.mark.parametrize("success_code", ["1002", "1003", "1004"])
+def test_success_envelope_codes_pass_through(success_code: str):
+    response = httpx.Response(
+        200,
+        json={"statusCode": success_code, "message": "ok", "data": {"id": 1}},
+        request=_make_request(),
+    )
+    assert parse_data(response) == {"id": 1}
+
+
+def test_parse_raw_ignores_envelope_error_statusCode():
+    response = httpx.Response(
+        200,
+        json={"statusCode": "5000", "message": "No data found"},
+        request=_make_request(),
+    )
+    assert parse_raw(response) == {
+        "statusCode": "5000",
+        "message": "No data found",
+    }

@@ -6,7 +6,7 @@ import typer
 
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk.exceptions import AuthenticationError
+from nextlabs_sdk.exceptions import ApiError, AuthenticationError
 
 
 def _ctx(verbose: int) -> typer.Context:
@@ -82,3 +82,42 @@ def test_verbose_one_with_partial_exception_fields(
 
     captured = capsys.readouterr()
     assert "None" not in captured.err
+
+
+def test_verbose_one_prints_envelope_status_code(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ApiError(
+            message="No data found",
+            status_code=200,
+            response_body='{"statusCode":"5000","message":"No data found"}',
+            request_method="GET",
+            request_url="https://srv/console/api/v1/policy/mgmt/100",
+            envelope_status_code="5000",
+            envelope_message="No data found",
+        ),
+        verbose=1,
+    )
+
+    captured = capsys.readouterr()
+    assert "API error: No data found" in captured.out
+    assert "envelope:" in captured.err
+    assert "statusCode=5000" in captured.err
+
+
+def test_verbose_zero_hides_envelope_status_code(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ApiError(
+            message="No data found",
+            status_code=200,
+            envelope_status_code="5000",
+            envelope_message="No data found",
+        ),
+        verbose=0,
+    )
+
+    captured = capsys.readouterr()
+    assert "envelope:" not in captured.err
