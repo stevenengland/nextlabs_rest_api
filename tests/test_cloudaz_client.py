@@ -227,3 +227,51 @@ def test_client_exposes_reporter_audit_log_service() -> None:
     )
 
     assert isinstance(client.reporter_audit_logs, ReporterAuditLogService)
+
+
+def test_authenticate_invokes_auth_ensure_token() -> None:
+    from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        http_config=any_value(),
+    ).thenReturn(mock_client)
+
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client._auth, CloudAzAuth)
+    when(client._auth).ensure_token(any_value()).thenReturn(None)
+
+    client.authenticate()
+
+    verify(client._auth).ensure_token(any_value())
+
+
+def test_authenticate_raises_when_custom_auth_override() -> None:
+    from nextlabs_sdk.exceptions import AuthenticationError
+
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        http_config=any_value(),
+    ).thenReturn(mock_client)
+
+    custom = mock(httpx.Auth)
+    client = CloudAzClient(
+        base_url="https://cloudaz.example.com",
+        auth=custom,
+    )
+
+    try:
+        client.authenticate()
+    except AuthenticationError as exc:
+        assert "custom auth" in exc.message.lower()
+    else:
+        raise AssertionError("expected AuthenticationError")

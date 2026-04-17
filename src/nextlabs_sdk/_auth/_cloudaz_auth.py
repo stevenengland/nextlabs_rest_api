@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Generator
+from collections.abc import Awaitable, Generator
+from typing import Callable
 
 import httpx
 
@@ -118,6 +119,57 @@ class CloudAzAuth(httpx.Auth):
                     request_method=request.method,
                     request_url=str(request.url),
                 )
+
+    def ensure_token(
+        self,
+        send: Callable[[httpx.Request], httpx.Response],
+    ) -> None:
+        """Fetch and cache a token synchronously via a provided transport.
+
+        Intended for explicit `authenticate()` flows that need to acquire a
+        token without making a business API call. No-op when a valid token is
+        already available in memory.
+        """
+        if self._has_valid_token():
+            return
+        if self._refresh_token is not None:
+            response = send(self._build_refresh_request(self._refresh_token))
+            if response.status_code == _OK_STATUS:
+                self._parse_token_response(response)
+                return
+        if self._password is None:
+            raise AuthenticationError(
+                f"Token expired and no refresh available. {_RELOGIN_HINT}",
+                status_code=None,
+                response_body=None,
+                request_method=_HTTP_POST,
+                request_url=self._token_url,
+            )
+        response = send(self._build_password_request())
+        self._parse_token_response(response)
+
+    async def ensure_token_async(
+        self,
+        send: Callable[[httpx.Request], Awaitable[httpx.Response]],
+    ) -> None:
+        """Async counterpart of :meth:`ensure_token`."""
+        if self._has_valid_token():
+            return
+        if self._refresh_token is not None:
+            response = await send(self._build_refresh_request(self._refresh_token))
+            if response.status_code == _OK_STATUS:
+                self._parse_token_response(response)
+                return
+        if self._password is None:
+            raise AuthenticationError(
+                f"Token expired and no refresh available. {_RELOGIN_HINT}",
+                status_code=None,
+                response_body=None,
+                request_method=_HTTP_POST,
+                request_url=self._token_url,
+            )
+        response = await send(self._build_password_request())
+        self._parse_token_response(response)
 
     def _has_valid_token(self) -> bool:
         with self._lock:

@@ -30,6 +30,7 @@ def _mock_cloudaz_client() -> CloudAzClient:
     mock_ops = mock(OperatorService)
     mock_client.operators = mock_ops
     when(mock_ops).list_types().thenReturn(["STRING", "NUMBER"])
+    when(mock_client).authenticate().thenReturn(None)
     return cast(CloudAzClient, mock_client)
 
 

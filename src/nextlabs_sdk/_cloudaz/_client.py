@@ -23,6 +23,7 @@ from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
 from nextlabs_sdk._cloudaz._system_config import SystemConfigService
 from nextlabs_sdk._cloudaz._tags import TagService
 from nextlabs_sdk._config import HttpConfig
+from nextlabs_sdk.exceptions import AuthenticationError
 
 
 class CloudAzClient:
@@ -58,6 +59,7 @@ class CloudAzClient:
             auth=auth,
             http_config=config,
         )
+        self._auth = auth
         self._operators = OperatorService(self._client)
         self._tags = TagService(self._client)
         self._component_types = ComponentTypeService(self._client)
@@ -132,6 +134,31 @@ class CloudAzClient:
     def close(self) -> None:
         self._client.close()
 
+    def authenticate(self) -> None:
+        """Acquire and cache a token without issuing any API call.
+
+        Triggers the OIDC password (or refresh) grant via the CloudAz auth
+        handler if no valid cached token is available. Safe to call more
+        than once; no-op when a valid token is already loaded.
+
+        Raises:
+            AuthenticationError: if the configured auth handler does not
+                support direct token acquisition (e.g. a custom
+                ``auth=`` override) or if the token endpoint rejects the
+                credentials.
+        """
+        if not isinstance(self._auth, CloudAzAuth):
+            raise AuthenticationError(
+                "authenticate() requires the default CloudAzAuth handler; "
+                "a custom auth= override does not support direct token "
+                "acquisition.",
+                status_code=None,
+                response_body=None,
+                request_method=None,
+                request_url=None,
+            )
+        self._auth.ensure_token(self._send_unauthenticated)
+
     def __enter__(self) -> CloudAzClient:
         return self
 
@@ -142,3 +169,6 @@ class CloudAzClient:
         exc_tb: TracebackType | None,
     ) -> None:
         self.close()
+
+    def _send_unauthenticated(self, request: httpx.Request) -> httpx.Response:
+        return self._client.send(request, auth=None)

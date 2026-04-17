@@ -23,6 +23,7 @@ from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogServ
 from nextlabs_sdk._cloudaz._system_config import AsyncSystemConfigService
 from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
+from nextlabs_sdk.exceptions import AuthenticationError
 
 
 class AsyncCloudAzClient:
@@ -58,6 +59,7 @@ class AsyncCloudAzClient:
             auth=auth,
             http_config=config,
         )
+        self._auth = auth
         self._operators = AsyncOperatorService(self._client)
         self._tags = AsyncTagService(self._client)
         self._component_types = AsyncComponentTypeService(self._client)
@@ -132,6 +134,23 @@ class AsyncCloudAzClient:
     async def close(self) -> None:
         await self._client.aclose()
 
+    async def authenticate(self) -> None:
+        """Acquire and cache a token without issuing any API call.
+
+        Async counterpart of :meth:`CloudAzClient.authenticate`.
+        """
+        if not isinstance(self._auth, CloudAzAuth):
+            raise AuthenticationError(
+                "authenticate() requires the default CloudAzAuth handler; "
+                "a custom auth= override does not support direct token "
+                "acquisition.",
+                status_code=None,
+                response_body=None,
+                request_method=None,
+                request_url=None,
+            )
+        await self._auth.ensure_token_async(self._send_unauthenticated)
+
     async def __aenter__(self) -> AsyncCloudAzClient:
         return self
 
@@ -142,3 +161,9 @@ class AsyncCloudAzClient:
         exc_tb: TracebackType | None,
     ) -> None:
         await self.close()
+
+    async def _send_unauthenticated(
+        self,
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return await self._client.send(request, auth=None)

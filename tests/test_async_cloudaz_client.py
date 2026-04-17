@@ -214,3 +214,57 @@ def test_async_client_exposes_reporter_audit_log_service() -> None:
     )
 
     assert isinstance(client.reporter_audit_logs, AsyncReporterAuditLogService)
+
+
+def test_async_authenticate_invokes_ensure_token_async() -> None:
+    from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        http_config=any_value(),
+    ).thenReturn(mock_client)
+
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        username="admin",
+        password="secret",
+    )
+
+    assert isinstance(client._auth, CloudAzAuth)
+
+    when(client._auth).ensure_token_async(any_value()).thenReturn(
+        asyncio.sleep(0),
+    )
+
+    asyncio.run(client.authenticate())
+
+    verify(client._auth).ensure_token_async(any_value())
+
+
+def test_async_authenticate_raises_when_custom_auth() -> None:
+    from nextlabs_sdk.exceptions import AuthenticationError
+
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        http_config=any_value(),
+    ).thenReturn(mock_client)
+
+    custom = mock(httpx.Auth)
+    client = AsyncCloudAzClient(
+        base_url="https://cloudaz.example.com",
+        auth=custom,
+    )
+
+    async def run() -> None:
+        await client.authenticate()
+
+    try:
+        asyncio.run(run())
+    except AuthenticationError as exc:
+        assert "custom auth" in exc.message.lower()
+    else:
+        raise AssertionError("expected AuthenticationError")

@@ -425,3 +425,148 @@ def test_non_hash_redirect_does_not_trigger_reauth() -> None:
 
     with contextlib.suppress(StopIteration):
         flow.send(final_ok)
+
+
+# ─────────────────────────── ensure_token (direct fetch) ──────────────────
+
+
+def _run_ensure_token(
+    auth: CloudAzAuth, responses: list[httpx.Response]
+) -> list[httpx.Request]:
+    """Drive ensure_token with a canned response queue; return sent requests."""
+    sent: list[httpx.Request] = []
+
+    def send(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return responses.pop(0)
+
+    auth.ensure_token(send)
+    return sent
+
+
+def test_ensure_token_noop_when_valid_token_cached() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+
+    # Prime an in-memory token via auth_flow.
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="already", expires_in=1200))
+    with contextlib.suppress(StopIteration):
+        flow.send(httpx.Response(200, request=request))
+
+    sent = _run_ensure_token(auth, [])
+    assert sent == []
+
+
+def test_ensure_token_uses_password_grant_when_no_refresh() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+
+    sent = _run_ensure_token(auth, [_make_token_response(access_token="fresh")])
+
+    assert len(sent) == 1
+    assert str(sent[0].url) == TOKEN_URL
+    body = sent[0].content.decode()
+    assert "grant_type=password" in body
+    assert auth._token == "fresh"
+
+
+def test_ensure_token_prefers_refresh_token_when_available() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    auth._refresh_token = "RT-cached"
+
+    sent = _run_ensure_token(auth, [_make_token_response(access_token="refreshed")])
+
+    assert len(sent) == 1
+    body = sent[0].content.decode()
+    assert "grant_type=refresh_token" in body
+    assert "refresh_token=RT-cached" in body
+    assert auth._token == "refreshed"
+
+
+def test_ensure_token_falls_back_to_password_when_refresh_fails() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    auth._refresh_token = "RT-stale"
+
+    refresh_failed = httpx.Response(
+        401,
+        text="invalid_grant",
+        request=httpx.Request("POST", TOKEN_URL),
+    )
+    sent = _run_ensure_token(
+        auth,
+        [refresh_failed, _make_token_response(access_token="pwd-grant")],
+    )
+
+    assert len(sent) == 2
+    assert "grant_type=refresh_token" in sent[0].content.decode()
+    assert "grant_type=password" in sent[1].content.decode()
+    assert auth._token == "pwd-grant"
+
+
+def test_ensure_token_raises_when_no_password_and_refresh_fails() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = CloudAzAuth(
+        token_url=TOKEN_URL,
+        username="admin",
+        password=None,
+        client_id="ControlCenterOIDCClient",
+    )
+    auth._refresh_token = "RT-stale"
+
+    refresh_failed = httpx.Response(
+        401,
+        text="invalid_grant",
+        request=httpx.Request("POST", TOKEN_URL),
+    )
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        _run_ensure_token(auth, [refresh_failed])
+
+    assert "auth login" in exc_info.value.message.lower()
+
+
+def test_ensure_token_caches_access_token(tmp_path: object) -> None:
+    """ensure_token must populate both in-memory state and cache."""
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    when(time).time().thenReturn(float(0))
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    auth = CloudAzAuth(
+        token_url=TOKEN_URL,
+        username="admin",
+        password="secret",
+        client_id="ControlCenterOIDCClient",
+        token_cache=cache,
+    )
+
+    _run_ensure_token(auth, [_make_token_response(access_token="persisted")])
+
+    loaded = cache.load(auth._cache_key)
+    assert loaded is not None
+    assert loaded.access_token == "persisted"
+
+
+def test_ensure_token_async_fetches_and_caches() -> None:
+    import asyncio
+
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+
+    sent: list[httpx.Request] = []
+
+    async def send(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return _make_token_response(access_token="async-fresh")
+
+    async def run() -> None:
+        await auth.ensure_token_async(send)
+
+    asyncio.run(run())
+
+    assert len(sent) == 1
+    assert auth._token == "async-fresh"

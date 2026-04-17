@@ -109,7 +109,7 @@ def login(ctx: typer.Context) -> None:
     cli_ctx: CliContext = ctx.obj
     resolved = _resolve_login_context(cli_ctx)
     client = _client_factory.make_cloudaz_client(resolved)
-    client.operators.list_types()
+    client.authenticate()
     print_success("Login successful; token cached")
 
 
