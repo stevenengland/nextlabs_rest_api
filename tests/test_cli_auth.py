@@ -227,6 +227,94 @@ def test_login_menu_selection_does_not_override_explicit_username(
     assert captured[0].username == "carol"
 
 
+def test_login_persists_verify_preference_default_true(login_ctx):
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    assert entry is not None
+    assert entry.verify_ssl is True
+
+
+def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    result = runner.invoke(
+        app,
+        [
+            "--no-verify",
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    assert entry is not None
+    assert entry.verify_ssl is False
+
+
+def test_logout_deletes_persisted_preference(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._cli._account_preferences import AccountPreferences
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY)
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://alpha.example.com",
+            username="alice",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+    prefs_path = f"{tmp_path}/account_prefs.json"
+    prefs_store = AccountPreferencesStore(path=prefs_path)
+    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient"
+    prefs_store.save(prefs_key, AccountPreferences(verify_ssl=False))
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    assert prefs_store.load(prefs_key) is None
+
+
 def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
     from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
     from nextlabs_sdk._auth._active_account._active_account_store import (

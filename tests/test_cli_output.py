@@ -37,7 +37,7 @@ def _make_ctx(*, json_output: bool = False) -> CliContext:
         client_secret=None,
         pdp_url=None,
         json_output=json_output,
-        no_verify=False,
+        verify=None,
         timeout=30.0,
     )
 

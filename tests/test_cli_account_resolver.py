@@ -28,7 +28,7 @@ def _ctx(
         client_secret=None,
         pdp_url=None,
         json_output=False,
-        no_verify=False,
+        verify=None,
         timeout=30.0,
         cache_dir=cache_dir,
     )

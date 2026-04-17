@@ -4,9 +4,12 @@ import typer
 
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
     build_file_cache,
+    build_prefs_store,
+    prefs_key_for,
     resolve_account,
 )
 from nextlabs_sdk._cli._context import CliContext
@@ -33,10 +36,31 @@ def _has_valid_cached_token_for(
     return entry is not None and not entry.is_expired()
 
 
-def _http_config(ctx: CliContext) -> HttpConfig:
+def _persisted_verify(
+    prefs: AccountPreferencesStore,
+    account: ResolvedAccount,
+) -> bool | None:
+    entry = prefs.load(prefs_key_for(account))
+    return None if entry is None else entry.verify_ssl
+
+
+def _effective_verify_ssl(
+    ctx: CliContext,
+    account: ResolvedAccount | None,
+) -> bool:
+    if ctx.verify is not None:
+        return ctx.verify
+    if account is not None:
+        persisted = _persisted_verify(build_prefs_store(ctx), account)
+        if persisted is not None:
+            return persisted
+    return True
+
+
+def _http_config(ctx: CliContext, account: ResolvedAccount | None) -> HttpConfig:
     return HttpConfig(
         timeout=ctx.timeout,
-        verify_ssl=not ctx.no_verify,
+        verify_ssl=_effective_verify_ssl(ctx, account),
         verbose=ctx.verbose,
     )
 
@@ -47,7 +71,7 @@ def _build_static_token_client(ctx: CliContext) -> CloudAzClient:
     return CloudAzClient(
         base_url=ctx.base_url,
         client_id=ctx.client_id,
-        http_config=_http_config(ctx),
+        http_config=_http_config(ctx, None),
         auth=StaticTokenAuth(ctx.token or ""),
     )
 
@@ -75,20 +99,16 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
         username=account.username,
         password=ctx.password,
         client_id=account.client_id,
-        http_config=_http_config(ctx),
+        http_config=_http_config(ctx, account),
         token_cache=cache,
     )
 
 
 def make_pdp_client(ctx: CliContext) -> PdpClient:
-    base_url = ctx.base_url
-    client_id = ctx.client_id
-
-    if not base_url:
-        account = resolve_account(ctx)
-        if account is not None:
-            base_url = account.base_url
-            client_id = account.client_id
+    account = resolve_account(ctx)
+    fallback_base_url = account.base_url if account else None
+    base_url = ctx.base_url or fallback_base_url
+    client_id = account.client_id if account else ctx.client_id
 
     if not base_url:
         raise typer.BadParameter(_BASE_URL_REQUIRED)
@@ -99,5 +119,5 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
         base_url=ctx.pdp_url or base_url,
         client_id=client_id,
         client_secret=ctx.client_secret,
-        http_config=_http_config(ctx),
+        http_config=_http_config(ctx, account),
     )

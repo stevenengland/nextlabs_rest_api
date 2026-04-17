@@ -16,9 +16,11 @@ from nextlabs_sdk._cli._account_menu import (
     known_accounts,
     select_account,
 )
+from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
     build_active_store,
     build_file_cache,
+    build_prefs_store,
 )
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
@@ -218,15 +220,26 @@ def login(ctx: typer.Context) -> None:
     resolved = _resolve_login_context(cli_ctx)
     client = _client_factory.make_cloudaz_client(resolved)
     client.authenticate()
-    _set_active(
-        resolved,
-        AccountIdentifier(
-            base_url=resolved.base_url or "",
-            username=resolved.username or "",
-            client_id=resolved.client_id,
-        ),
+    account = AccountIdentifier(
+        base_url=resolved.base_url or "",
+        username=resolved.username or "",
+        client_id=resolved.client_id,
     )
+    _set_active(resolved, account)
+    _save_prefs(resolved, account)
     print_success("Login successful; token cached")
+
+
+def _prefs_key(account: AccountIdentifier) -> str:
+    return f"{account.base_url}|{account.username}|{account.client_id}"
+
+
+def _save_prefs(cli_ctx: CliContext, account: AccountIdentifier) -> None:
+    verify_ssl = True if cli_ctx.verify is None else cli_ctx.verify
+    build_prefs_store(cli_ctx).save(
+        _prefs_key(account),
+        AccountPreferences(verify_ssl=verify_ssl),
+    )
 
 
 @auth_app.command(name="logout")
@@ -237,6 +250,7 @@ def logout(ctx: typer.Context) -> None:
     target = _resolve_active_target(cli_ctx)
     cache = build_file_cache(cli_ctx)
     cache.delete(cache_key_for(target))
+    build_prefs_store(cli_ctx).delete(_prefs_key(target))
     if _is_active(cli_ctx, target):
         build_active_store(cli_ctx).clear()
     print_success("Logged out; cache entry removed")

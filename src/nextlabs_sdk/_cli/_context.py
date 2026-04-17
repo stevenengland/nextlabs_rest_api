@@ -14,7 +14,7 @@ class CliContext:
     client_secret: str | None
     pdp_url: str | None
     json_output: bool
-    no_verify: bool
+    verify: bool | None
     timeout: float
     token: str | None = None
     cache_dir: str | None = None

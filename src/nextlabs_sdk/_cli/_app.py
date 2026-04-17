@@ -69,10 +69,14 @@ def main(
         "--json",
         help="Output JSON instead of Rich tables",
     ),
-    no_verify: bool = typer.Option(
-        False,
-        "--no-verify",
-        help="Disable SSL certificate verification",
+    verify: bool | None = typer.Option(
+        None,
+        "--verify/--no-verify",
+        help=(
+            "Enable or disable SSL certificate verification for this "
+            "invocation. When omitted, the persisted per-account preference "
+            "is used (default: verify)."
+        ),
     ),
     timeout: float = typer.Option(
         30.0,
@@ -109,7 +113,7 @@ def main(
         client_secret=client_secret,
         pdp_url=pdp_url,
         json_output=json_output,
-        no_verify=no_verify,
+        verify=verify,
         timeout=timeout,
         token=token,
         cache_dir=cache_dir,

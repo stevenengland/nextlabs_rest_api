@@ -18,7 +18,7 @@ def _ctx(verbose: int) -> typer.Context:
         client_secret=None,
         pdp_url=None,
         json_output=False,
-        no_verify=False,
+        verify=None,
         timeout=30.0,
         verbose=verbose,
     )

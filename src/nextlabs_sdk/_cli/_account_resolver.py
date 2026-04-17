@@ -7,6 +7,7 @@ from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
 )
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._context import CliContext
 
 
@@ -29,6 +30,18 @@ def build_file_cache(ctx: CliContext) -> FileTokenCache:
     if ctx.cache_dir:
         return FileTokenCache(path=Path(ctx.cache_dir) / "tokens.json")
     return FileTokenCache()
+
+
+def build_prefs_store(ctx: CliContext) -> AccountPreferencesStore:
+    if ctx.cache_dir:
+        return AccountPreferencesStore(
+            path=Path(ctx.cache_dir) / "account_prefs.json",
+        )
+    return AccountPreferencesStore()
+
+
+def prefs_key_for(account: ResolvedAccount) -> str:
+    return f"{account.base_url}|{account.username}|{account.client_id}"
 
 
 def resolve_account(ctx: CliContext) -> ResolvedAccount | None:
