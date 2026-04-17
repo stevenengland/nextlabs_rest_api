@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import click
+import typer
+
+from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+_TOKEN_PATH_SUFFIX = "/cas/oidc/accessToken"
+
+
+@dataclass(frozen=True)
+class AccountIdentifier:
+    """Identifying tuple of a cached account."""
+
+    base_url: str
+    username: str
+    client_id: str
+
+
+def parse_cache_key(key: str) -> AccountIdentifier | None:
+    """Parse a token-cache key into account identifiers, or ``None`` if malformed."""
+    parts = key.split("|")
+    if len(parts) != 3:
+        return None
+    base_part, username, client_id = parts
+    if not base_part.endswith(_TOKEN_PATH_SUFFIX):
+        return None
+    base_url = base_part[: -len(_TOKEN_PATH_SUFFIX)]
+    if not (base_url and username and client_id):
+        return None
+    return AccountIdentifier(
+        base_url=base_url,
+        username=username,
+        client_id=client_id,
+    )
+
+
+def cache_key_for(account: AccountIdentifier) -> str:
+    return (
+        f"{account.base_url}{_TOKEN_PATH_SUFFIX}"
+        f"|{account.username}|{account.client_id}"
+    )
+
+
+def known_accounts(cache: FileTokenCache) -> list[AccountIdentifier]:
+    """Return all parseable accounts from the token cache, in insertion order."""
+    parsed: list[AccountIdentifier] = []
+    for key in cache.keys():
+        entry = parse_cache_key(key)
+        if entry is not None:
+            parsed.append(entry)
+    return parsed
+
+
+def select_account(
+    accounts: list[AccountIdentifier],
+    *,
+    add_new_label: str | None = "Add new",
+) -> AccountIdentifier | None:
+    """Prompt the user to pick a cached account.
+
+    Returns the chosen account, or ``None`` if the user picked ``Add new``
+    (only offered when ``add_new_label`` is non-empty).
+    """
+    typer.echo("Cached accounts:")
+    for idx, account in enumerate(accounts, start=1):
+        typer.echo(f"  {idx}) {account.username} @ {account.base_url}")
+    if add_new_label:
+        add_new_idx = len(accounts) + 1
+        typer.echo(f"  {add_new_idx}) {add_new_label}")
+        upper = add_new_idx
+    else:
+        upper = len(accounts)
+    choice = typer.prompt(
+        "Select an account",
+        type=click.IntRange(1, upper),
+        default=1,
+    )
+    if add_new_label and choice == len(accounts) + 1:
+        return None
+    return accounts[choice - 1]

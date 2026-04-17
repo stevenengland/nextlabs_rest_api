@@ -1,86 +1,103 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._cli._account_resolver import (
+    ResolvedAccount,
+    build_file_cache,
+    resolve_account,
+)
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk._pdp._client import PdpClient
 
-
-def _build_file_cache(ctx: CliContext) -> FileTokenCache:
-    if ctx.cache_dir:
-        return FileTokenCache(path=Path(ctx.cache_dir) / "tokens.json")
-    return FileTokenCache()
-
-
-def _cache_key(ctx: CliContext) -> str:
-    return f"{ctx.base_url}/cas/oidc/accessToken|{ctx.username}|{ctx.client_id}"
+_LOGIN_HINT = "run `nextlabs auth login` or `nextlabs auth use`"
+_BASE_URL_REQUIRED = f"--base-url is required (or {_LOGIN_HINT})"
+_USERNAME_REQUIRED = f"--username is required (or {_LOGIN_HINT})"
+_PASSWORD_REQUIRED = f"--password or NEXTLABS_PASSWORD is required (or {_LOGIN_HINT})"
+_CLIENT_SECRET_REQUIRED = "--client-secret or NEXTLABS_CLIENT_SECRET is required"
 
 
-def _has_valid_cached_token(ctx: CliContext) -> bool:
-    if not (ctx.base_url and ctx.username):
-        return False
-    cache = _build_file_cache(ctx)
-    entry = cache.load(_cache_key(ctx))
+def _has_valid_cached_token_for(
+    cache: FileTokenCache,
+    account: ResolvedAccount,
+) -> bool:
+    key = (
+        f"{account.base_url}/cas/oidc/accessToken"
+        f"|{account.username}|{account.client_id}"
+    )
+    entry = cache.load(key)
     return entry is not None and not entry.is_expired()
 
 
-def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
-    if not ctx.base_url:
-        raise typer.BadParameter("--base-url or NEXTLABS_BASE_URL is required")
-
-    config = HttpConfig(
+def _http_config(ctx: CliContext) -> HttpConfig:
+    return HttpConfig(
         timeout=ctx.timeout,
         verify_ssl=not ctx.no_verify,
         verbose=ctx.verbose,
     )
 
-    if ctx.token:
-        return CloudAzClient(
-            base_url=ctx.base_url,
-            client_id=ctx.client_id,
-            http_config=config,
-            auth=StaticTokenAuth(ctx.token),
-        )
 
-    if not ctx.username:
-        raise typer.BadParameter("--username or NEXTLABS_USERNAME is required")
-    if not ctx.password and not _has_valid_cached_token(ctx):
-        raise typer.BadParameter(
-            "--password or NEXTLABS_PASSWORD is required "
-            "(or run `nextlabs auth login` first)",
-        )
-
+def _build_static_token_client(ctx: CliContext) -> CloudAzClient:
+    if not ctx.base_url:
+        raise typer.BadParameter(_BASE_URL_REQUIRED)
     return CloudAzClient(
         base_url=ctx.base_url,
-        username=ctx.username,
-        password=ctx.password,
         client_id=ctx.client_id,
-        http_config=config,
-        token_cache=_build_file_cache(ctx),
+        http_config=_http_config(ctx),
+        auth=StaticTokenAuth(ctx.token or ""),
+    )
+
+
+def _resolve_or_raise(ctx: CliContext) -> ResolvedAccount:
+    account = resolve_account(ctx)
+    if account is not None:
+        return account
+    if not ctx.base_url:
+        raise typer.BadParameter(_BASE_URL_REQUIRED)
+    raise typer.BadParameter(_USERNAME_REQUIRED)
+
+
+def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
+    if ctx.token:
+        return _build_static_token_client(ctx)
+
+    account = _resolve_or_raise(ctx)
+    cache = build_file_cache(ctx)
+    if not ctx.password and not _has_valid_cached_token_for(cache, account):
+        raise typer.BadParameter(_PASSWORD_REQUIRED)
+
+    return CloudAzClient(
+        base_url=account.base_url,
+        username=account.username,
+        password=ctx.password,
+        client_id=account.client_id,
+        http_config=_http_config(ctx),
+        token_cache=cache,
     )
 
 
 def make_pdp_client(ctx: CliContext) -> PdpClient:
-    if not ctx.base_url:
-        raise typer.BadParameter("--base-url or NEXTLABS_BASE_URL is required")
+    base_url = ctx.base_url
+    client_id = ctx.client_id
+
+    if not base_url:
+        account = resolve_account(ctx)
+        if account is not None:
+            base_url = account.base_url
+            client_id = account.client_id
+
+    if not base_url:
+        raise typer.BadParameter(_BASE_URL_REQUIRED)
     if not ctx.client_secret:
-        raise typer.BadParameter(
-            "--client-secret or NEXTLABS_CLIENT_SECRET is required",
-        )
-    config = HttpConfig(
-        timeout=ctx.timeout,
-        verify_ssl=not ctx.no_verify,
-        verbose=ctx.verbose,
-    )
+        raise typer.BadParameter(_CLIENT_SECRET_REQUIRED)
+
     return PdpClient(
-        base_url=ctx.pdp_url or ctx.base_url,
-        client_id=ctx.client_id,
+        base_url=ctx.pdp_url or base_url,
+        client_id=client_id,
         client_secret=ctx.client_secret,
-        http_config=config,
+        http_config=_http_config(ctx),
     )
