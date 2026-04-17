@@ -72,3 +72,25 @@ For non-Docker deployments:
 ```bash
 ./tools/setup_bare_metal.sh
 ```
+
+## E2E Tests
+
+```bash
+python ./tools/tests.py --short --e2e
+```
+
+Requires Docker. Spins up a WireMock container that serves stubs derived from
+the committed OpenAPI spec at `tests/_openapi/fixtures/nextlabs-openapi.json`.
+
+### Regenerating the OpenAPI fixture
+
+The vendor spec is committed so the test suite stays hermetic. To refresh:
+
+```bash
+python tools/fetch_openapi_spec.py
+```
+
+This writes the latest spec to
+`tests/_openapi/fixtures/nextlabs-openapi.json`. Review the diff, run the test
+suite (including `--e2e`), fix any new round-trip or model-registry failures,
+then commit. The helper refuses to run in CI.
