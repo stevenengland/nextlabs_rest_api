@@ -48,6 +48,7 @@ python ./tools/tests.py --short --all # unit + E2E tests (requires Docker)
 - When applicable, use available skills to improve output quality:
   - **tdd** skill — use for all new features and bug fixes.
   - **clean-code** skill — use when writing or refactoring production code.
+- NEVER touch changelog.md — it is auto-generated.
 
 ## Testing
 
