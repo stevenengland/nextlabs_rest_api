@@ -195,9 +195,6 @@ nextlabs -o detail components get 42
 nextlabs --output json components list   # machine-readable
 ```
 
-> Breaking change: the former `--json` flag has been removed in favor of
-> `-o json`.
-
 Command groups: `auth`, `tags`, `components`, `component-types`, `policies`,
 `audit-logs`, `reports`, `dashboard`, `pdp`.
 
