@@ -126,30 +126,44 @@ def test_components_get_not_found(stub: tuple[Any, Any, Any]):
     assert "Not found" in result.output
 
 
-def test_components_create_success(stub: tuple[Any, Any, Any]):
+def test_components_create_success(stub: tuple[Any, Any, Any], tmp_path: Any):
     _, mock_comp, _ = stub
     payload = {"name": "New Comp", "type": "RESOURCE"}
     when(mock_comp).create(payload).thenReturn(42)
+    payload_path = tmp_path / "comp.json"
+    payload_path.write_text(json.dumps(payload))
 
-    result = _invoke("components", "create", "--data", json.dumps(payload))
+    result = _invoke("components", "create", "--payload", str(payload_path))
 
     assert result.exit_code == 0
     assert "42" in result.output
 
 
-def test_components_create_invalid_json(stub: tuple[Any, Any, Any]):
-    result = _invoke("components", "create", "--data", "not-json")
+def test_components_create_invalid_payload(stub: tuple[Any, Any, Any], tmp_path: Any):
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text("not-json")
+
+    result = _invoke("components", "create", "--payload", str(payload_path))
 
     assert result.exit_code == 1
     assert "Invalid JSON" in result.output
 
 
-def test_components_modify_success(stub: tuple[Any, Any, Any]):
+def test_components_create_rejects_deprecated_data_flag(stub: tuple[Any, Any, Any]):
+    result = _invoke("components", "create", "--data", "{}")
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_components_modify_success(stub: tuple[Any, Any, Any], tmp_path: Any):
     _, mock_comp, _ = stub
     payload = {"id": 1, "name": "Updated"}
     when(mock_comp).modify(payload).thenReturn(1)
+    payload_path = tmp_path / "mod.json"
+    payload_path.write_text(json.dumps(payload))
 
-    result = _invoke("components", "modify", "--data", json.dumps(payload))
+    result = _invoke("components", "modify", "--payload", str(payload_path))
 
     assert result.exit_code == 0
     assert "Modified" in result.output

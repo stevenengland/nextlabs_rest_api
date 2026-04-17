@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -11,7 +12,7 @@ from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_success, render
-from nextlabs_sdk._cli._parsing import parse_json_payload
+from nextlabs_sdk._cli._payload_loader import reject_data_flag, require_payload
 from nextlabs_sdk._cloudaz._component_models import Component
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
@@ -58,11 +59,19 @@ def get(
 @cli_error_handler
 def create(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Create a component from a JSON payload."""
+    """Create a component from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     comp_id = client.components.create(payload)
     print_success(f"Created component with ID {comp_id}")
@@ -72,11 +81,19 @@ def create(
 @cli_error_handler
 def modify(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Modify a component from a JSON payload."""
+    """Modify a component from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.components.modify(payload)
     print_success("Modified component")

@@ -113,38 +113,55 @@ def test_component_types_get_not_found(stub_client):
     assert "Not found" in result.output
 
 
-def test_component_types_create_success(stub_client):
+def test_component_types_create_success(stub_client, tmp_path):
     _, mock_ct, _ = stub_client
     payload = {"name": "New Type", "shortName": "new", "type": "RESOURCE"}
     when(mock_ct).create(payload).thenReturn(42)
+    payload_path = tmp_path / "ct.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "create", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "component-types", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
     assert "42" in result.output
 
 
-def test_component_types_create_invalid_json(stub_client):
+def test_component_types_create_invalid_payload(stub_client, tmp_path):
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text("not-json")
+
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "create", "--data", "not-json"],
+        [*_GLOBAL_OPTS, "component-types", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 1
     assert "Invalid JSON" in result.output
 
 
-def test_component_types_modify_success(stub_client):
+def test_component_types_create_rejects_deprecated_data_flag(stub_client):
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "create", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_component_types_modify_success(stub_client, tmp_path):
     _, mock_ct, _ = stub_client
     payload = {"id": 1, "name": "Updated"}
     when(mock_ct).modify(payload).thenReturn(1)
+    payload_path = tmp_path / "mod.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "modify", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "component-types", "modify", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0

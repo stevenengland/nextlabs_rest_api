@@ -143,14 +143,16 @@ def test_policies_get_not_found(stub: tuple[Any, Any, Any]) -> None:
 # --- create ---
 
 
-def test_policies_create_success(stub: tuple[Any, Any, Any]) -> None:
+def test_policies_create_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
     _, mock_policies, _ = stub
     payload = {"name": "New Policy", "effectType": "ALLOW"}
     when(mock_policies).create(payload).thenReturn(100)
+    payload_path = tmp_path / "policy.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "policies", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
@@ -158,38 +160,75 @@ def test_policies_create_success(stub: tuple[Any, Any, Any]) -> None:
 
 
 @pytest.mark.parametrize(
-    "data,expected_msg",
+    "body,expected_msg",
     [
         pytest.param("not-json", "Invalid JSON", id="invalid-json"),
-        pytest.param("[1, 2]", "must be an object", id="json-array-rejected"),
+        pytest.param("[1, 2]", "must be a JSON object", id="json-array-rejected"),
     ],
 )
-def test_policies_create_invalid_data(
+def test_policies_create_invalid_payload(
     stub: tuple[Any, Any, Any],
-    data: str,
+    tmp_path: Any,
+    body: str,
     expected_msg: str,
 ) -> None:
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text(body)
+
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", data],
+        [*_GLOBAL_OPTS, "policies", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 1
     assert expected_msg in result.output
 
 
-def test_policies_modify_success(stub: tuple[Any, Any, Any]) -> None:
+def test_policies_create_rejects_deprecated_data_flag(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "create", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_policies_create_requires_payload(stub: tuple[Any, Any, Any]) -> None:
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "create"])
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_policies_modify_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
     _, mock_policies, _ = stub
     payload = {"id": 82, "name": "Updated Policy"}
     when(mock_policies).modify(payload).thenReturn(82)
+    payload_path = tmp_path / "policy.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "modify", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "policies", "modify", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
     assert "Modified" in result.output
+
+
+def test_policies_modify_rejects_deprecated_data_flag(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "modify", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
 
 
 def test_policies_delete_success(stub: tuple[Any, Any, Any]) -> None:
