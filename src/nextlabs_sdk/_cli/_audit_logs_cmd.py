@@ -3,12 +3,15 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
+from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, render
-from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+from nextlabs_sdk._cloudaz._audit_log_models import AuditLogEntry, AuditLogQuery
 
 audit_logs_app = typer.Typer(help="Entity audit log commands")
 
@@ -50,3 +53,18 @@ def search(
     )
     entries = list(client.audit_logs.search(query))
     render(cli_ctx, entries, _AUDIT_LOG_COLUMNS, title="Audit Logs")
+
+
+def _render_audit_entry_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, AuditLogEntry)
+    console.print(f"[bold]AuditLogEntry[/bold] {model.id}")
+    console.print(f"  [bold]Timestamp[/bold]:   {model.timestamp}")
+    console.print(f"  [bold]Action[/bold]:      {model.action}")
+    console.print(f"  [bold]Actor[/bold]:       {model.actor} (id={model.actor_id})")
+    console.print(f"  [bold]Entity Type[/bold]: {model.entity_type}")
+    console.print(f"  [bold]Entity ID[/bold]:   {model.entity_id}")
+    console.print(f"  [bold]Old Value[/bold]:   {model.old_value}")
+    console.print(f"  [bold]New Value[/bold]:   {model.new_value}")
+
+
+register_detail_renderer(AuditLogEntry, _render_audit_entry_detail)
