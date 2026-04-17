@@ -5,7 +5,8 @@ Tests in this directory are only collected when E2E_COLLECT=1 is set
 (see tests/conftest.py for the collection guard).
 
 Usage:
-    python ./tools/tests.py --short --e2e
+    python ./tools/tests.py --short --e2e  # e2e only
+    python ./tools/tests.py --short --all  # unit + e2e
 """
 
 # ── Example: WireMock container fixture ──

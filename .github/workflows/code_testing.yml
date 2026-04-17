@@ -42,13 +42,9 @@ jobs:
         shell: bash
         run: "python ./tools/checks.py"
 
-      - name: Perform Unit and Coverage tests
+      - name: Perform Unit, E2E and Coverage tests
         shell: bash
-        run: "python ./tools/tests.py --short"
-
-      - name: Perform E2E tests
-        shell: bash
-        run: "python ./tools/tests.py --short --e2e"
+        run: "python ./tools/tests.py --short --all"
 
       - name: Build and check package
         shell: bash

@@ -31,7 +31,8 @@ python ./tools/checks.py pyright
 
 ```bash
 python ./tools/tests.py --short       # Unit tests (filtered output)
-python ./tools/tests.py --short --e2e # E2E tests (requires Docker)
+python ./tools/tests.py --short --e2e # E2E tests only (requires Docker)
+python ./tools/tests.py --short --all # Unit + E2E tests (requires Docker)
 python ./tools/tests.py               # Full pytest output
 ```
 

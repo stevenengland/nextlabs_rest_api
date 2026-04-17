@@ -19,19 +19,35 @@ def _extract_no_cov(argv: list[str]) -> bool:
 
 
 def _build_marker_args(argv: list[str]) -> list[str]:
-    """Build pytest marker arguments based on --e2e flag.
+    """Build pytest marker arguments based on test-selection flags.
 
-    When --e2e is present: run only e2e-marked tests.
-    When absent: exclude e2e-marked tests.
+    Flags:
+        - ``--e2e``: run only e2e-marked tests (coverage forced off).
+        - ``--all``: run unit and e2e tests in a single run. Coverage
+          stays on unless ``--no-cov`` is also passed. Mutually
+          exclusive with ``--e2e``.
+        - neither: run unit tests only (exclude e2e).
 
     Args:
-        argv: Command-line arguments (mutated to remove --e2e).
+        argv: Command-line arguments (mutated to remove consumed flags).
 
     Returns:
         Extra pytest arguments for marker selection.
     """
     no_cov = _extract_no_cov(argv)
-    if "--e2e" in argv:
+    want_all = "--all" in argv
+    want_e2e = "--e2e" in argv
+    if want_all and want_e2e:
+        print("Error: --all and --e2e are mutually exclusive.")
+        sys.exit(2)
+    if want_all:
+        argv.remove("--all")
+        os.environ["E2E_COLLECT"] = "1"
+        extra = ["-m", "e2e or not e2e"]
+        if no_cov:
+            extra.append("--no-cov")
+        return extra
+    if want_e2e:
         argv.remove("--e2e")
         os.environ["E2E_COLLECT"] = "1"
         return ["-m", "e2e", "--no-cov"]

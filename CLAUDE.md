@@ -9,7 +9,8 @@ Python 3.11+. See @docs/development.md for the full development guide.
 gh                                    # GitHub CLI
 python ./tools/checks.py              # Black + Flake8 + MyPy + Pyright
 python ./tools/tests.py --short       # unit tests
-python ./tools/tests.py --short --e2e # + E2E (requires Docker)
+python ./tools/tests.py --short --e2e # E2E tests only (requires Docker)
+python ./tools/tests.py --short --all # unit + E2E tests (requires Docker)
 ```
 
 - **Pre-commit hooks** (black, flake8, mypy, pyright) run on `git commit`.
@@ -51,7 +52,8 @@ python ./tools/tests.py --short --e2e # + E2E (requires Docker)
 ## Testing
 
 - Mocking: **mockito** (not `unittest.mock`).
-- E2E: **testcontainers**; requires Docker + `--e2e` flag.
+- E2E: **testcontainers**; requires Docker + `--e2e` (e2e only) or
+  `--all` (unit + e2e) flag.
 - Key fixtures: `when`, `unstub` (in `tests/conftest.py`).
 
 ## References

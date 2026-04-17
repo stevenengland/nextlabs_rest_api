@@ -277,7 +277,8 @@ guide. Quick reference:
 ```bash
 python ./tools/checks.py              # Black + Flake8 + MyPy + Pyright
 python ./tools/tests.py --short       # unit tests
-python ./tools/tests.py --short --e2e # + E2E tests (requires Docker)
+python ./tools/tests.py --short --e2e # E2E tests only (requires Docker)
+python ./tools/tests.py --short --all # unit + E2E tests (requires Docker)
 ```
 
 A `.devcontainer` is provided; pre-commit hooks are preconfigured.
