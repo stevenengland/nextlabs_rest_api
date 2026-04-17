@@ -153,24 +153,64 @@ def test_top_users_custom_decision():
     assert "admin_user" in result.output
 
 
-def test_top_policies_json_format():
+@pytest.mark.parametrize(
+    "output_format,assertions",
+    [
+        pytest.param(
+            "table",
+            lambda out: (
+                "Top Policies" in out
+                and "Access Control Policy" in out
+                and "95" in out  # allow_total = 50 + 45
+                and "10" in out  # deny_total = 3 + 7
+            ),
+            id="table",
+        ),
+        pytest.param(
+            "json",
+            lambda out: (
+                json.loads(out)[0]["policy_name"] == "Access Control Policy"
+                and len(json.loads(out)[0]["policy_decisions"]) == 2
+            ),
+            id="json",
+        ),
+        pytest.param(
+            "detail",
+            lambda out: (
+                "Access Control Policy" in out
+                and "Daily Trend" in out
+                and "day=1" in out
+                and "day=2" in out
+            ),
+            id="detail",
+        ),
+    ],
+)
+def test_top_policies_output_formats(output_format, assertions):
     _, mock_dashboard = _stub_client()
     when(mock_dashboard).top_policies(...).thenReturn([_make_policy_activity()])
 
-    result = _invoke("top-policies", json_flag=False)
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "--output",
+            output_format,
+            "dashboard",
+            "top-policies",
+            *_DATE_OPTS,
+        ],
+    )
 
     assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["policy_name"] == "Access Control Policy"
-    assert len(parsed[0]["policy_decisions"]) == 2
+    assert assertions(result.output)
 
 
 def test_top_policies_custom_decision():
     _, mock_dashboard = _stub_client()
     when(mock_dashboard).top_policies(...).thenReturn([_make_policy_activity()])
 
-    result = _invoke("top-policies", json_flag=False, extra=("--decision", "D"))
+    result = _invoke("top-policies", json_flag=True, extra=("--decision", "D"))
 
     assert result.exit_code == 0
     parsed = json.loads(result.output)

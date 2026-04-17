@@ -52,3 +52,19 @@ class PolicyActivity(BaseModel):
 
     policy_name: str
     policy_decisions: list[PolicyDayBucket]
+
+    @property
+    def day_count(self) -> int:
+        return len(self.policy_decisions)
+
+    @property
+    def allow_total(self) -> int:
+        return sum(bucket.allow_count for bucket in self.policy_decisions)
+
+    @property
+    def deny_total(self) -> int:
+        return sum(bucket.deny_count for bucket in self.policy_decisions)
+
+    @property
+    def decision_total(self) -> int:
+        return self.allow_total + self.deny_total

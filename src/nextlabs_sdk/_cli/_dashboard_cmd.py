@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
+from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk._cli._output import ColumnDef, render, render_json
+from nextlabs_sdk._cli._output import ColumnDef, render
+from nextlabs_sdk._cloudaz._dashboard_models import PolicyActivity
 
 dashboard_app = typer.Typer(help="Reporter dashboard commands")
 
@@ -23,6 +27,14 @@ _ACTIVITY_COLUMNS = (
     ColumnDef("Allow", "allow_count"),
     ColumnDef("Deny", "deny_count"),
     ColumnDef("Total", "decision_count"),
+)
+
+_TOP_POLICIES_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Policy", "policy_name"),
+    ColumnDef("Days", "day_count"),
+    ColumnDef("Allow", "allow_total"),
+    ColumnDef("Deny", "deny_total"),
+    ColumnDef("Total", "decision_total"),
 )
 
 
@@ -82,4 +94,23 @@ def top_policies(
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     policies = client.dashboard.top_policies(from_date, to_date, decision)
-    render_json(policies)
+    render(cli_ctx, policies, _TOP_POLICIES_COLUMNS, title="Top Policies")
+
+
+def _render_policy_activity_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, PolicyActivity)
+    console.print(f"[bold]Policy[/bold]: {model.policy_name}")
+    console.print(
+        f"  [bold]Totals[/bold]: allow={model.allow_total} "
+        f"deny={model.deny_total} total={model.decision_total} "
+        f"days={model.day_count}",
+    )
+    console.print("  [bold]Daily Trend[/bold]:")
+    for bucket in model.policy_decisions:
+        console.print(
+            f"    - day={bucket.day_nb} "
+            f"allow={bucket.allow_count} deny={bucket.deny_count}",
+        )
+
+
+register_detail_renderer(PolicyActivity, _render_policy_activity_detail)
