@@ -85,6 +85,27 @@ python ./tools/tests.py --short --e2e
 
 Requires Docker. Spins up a WireMock container that serves stubs derived from
 the committed OpenAPI spec at `tests/_openapi/fixtures/nextlabs-openapi.json`.
+The full E2E suite runs in about 25 seconds on top of the ~18 second unit run.
+
+### Troubleshooting
+
+- **`docker: command not found` or Docker socket unavailable:** E2E tests are
+  automatically skipped when Docker is not reachable. Inside the dev container
+  make sure the Docker-in-Docker feature is enabled (see *Docker from inside
+  the dev container* above).
+- **Tests hang at WireMock startup / connection refused:** when running from
+  inside a container the host-mapped port is not routable. The fixtures
+  resolve the WireMock container's internal IP via `docker inspect` and talk
+  to it on port 8080 directly — verify Docker network reachability with
+  `docker network ls` and `docker inspect <container>`.
+- **Corporate proxy breaks requests to WireMock:** the conftest clears
+  `HTTP(S)_PROXY` before each test because httpx's `NO_PROXY` does not
+  understand CIDR ranges. If you see unexpected proxy traffic, confirm the
+  clearing logic in `tests/e2e/conftest.py` still fires.
+- **`nextlabs: command not found` in CLI tests:** the subprocess fixtures
+  inherit the full `os.environ` so the installed entry point is found via
+  user site-packages. If you override `PATH`/`HOME` in a custom fixture you
+  must keep them pointed at the same Python environment.
 
 ### Regenerating the OpenAPI fixture
 
