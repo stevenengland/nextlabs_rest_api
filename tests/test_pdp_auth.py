@@ -154,3 +154,43 @@ def test_client_credentials_grant_type_in_token_request() -> None:
     assert "grant_type=client_credentials" in body
     assert "client_id=pdp-client" in body
     assert "client_secret=pdp-secret" in body
+
+
+def test_non_json_200_token_response_raises_authentication_error() -> None:
+    when(time).monotonic().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("POST", "https://cloudaz.example.com/dpc/authorization/pdp")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        flow.send(
+            httpx.Response(
+                200,
+                content=b"not-json",
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    assert "Invalid JSON response" in exc_info.value.message
+
+
+def test_token_response_missing_access_token_raises_authentication_error() -> None:
+    when(time).monotonic().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("POST", "https://cloudaz.example.com/dpc/authorization/pdp")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        flow.send(
+            httpx.Response(
+                200,
+                json={"expires_in": 3600},
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    assert "missing 'access_token'" in exc_info.value.message

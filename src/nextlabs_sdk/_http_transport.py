@@ -8,6 +8,17 @@ import time
 import httpx
 
 from nextlabs_sdk._config import RetryConfig
+from nextlabs_sdk.exceptions import (
+    NextLabsError,
+    RequestTimeoutError,
+    TransportError,
+)
+
+_SSL_VERIFY_MARKER = "CERTIFICATE_VERIFY_FAILED"
+_SSL_HINT = (
+    "SSL certificate verification failed: {detail}. "
+    "Use --no-verify to bypass (dev/self-signed servers only)."
+)
 
 logger = logging.getLogger("nextlabs_sdk")
 
@@ -50,7 +61,7 @@ class RetryTransport(httpx.BaseTransport):
             if attempt < self._max_retries:
                 self._sleep_before_retry(attempt, last_response, last_exc)
 
-        return _resolve_final(last_exc, last_response)
+        return _resolve_final(last_exc, last_response, request)
 
     def close(self) -> None:
         self._wrapped.close()
@@ -104,7 +115,7 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 
             attempt += 1
 
-        return _resolve_final(last_exc, last_response)
+        return _resolve_final(last_exc, last_response, request)
 
     async def aclose(self) -> None:
         await self._wrapped.aclose()
@@ -208,13 +219,43 @@ async def _try_async_request(
 def _resolve_final(
     last_exc: BaseException | None,
     last_response: httpx.Response | None,
+    request: httpx.Request,
 ) -> httpx.Response:
     if last_exc is not None:
-        raise last_exc
+        raise _wrap_transport_exception(last_exc, request) from last_exc
     if last_response is not None:
         return last_response
     msg = "No request attempts were made"
     raise RuntimeError(msg)
+
+
+def _wrap_transport_exception(
+    exc: BaseException,
+    request: httpx.Request,
+) -> NextLabsError:
+    method = request.method
+    url = str(request.url)
+    detail = str(exc) or exc.__class__.__name__
+
+    if isinstance(exc, (httpx.ConnectTimeout, httpx.ReadTimeout)):
+        return RequestTimeoutError(
+            message=f"Request timed out: {detail}",
+            request_method=method,
+            request_url=url,
+        )
+
+    if isinstance(exc, httpx.ConnectError) and _SSL_VERIFY_MARKER in detail:
+        return TransportError(
+            message=_SSL_HINT.format(detail=detail),
+            request_method=method,
+            request_url=url,
+        )
+
+    return TransportError(
+        message=f"Connection error: {detail}",
+        request_method=method,
+        request_url=url,
+    )
 
 
 def _is_retryable_status(status_code: int) -> bool:

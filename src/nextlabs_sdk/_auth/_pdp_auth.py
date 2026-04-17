@@ -6,6 +6,7 @@ from collections.abc import Generator
 
 import httpx
 
+from nextlabs_sdk._json_response import decode_json_object, require_int, require_str
 from nextlabs_sdk.exceptions import AuthenticationError
 
 _EXPIRY_SAFETY_MARGIN = 60
@@ -80,8 +81,23 @@ class PdpAuth(httpx.Auth):
                 request_url=self._token_url,
             )
 
-        body = response.json()
+        body = decode_json_object(
+            response,
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
+        access_token = require_str(
+            body,
+            "access_token",
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
+        expires_in = require_int(
+            body,
+            "expires_in",
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
         with self._lock:
-            self._token = body["access_token"]
-            expires_in = int(body["expires_in"])
+            self._token = access_token
             self._token_expiry = time.monotonic() + expires_in - _EXPIRY_SAFETY_MARGIN

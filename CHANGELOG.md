@@ -18,3 +18,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `client.reporter_audit_logs`, wrapping `GET /nextlabs-reporter/api/activity-logs/search`
   for Reporter audit logs covering Policy Activity Reports, Monitors, and Alerts
   (distinct from the entity audit log). Includes a `ReporterAuditLogEntry` model.
+
+### Changed
+
+- Transport layer now wraps retry-exhausted `httpx` exceptions into the
+  `NextLabsError` hierarchy: `httpx.ConnectTimeout` / `httpx.ReadTimeout` raise
+  `RequestTimeoutError`, and `httpx.ConnectError` raises `TransportError`. SSL
+  verification failures produce a `TransportError` with a hint pointing to
+  `--no-verify` for dev / self-signed servers.
+- CLI error handler now renders unexpected exceptions as a single-line message
+  (exit code 1) instead of a full traceback, and adds dedicated prefixes for
+  `TransportError` (*Connection error*) and `RequestTimeoutError` (*Request
+  timed out*).
+- JSON response decoding is now hardened across all call sites (CloudAz auth,
+  PDP auth, CloudAz response envelope, PDP eval/permissions). Non-JSON 200
+  bodies now raise `AuthenticationError` / `ApiError` with an *Invalid JSON
+  response* message (body preview truncated to 500 chars) instead of leaking
+  a bare `ValueError`. Missing or mistyped required keys raise
+  `AuthenticationError` / `ApiError` with an *Unexpected response shape*
+  message instead of a bare `KeyError` / `TypeError`.

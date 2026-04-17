@@ -11,6 +11,8 @@ from nextlabs_sdk.exceptions import (
     AuthenticationError,
     NextLabsError,
     NotFoundError,
+    RequestTimeoutError,
+    TransportError,
 )
 
 ParamSpec_T = ParamSpec("ParamSpec_T")
@@ -22,7 +24,19 @@ def _error_prefix(exc: NextLabsError) -> str:
         return "Authentication failed"
     if isinstance(exc, NotFoundError):
         return "Not found"
+    if isinstance(exc, RequestTimeoutError):
+        return "Request timed out"
+    if isinstance(exc, TransportError):
+        return "Connection error"
     return "API error"
+
+
+def _format_error_message(exc: BaseException) -> str:
+    if isinstance(exc, typer.BadParameter):
+        return str(exc)
+    if isinstance(exc, NextLabsError):
+        return f"{_error_prefix(exc)}: {exc.message}"
+    return f"Unexpected error: {exc}"
 
 
 def cli_error_handler(
@@ -32,11 +46,10 @@ def cli_error_handler(
     def wrapper(*args: ParamSpec_T.args, **kwargs: ParamSpec_T.kwargs) -> ReturnType_T:
         try:
             return func(*args, **kwargs)
-        except typer.BadParameter as exc:
-            print_error(str(exc))
-            raise typer.Exit(code=1) from exc
-        except NextLabsError as exc:
-            print_error(f"{_error_prefix(exc)}: {exc.message}")
+        except typer.Exit:
+            raise
+        except Exception as exc:
+            print_error(_format_error_message(exc))
             raise typer.Exit(code=1) from exc
 
     return wrapper

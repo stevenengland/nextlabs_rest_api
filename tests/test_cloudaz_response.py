@@ -150,3 +150,58 @@ def test_parse_raw_raises_on_http_error() -> None:
     )
     with pytest.raises(NotFoundError):
         parse_raw(response)
+
+
+def test_parse_data_raises_api_error_on_non_json() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    response = httpx.Response(
+        200,
+        content=b"<html>oops</html>",
+        request=_make_request(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        parse_data(response)
+    assert "Invalid JSON response" in exc_info.value.message
+
+
+def test_parse_data_raises_api_error_on_missing_data_key() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    response = httpx.Response(
+        200,
+        json={"statusCode": "1003"},
+        request=_make_request(),
+    )
+
+    with pytest.raises(ApiError) as exc_info:
+        parse_data(response)
+    assert "missing 'data'" in exc_info.value.message
+
+
+def test_parse_paginated_raises_api_error_on_non_json() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    response = httpx.Response(200, content=b"x", request=_make_request())
+
+    with pytest.raises(ApiError):
+        parse_paginated(response)
+
+
+def test_parse_reporter_paginated_raises_api_error_on_non_json() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    response = httpx.Response(200, content=b"x", request=_make_request())
+
+    with pytest.raises(ApiError):
+        parse_reporter_paginated(response)
+
+
+def test_parse_raw_raises_api_error_on_non_json() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    response = httpx.Response(200, content=b"x", request=_make_request())
+
+    with pytest.raises(ApiError):
+        parse_raw(response)

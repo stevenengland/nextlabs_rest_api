@@ -9,6 +9,7 @@ import httpx
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._null_token_cache import NullTokenCache
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
+from nextlabs_sdk._json_response import decode_json_object, require_int, require_str
 from nextlabs_sdk.exceptions import AuthenticationError
 
 _EXPIRY_SAFETY_MARGIN = 60
@@ -142,14 +143,35 @@ class CloudAzAuth(httpx.Auth):
                 request_url=self._token_url,
             )
 
-        body = response.json()
-        expires_in = int(body["expires_in"])
+        body = decode_json_object(
+            response,
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
+        expires_in = require_int(
+            body,
+            "expires_in",
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
         now = time.time()
         expires_at = now + expires_in - _EXPIRY_SAFETY_MARGIN
-        id_token = body["id_token"]
-        refresh_token = body.get("refresh_token") or self._refresh_token
-        token_type = body.get("token_type", "bearer")
-        scope = body.get("scope")
+        id_token = require_str(
+            body,
+            "id_token",
+            error_cls=AuthenticationError,
+            context=" in token response",
+        )
+        refresh_token_raw = body.get("refresh_token")
+        refresh_token = (
+            refresh_token_raw
+            if isinstance(refresh_token_raw, str)
+            else self._refresh_token
+        )
+        token_type_raw = body.get("token_type", "bearer")
+        token_type = token_type_raw if isinstance(token_type_raw, str) else "bearer"
+        scope_raw = body.get("scope")
+        scope = scope_raw if isinstance(scope_raw, str) else None
 
         with self._lock:
             self._token = id_token

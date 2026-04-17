@@ -212,3 +212,78 @@ def test_async_evaluate_with_xml() -> None:
         assert response.first_result.decision == Decision.DENY
 
     asyncio.run(run())
+
+
+def test_async_evaluate_raises_api_error_on_non_json_response() -> None:
+    import pytest
+    from nextlabs_sdk.exceptions import ApiError
+
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    bad_response = httpx.Response(
+        200,
+        content=b"<html>oops</html>",
+        request=_make_request(),
+    )
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(bad_response)
+
+    pdp = AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+
+    async def run() -> None:
+        with pytest.raises(ApiError) as exc_info:
+            await pdp.evaluate(_make_eval_request())
+        assert "Invalid JSON response" in exc_info.value.message
+
+    asyncio.run(run())
+
+
+def test_async_permissions_raises_api_error_on_unexpected_shape() -> None:
+    import pytest
+    from nextlabs_sdk.exceptions import ApiError
+
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    bad_response = httpx.Response(
+        200,
+        json={"nope": True},
+        request=_make_request(),
+    )
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(bad_response)
+
+    pdp = AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+
+    async def run() -> None:
+        with pytest.raises(ApiError) as exc_info:
+            await pdp.permissions(
+                PermissionsRequest(
+                    subject=Subject(id="u"),
+                    action=Action(id="VIEW"),
+                    resource=Resource(id="r", type="doc"),
+                    application=Application(id="app"),
+                ),
+            )
+        assert "Unexpected PDP response shape" in exc_info.value.message
+
+    asyncio.run(run())

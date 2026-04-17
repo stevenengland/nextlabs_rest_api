@@ -135,6 +135,46 @@ def test_token_acquisition_failure_raises() -> None:
     assert exc_info.value.status_code == 401
 
 
+def test_non_json_200_token_response_raises_authentication_error() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        flow.send(
+            httpx.Response(
+                200,
+                content=b"<html>service unavailable</html>",
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    assert "Invalid JSON response" in exc_info.value.message
+
+
+def test_token_response_missing_id_token_raises_authentication_error() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        flow.send(
+            httpx.Response(
+                200,
+                json={"expires_in": 1200, "token_type": "bearer"},
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    assert "missing 'id_token'" in exc_info.value.message
+
+
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 

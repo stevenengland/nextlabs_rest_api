@@ -9,6 +9,7 @@ from nextlabs_sdk._pdp import _json_serializer as json_ser
 from nextlabs_sdk._pdp import _xml_serializer as xml_ser
 from nextlabs_sdk._pdp._enums import ContentType
 from nextlabs_sdk._pdp._request_models import EvalRequest, PermissionsRequest
+from nextlabs_sdk._pdp._response_decode import decode_pdp_response
 from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
 from nextlabs_sdk.exceptions import raise_for_status
 
@@ -66,7 +67,11 @@ class PdpClient:
             headers={_CONTENT_TYPE: content_type.value},
         )
         raise_for_status(response)
-        return json_ser.deserialize_eval_response(response.json())
+        return decode_pdp_response(
+            response,
+            json_ser.deserialize_eval_response,
+            what="eval response",
+        )
 
     def permissions(
         self,
@@ -91,7 +96,11 @@ class PdpClient:
             headers={_CONTENT_TYPE: content_type.value},
         )
         raise_for_status(response)
-        return json_ser.deserialize_permissions_response(response.json())
+        return decode_pdp_response(
+            response,
+            json_ser.deserialize_permissions_response,
+            what="permissions response",
+        )
 
     def close(self) -> None:
         self._client.close()

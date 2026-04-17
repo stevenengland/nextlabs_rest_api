@@ -338,3 +338,85 @@ def test_evaluate_with_xml_content_type() -> None:
     )
 
     assert response.first_result.decision == Decision.PERMIT
+
+
+def test_evaluate_raises_api_error_on_non_json_response() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    bad_response = httpx.Response(
+        200,
+        content=b"<html>oops</html>",
+        request=_make_request(),
+    )
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(bad_response)
+
+    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+    with pytest.raises(ApiError) as exc_info:
+        pdp.evaluate(_make_eval_request())
+    assert "Invalid JSON response" in exc_info.value.message
+
+
+def test_evaluate_raises_api_error_on_unexpected_shape() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    bad_response = httpx.Response(
+        200,
+        json={"nope": True},
+        request=_make_request(),
+    )
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(bad_response)
+
+    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+    with pytest.raises(ApiError) as exc_info:
+        pdp.evaluate(_make_eval_request())
+    assert "Unexpected PDP response shape" in exc_info.value.message
+
+
+def test_permissions_raises_api_error_on_non_json_response() -> None:
+    from nextlabs_sdk.exceptions import ApiError
+
+    mock_client = mock(httpx.Client)
+    when(transport_mod).create_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        timeout=any_value(),
+        verify_ssl=any_value(),
+        retry=any_value(),
+    ).thenReturn(mock_client)
+
+    bad_response = httpx.Response(200, content=b"x", request=_make_request())
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(bad_response)
+
+    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+    with pytest.raises(ApiError):
+        pdp.permissions(_make_permissions_request())
