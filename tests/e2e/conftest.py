@@ -53,19 +53,12 @@ def wiremock_container() -> Iterator[DockerContainer]:
         container.stop()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def wiremock_base_url(wiremock_container: DockerContainer) -> str:
-    """HTTP base URL for the running WireMock instance."""
+    """HTTP base URL for WireMock, freshly reset for each test."""
     host = wiremock_container.get_container_host_ip()
     port = wiremock_container.get_exposed_port(WIREMOCK_PORT)
-    return f"http://{host}:{port}"
-
-
-@pytest.fixture(autouse=True)
-def _reset_wiremock(  # pyright: ignore[reportUnusedFunction]
-    wiremock_base_url: str,
-) -> Iterator[None]:
-    """Reset request journal and mappings between tests for isolation."""
-    httpx.post(f"{wiremock_base_url}/__admin/mappings/reset", timeout=5.0)
-    httpx.post(f"{wiremock_base_url}/__admin/requests/reset", timeout=5.0)
-    yield
+    base = f"http://{host}:{port}"
+    httpx.post(f"{base}/__admin/mappings/reset", timeout=5.0)
+    httpx.post(f"{base}/__admin/requests/reset", timeout=5.0)
+    return base
