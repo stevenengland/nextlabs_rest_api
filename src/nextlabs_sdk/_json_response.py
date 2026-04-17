@@ -34,12 +34,33 @@ def decode_json(
     except ValueError as exc:
         method, url = _request_context(response)
         raise error_cls(
-            f"Invalid JSON response: {exc}",
+            _build_invalid_json_message(response, exc),
             status_code=response.status_code,
             response_body=_truncate(response.text),
             request_method=method,
             request_url=url,
         ) from exc
+
+
+def _build_invalid_json_message(response: httpx.Response, exc: ValueError) -> str:
+    content_type = response.headers.get("content-type") or "unknown"
+    redirect_clause = _format_redirect_clause(response)
+    return (
+        f"Invalid JSON response "
+        f"(HTTP {response.status_code}, Content-Type={content_type})"
+        f"{redirect_clause}: {exc}"
+    )
+
+
+def _format_redirect_clause(response: httpx.Response) -> str:
+    history = response.history
+    if not history:
+        return ""
+    hops = len(history)
+    noun = "redirect" if hops == 1 else "redirects"
+    original_url = str(history[0].request.url)
+    final_url = str(response.request.url)
+    return f" after {hops} {noun} from {original_url} to {final_url}"
 
 
 def decode_json_object(

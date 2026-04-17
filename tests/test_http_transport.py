@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import typing
 
 import httpx
 import pytest
@@ -342,3 +343,131 @@ def test_create_async_http_client_returns_configured_client() -> None:
     assert str(client.base_url) == "https://api.example.com"
     assert client.timeout == httpx.Timeout(15.0)
     asyncio.run(client.aclose())
+
+
+# ── Redirect handling tests ──
+
+
+class _NoopAuth(httpx.Auth):
+    def auth_flow(
+        self,
+        request: httpx.Request,
+    ) -> "typing.Generator[httpx.Request, httpx.Response, None]":
+        yield request
+
+
+def _redirect_handler(
+    location: str,
+    final_content: bytes = b'{"ok": true}',
+    final_content_type: str = "application/json",
+    final_status: int = 200,
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/redirect":
+            return httpx.Response(302, headers={"location": location})
+        return httpx.Response(
+            final_status,
+            content=final_content,
+            headers={"content-type": final_content_type},
+        )
+
+    return handler
+
+
+def _build_sync_factory_client_with_transport(
+    transport: httpx.MockTransport,
+) -> httpx.Client:
+    factory_client = _http_transport.create_http_client(
+        base_url="https://api.example.com",
+        auth=_NoopAuth(),
+    )
+    factory_client._transport = transport
+    return factory_client
+
+
+def _build_async_factory_client_with_transport(
+    transport: httpx.MockTransport,
+) -> httpx.AsyncClient:
+    factory_client = _http_transport.create_async_http_client(
+        base_url="https://api.example.com",
+        auth=_NoopAuth(),
+    )
+    factory_client._transport = transport
+    return factory_client
+
+
+def test_sync_client_follows_redirect_to_json() -> None:
+    mock_transport = httpx.MockTransport(
+        _redirect_handler("https://api.example.com/final"),
+    )
+    client = _build_sync_factory_client_with_transport(mock_transport)
+    try:
+        response = client.get("/redirect")
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+        assert len(response.history) == 1
+        assert response.history[0].status_code == 302
+    finally:
+        client.close()
+
+
+def test_async_client_follows_redirect_to_json() -> None:
+    mock_transport = httpx.MockTransport(
+        _redirect_handler("https://api.example.com/final"),
+    )
+    client = _build_async_factory_client_with_transport(mock_transport)
+
+    async def run() -> httpx.Response:
+        try:
+            return await client.get("/redirect")
+        finally:
+            await client.aclose()
+
+    response = asyncio.run(run())
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert len(response.history) == 1
+
+
+def test_sync_client_redirect_loop_raises_transport_error() -> None:
+    def loop_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302,
+            headers={"location": "https://api.example.com/redirect"},
+        )
+
+    client = _build_sync_factory_client_with_transport(
+        httpx.MockTransport(loop_handler),
+    )
+    try:
+        with pytest.raises(TransportError) as exc_info:
+            client.get("/redirect")
+    finally:
+        client.close()
+
+    assert exc_info.value.request_method == "GET"
+    assert "redirect" in (exc_info.value.request_url or "")
+    assert isinstance(exc_info.value.__cause__, httpx.TooManyRedirects)
+
+
+def test_async_client_redirect_loop_raises_transport_error() -> None:
+    def loop_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            302,
+            headers={"location": "https://api.example.com/redirect"},
+        )
+
+    client = _build_async_factory_client_with_transport(
+        httpx.MockTransport(loop_handler),
+    )
+
+    async def run() -> None:
+        try:
+            await client.get("/redirect")
+        finally:
+            await client.aclose()
+
+    with pytest.raises(TransportError) as exc_info:
+        asyncio.run(run())
+
+    assert isinstance(exc_info.value.__cause__, httpx.TooManyRedirects)

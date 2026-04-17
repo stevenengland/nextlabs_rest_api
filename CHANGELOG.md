@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- HTTP clients now follow redirects (`follow_redirects=True`). A benign
+  `302 → 200 JSON` redirect (e.g. trailing-slash canonicalisation) succeeds
+  transparently.
+- `httpx.TooManyRedirects` (redirect loops) now surfaces as `TransportError`
+  through the `NextLabsError` hierarchy.
+- `Invalid JSON response` errors from `decode_json` now include the final
+  status code, `Content-Type`, and — when the response went through
+  redirects — the hop count plus original and final URLs, making
+  auth-layer redirects to login pages diagnosable.
 - `PolicyService.retrieve_all_policies` / `AsyncPolicyService.retrieve_all_policies` —
   wraps `GET /console/api/v1/policy/mgmt/retrieveAllPolicies` to export all policies
   with a selectable `ExportMode` (`PLAIN` or `SANDE`).

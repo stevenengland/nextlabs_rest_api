@@ -157,11 +157,12 @@ def create_http_client(
         base_delay=effective.retry.base_delay,
         max_delay=effective.retry.max_delay,
     )
-    return httpx.Client(
+    return _RedirectAwareClient(
         base_url=base_url,
         auth=auth,
         timeout=effective.timeout,
         transport=transport,
+        follow_redirects=True,
     )
 
 
@@ -185,12 +186,35 @@ def create_async_http_client(
         base_delay=effective.retry.base_delay,
         max_delay=effective.retry.max_delay,
     )
-    return httpx.AsyncClient(
+    return _AsyncRedirectAwareClient(
         base_url=base_url,
         auth=auth,
         timeout=effective.timeout,
         transport=transport,
+        follow_redirects=True,
     )
+
+
+class _RedirectAwareClient(httpx.Client):
+
+    def send(self, request: httpx.Request, **kwargs: object) -> httpx.Response:
+        try:
+            return super().send(request, **kwargs)  # type: ignore[arg-type]
+        except httpx.TooManyRedirects as exc:
+            raise _wrap_transport_exception(exc, request) from exc
+
+
+class _AsyncRedirectAwareClient(httpx.AsyncClient):
+
+    async def send(
+        self,
+        request: httpx.Request,
+        **kwargs: object,
+    ) -> httpx.Response:
+        try:
+            return await super().send(request, **kwargs)  # type: ignore[arg-type]
+        except httpx.TooManyRedirects as exc:
+            raise _wrap_transport_exception(exc, request) from exc
 
 
 def _needs_retry(
@@ -255,6 +279,13 @@ def _wrap_transport_exception(
     if isinstance(exc, httpx.ConnectError) and _SSL_VERIFY_MARKER in detail:
         return TransportError(
             message=_SSL_HINT.format(detail=detail),
+            request_method=method,
+            request_url=url,
+        )
+
+    if isinstance(exc, httpx.TooManyRedirects):
+        return TransportError(
+            message=f"Too many redirects: {detail}",
             request_method=method,
             request_url=url,
         )
