@@ -202,12 +202,25 @@ def test_reports_list(
 def test_reports_get_json_format(mock_reports: Any):
     when(mock_reports).get(1).thenReturn(_make_report_detail())
 
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "get", "1"])
+    result = _invoke(True, ["reports", "get", "1"])
 
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert "criteria" in parsed
     assert "widgets" in parsed
+
+
+def test_reports_get_table_format(mock_reports: Any):
+    when(mock_reports).get(1).thenReturn(_make_report_detail())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "table", "reports", "get", "1"],
+    )
+
+    assert result.exit_code == 0
+    assert not result.output.lstrip().startswith("{")
+    assert "Widgets" in result.output or "Criteria" in result.output
 
 
 def test_reports_get_not_found(mock_reports: Any):
@@ -295,12 +308,25 @@ def test_reports_delete_success(mock_reports: Any):
 def test_reports_widgets_json_format(mock_reports: Any):
     when(mock_reports).get_widgets(1).thenReturn(_make_widget_data())
 
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "widgets", "1"])
+    result = _invoke(True, ["reports", "widgets", "1"])
 
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert "enforcements" in parsed
     assert parsed["enforcements"][0]["hour"] == 10
+
+
+def test_reports_widgets_table_format(mock_reports: Any):
+    when(mock_reports).get_widgets(1).thenReturn(_make_widget_data())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "table", "reports", "widgets", "1"],
+    )
+
+    assert result.exit_code == 0
+    assert not result.output.lstrip().startswith("{")
+    assert "Enforcements" in result.output
 
 
 # ── enforcements ──

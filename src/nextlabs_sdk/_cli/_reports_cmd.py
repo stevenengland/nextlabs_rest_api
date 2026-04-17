@@ -4,15 +4,20 @@ import sys
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
+from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk._cli._output import ColumnDef, print_success, render, render_json
+from nextlabs_sdk._cli._output import ColumnDef, print_success, render
 from nextlabs_sdk._cli._parsing import parse_json_payload
 from nextlabs_sdk._cloudaz._report_models import (
     DeleteReportsRequest,
+    PolicyActivityReportDetail,
     PolicyActivityReportRequest,
+    WidgetData,
 )
 
 reports_app = typer.Typer(help="Report management commands")
@@ -35,6 +40,13 @@ _ENFORCEMENT_COLUMNS = (
     ColumnDef("Decision", "policy_decision"),
     ColumnDef("Action", "action"),
 )
+
+_REPORT_DETAIL_COLUMNS = (
+    ColumnDef("Criteria", "criteria"),
+    ColumnDef("Widgets", "widgets"),
+)
+
+_WIDGET_DATA_COLUMNS = (ColumnDef("Enforcements", "enforcements"),)
 
 
 @reports_app.command(name="list")
@@ -71,9 +83,10 @@ def get(
     report_id: Annotated[int, typer.Argument(help="Report ID")],
 ) -> None:
     """Get report detail by ID."""
-    client = _client_factory.make_cloudaz_client(ctx.obj)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
     detail = client.reports.get(report_id)
-    render_json(detail)
+    render(cli_ctx, detail, _REPORT_DETAIL_COLUMNS)
 
 
 @reports_app.command()
@@ -125,9 +138,10 @@ def widgets(
     report_id: Annotated[int, typer.Argument(help="Report ID")],
 ) -> None:
     """Get report widget data."""
-    client = _client_factory.make_cloudaz_client(ctx.obj)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
     widget_data = client.reports.get_widgets(report_id)
-    render_json(widget_data)
+    render(cli_ctx, widget_data, _WIDGET_DATA_COLUMNS)
 
 
 @reports_app.command()
@@ -169,3 +183,42 @@ def export_report(
         sort_order=sort_order,
     )
     sys.stdout.buffer.write(exported)
+
+
+def _render_report_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, PolicyActivityReportDetail)
+    console.print("[bold]Report[/bold]")
+    criteria = model.criteria
+    rows: tuple[tuple[str, object], ...] = (
+        ("Criteria Filters", "none" if criteria.filters is None else "set"),
+        ("Criteria Header Fields", len(criteria.header) if criteria.header else 0),
+        ("Criteria Order By", len(criteria.order_by) if criteria.order_by else 0),
+        ("Criteria Group By", len(criteria.group_by) if criteria.group_by else 0),
+        ("Criteria Page Size", criteria.pagesize),
+        ("Criteria Max Rows", criteria.max_rows),
+        ("Criteria Grouping Mode", criteria.grouping_mode),
+        ("Widgets", len(model.widgets)),
+    )
+    for label, row_value in rows:
+        console.print(f"  [bold]{label}[/bold]: {row_value}")
+    for widget in model.widgets:
+        console.print(
+            f"    - {widget.name} ({widget.title}) "
+            f"chart={widget.chart_type} attr={widget.attribute_name}",
+        )
+
+
+def _render_widget_data_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, WidgetData)
+    console.print("[bold]WidgetData[/bold]")
+    console.print(f"  [bold]Enforcements[/bold]: {len(model.enforcements)} bucket(s)")
+    for bucket in model.enforcements:
+        console.print(
+            f"    - hour={bucket.hour} "
+            f"allow={bucket.allow_count} deny={bucket.deny_count} "
+            f"total={bucket.decision_count}",
+        )
+
+
+register_detail_renderer(PolicyActivityReportDetail, _render_report_detail)
+register_detail_renderer(WidgetData, _render_widget_data_detail)
