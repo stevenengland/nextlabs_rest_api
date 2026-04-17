@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Awaitable, TypeVar
 
 import httpx
 from mockito import mock, when
@@ -12,12 +13,22 @@ from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"
 
+T = TypeVar("T")
+
+
+def _run(coro: Awaitable[T]) -> T:
+    return asyncio.run(coro)  # type: ignore[arg-type]
+
+
+async def _collect_async(paginator: AsyncPaginator[T]) -> list[T]:
+    return [item async for item in paginator]
+
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_envelope(
+def _envelope(
     data: object,
     page_no: int = 0,
     total_pages: int = 1,
@@ -39,7 +50,7 @@ def _make_envelope(
     )
 
 
-def _make_component_type_data() -> dict[str, object]:
+def _component_type_data() -> dict[str, object]:
     return {
         "id": 42,
         "name": "Support Tickets",
@@ -60,7 +71,7 @@ def _make_component_type_data() -> dict[str, object]:
     }
 
 
-def _make_saved_search_data() -> dict[str, object]:
+def _saved_search_data() -> dict[str, object]:
     return {
         "id": 10,
         "name": "My Search",
@@ -70,104 +81,85 @@ def _make_saved_search_data() -> dict[str, object]:
     }
 
 
-def test_async_search_returns_paginator() -> None:
+def _make_service() -> tuple[Any, AsyncComponentTypeSearchService]:
     client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
+    return client, AsyncComponentTypeSearchService(client)
+
+
+def test_async_search_returns_paginator():
+    client, service = _make_service()
     criteria = SearchCriteria().filter_type("RESOURCE")
-    response = _make_envelope(data=[_make_component_type_data()])
     when(client).post(
         "/console/api/v1/policyModel/search",
         json=criteria.page(0).to_dict(),
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_component_type_data()]))
 
     paginator = service.search(criteria)
     assert isinstance(paginator, AsyncPaginator)
 
-    async def collect() -> list[ComponentType]:
-        return [ct async for ct in paginator]
-
-    results = asyncio.run(collect())
+    results: list[ComponentType] = _run(_collect_async(paginator))
     assert len(results) == 1
     assert results[0].name == "Support Tickets"
 
 
-def test_async_save_search_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
+def test_async_save_search_returns_id():
+    client, service = _make_service()
     payload: dict[str, object] = {
         "name": "Search",
         "type": "POLICY_MODEL_RESOURCE",
         "criteria": {},
     }
-    response = _make_envelope(data=55)
     when(client).post(
         "/console/api/v1/policyModel/search/add",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=55))
 
-    assert asyncio.run(service.save_search(payload)) == 55
+    assert _run(service.save_search(payload)) == 55
 
 
-def test_async_delete_search_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_delete_search_succeeds():
+    client, service = _make_service()
     when(client).delete(
         "/console/api/v1/policyModel/search/remove/10",
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.delete_search(10))
+    _run(service.delete_search(10))
 
 
-def test_async_get_saved_search_returns_model() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
-    response = _make_envelope(data=_make_saved_search_data())
+def test_async_get_saved_search_returns_model():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policyModel/search/saved/10",
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=_saved_search_data()))
 
-    async def run() -> SavedSearch:
-        return await service.get_saved_search(10)
-
-    ss = asyncio.run(run())
+    ss: SavedSearch = _run(service.get_saved_search(10))
     assert ss.id == 10
     assert ss.name == "My Search"
 
 
-def test_async_list_saved_searches_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
-    response = _make_envelope(data=[_make_saved_search_data()])
+def test_async_list_saved_searches_returns_paginator():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policyModel/search/savedlist/POLICY_MODEL_RESOURCE",
         params={"pageNo": 0},
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_saved_search_data()]))
 
     paginator = service.list_saved_searches("POLICY_MODEL_RESOURCE")
     assert isinstance(paginator, AsyncPaginator)
 
-    async def collect() -> list[SavedSearch]:
-        return [ss async for ss in paginator]
-
-    results = asyncio.run(collect())
+    results: list[SavedSearch] = _run(_collect_async(paginator))
     assert len(results) == 1
 
 
-def test_async_find_saved_search_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeSearchService(client)
-    response = _make_envelope(data=[_make_saved_search_data()])
+def test_async_find_saved_search_returns_paginator():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policyModel/search/savedlist/POLICY_MODEL_RESOURCE/support",
         params={"pageNo": 0},
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_saved_search_data()]))
 
     paginator = service.find_saved_search("POLICY_MODEL_RESOURCE", "support")
     assert isinstance(paginator, AsyncPaginator)
 
-    async def collect() -> list[SavedSearch]:
-        return [ss async for ss in paginator]
-
-    results = asyncio.run(collect())
+    results: list[SavedSearch] = _run(_collect_async(paginator))
     assert len(results) == 1

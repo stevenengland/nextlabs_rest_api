@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Awaitable, TypeVar
 
 import httpx
-from mockito import mock, when, any as any_value, verify
+import pytest
+from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._pdp._async_client import AsyncPdpClient
@@ -16,16 +18,37 @@ from nextlabs_sdk._pdp._request_models import (
     Resource,
     Subject,
 )
+from nextlabs_sdk.exceptions import ApiError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
+
+T = TypeVar("T")
+
+
+def _run_async(coro: Awaitable[T]) -> T:
+    return asyncio.run(coro)  # type: ignore[arg-type]
 
 
 def _make_request() -> httpx.Request:
     return httpx.Request("POST", f"{BASE_URL}{PDP_ENDPOINT}")
 
 
-def _make_permit_response() -> httpx.Response:
+def _stub_transport() -> Any:
+    mock_client = mock(httpx.AsyncClient)
+    when(transport_mod).create_async_http_client(
+        base_url=any_value(),
+        auth=any_value(),
+        http_config=any_value(),
+    ).thenReturn(mock_client)
+    return mock_client
+
+
+def _make_pdp() -> AsyncPdpClient:
+    return AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+
+
+def _permit_response() -> httpx.Response:
     return httpx.Response(
         200,
         json={
@@ -44,7 +67,7 @@ def _make_permit_response() -> httpx.Response:
     )
 
 
-def _make_permissions_response() -> httpx.Response:
+def _permissions_response() -> httpx.Response:
     return httpx.Response(
         200,
         json={
@@ -70,7 +93,7 @@ def _make_permissions_response() -> httpx.Response:
     )
 
 
-def _make_eval_request() -> EvalRequest:
+def _eval_request() -> EvalRequest:
     return EvalRequest(
         subject=Subject(id="user@example.com"),
         action=Action(id="VIEW"),
@@ -79,52 +102,30 @@ def _make_eval_request() -> EvalRequest:
     )
 
 
-def test_async_evaluate_returns_permit() -> None:
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def _stub_post_json(mock_client: Any, response: httpx.Response) -> None:
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
-    ).thenReturn(_make_permit_response())
+    ).thenReturn(response)
 
-    pdp = AsyncPdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
+
+def test_async_evaluate_returns_permit():
+    mock_client = _stub_transport()
+    _stub_post_json(mock_client, _permit_response())
+    pdp = _make_pdp()
 
     async def run() -> None:
-        response = await pdp.evaluate(_make_eval_request())
+        response = await pdp.evaluate(_eval_request())
         assert response.first_result.decision == Decision.PERMIT
 
-    asyncio.run(run())
+    _run_async(run())
 
 
-def test_async_permissions_returns_grouped() -> None:
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    when(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    ).thenReturn(_make_permissions_response())
-
-    pdp = AsyncPdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
+def test_async_permissions_returns_grouped():
+    mock_client = _stub_transport()
+    _stub_post_json(mock_client, _permissions_response())
+    pdp = _make_pdp()
 
     async def run() -> None:
         request = PermissionsRequest(
@@ -136,41 +137,24 @@ def test_async_permissions_returns_grouped() -> None:
         assert len(response.allowed) == 1
         assert response.allowed[0].name == "VIEW"
 
-    asyncio.run(run())
+    _run_async(run())
 
 
-def test_async_context_manager_closes() -> None:
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
+def test_async_context_manager_closes():
+    mock_client = _stub_transport()
     when(mock_client).aclose().thenReturn(None)
-
-    pdp = AsyncPdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
+    pdp = _make_pdp()
 
     async def run() -> None:
         await pdp.__aenter__()
         await pdp.__aexit__(None, None, None)
 
-    asyncio.run(run())
-
+    _run_async(run())
     verify(mock_client).aclose()
 
 
-def test_async_evaluate_with_xml() -> None:
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def test_async_evaluate_with_xml():
+    mock_client = _stub_transport()
     xml_response = (
         '<Response xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17">'
         "<Result><Decision>Deny</Decision>"
@@ -183,84 +167,40 @@ def test_async_evaluate_with_xml() -> None:
         content=any_value(bytes),
         headers={"Content-Type": "application/xml"},
     ).thenReturn(
-        httpx.Response(
-            200,
-            content=xml_response.encode(),
-            request=_make_request(),
-        )
+        httpx.Response(200, content=xml_response.encode(), request=_make_request()),
     )
-
-    pdp = AsyncPdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
+    pdp = _make_pdp()
 
     async def run() -> None:
-        response = await pdp.evaluate(
-            _make_eval_request(),
-            content_type=ContentType.XML,
-        )
+        response = await pdp.evaluate(_eval_request(), content_type=ContentType.XML)
         assert response.first_result.decision == Decision.DENY
 
-    asyncio.run(run())
+    _run_async(run())
 
 
-def test_async_evaluate_raises_api_error_on_non_json_response() -> None:
-    import pytest
-    from nextlabs_sdk.exceptions import ApiError
-
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    bad_response = httpx.Response(
-        200,
-        content=b"<html>oops</html>",
-        request=_make_request(),
+def test_async_evaluate_raises_api_error_on_non_json_response():
+    mock_client = _stub_transport()
+    _stub_post_json(
+        mock_client,
+        httpx.Response(200, content=b"<html>oops</html>", request=_make_request()),
     )
-    when(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    ).thenReturn(bad_response)
-
-    pdp = AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+    pdp = _make_pdp()
 
     async def run() -> None:
         with pytest.raises(ApiError) as exc_info:
-            await pdp.evaluate(_make_eval_request())
+            await pdp.evaluate(_eval_request())
         assert "Invalid JSON response" in exc_info.value.message
 
-    asyncio.run(run())
+    _run_async(run())
 
 
-def test_async_permissions_raises_api_error_on_unexpected_shape() -> None:
-    import pytest
-    from nextlabs_sdk.exceptions import ApiError
-
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    bad_response = httpx.Response(
-        200,
-        json={"nope": True},
-        request=_make_request(),
+def test_async_permissions_raises_api_error_on_unexpected_shape():
+    mock_client = _stub_transport()
+    _stub_post_json(
+        mock_client,
+        httpx.Response(200, json={"nope": True}, request=_make_request()),
     )
-    when(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    ).thenReturn(bad_response)
-
-    pdp = AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+    pdp = _make_pdp()
 
     async def run() -> None:
         with pytest.raises(ApiError) as exc_info:
@@ -274,4 +214,4 @@ def test_async_permissions_raises_api_error_on_unexpected_shape() -> None:
             )
         assert "Unexpected PDP response shape" in exc_info.value.message
 
-    asyncio.run(run())
+    _run_async(run())

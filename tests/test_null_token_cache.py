@@ -14,20 +14,16 @@ def _sample() -> CachedToken:
     )
 
 
-def test_load_returns_none() -> None:
+def test_load_returns_none_before_and_after_save():
     cache = NullTokenCache()
     assert cache.load("any-key") is None
-
-
-def test_save_is_noop_and_load_still_returns_none() -> None:
-    cache = NullTokenCache()
     cache.save("k", _sample())
     assert cache.load("k") is None
 
 
-def test_delete_is_noop() -> None:
+def test_delete_is_noop():
     NullTokenCache().delete("k")
 
 
-def test_keys_returns_empty_list() -> None:
+def test_keys_returns_empty_list():
     assert NullTokenCache().keys() == []

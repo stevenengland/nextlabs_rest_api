@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Awaitable, TypeVar
 
 import httpx
 from mockito import mock, when
@@ -13,12 +13,22 @@ from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"
 
+T = TypeVar("T")
+
+
+def _run(coro: Awaitable[T]) -> T:
+    return asyncio.run(coro)  # type: ignore[arg-type]
+
+
+async def _collect_async(paginator: AsyncPaginator[T]) -> list[T]:
+    return [item async for item in paginator]
+
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_envelope(
+def _envelope(
     data: object,
     status_code: int = 200,
     page_no: int = 0,
@@ -42,7 +52,7 @@ def _make_envelope(
     )
 
 
-def _make_policy_lite_data() -> dict[str, Any]:
+def _policy_lite_data() -> dict[str, Any]:
     return {
         "id": 82,
         "folderId": 3,
@@ -70,7 +80,7 @@ def _make_policy_lite_data() -> dict[str, Any]:
     }
 
 
-def _make_saved_search_data() -> dict[str, Any]:
+def _saved_search_data() -> dict[str, Any]:
     return {
         "id": 20,
         "name": "My Policy Search",
@@ -80,47 +90,41 @@ def _make_saved_search_data() -> dict[str, Any]:
     }
 
 
-def test_async_search_returns_paginator() -> None:
+def _make_service() -> tuple[Any, AsyncPolicySearchService]:
     client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
+    return client, AsyncPolicySearchService(client)
+
+
+def test_async_search_returns_paginator():
+    client, service = _make_service()
     criteria = SearchCriteria().filter_effect_type("allow")
-    response = _make_envelope(
-        data=[_make_policy_lite_data()],
-        total_pages=1,
-        total_records=1,
-    )
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(0).to_dict(),
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_policy_lite_data()]))
 
     paginator = service.search(criteria)
-
     assert isinstance(paginator, AsyncPaginator)
 
-    async def run() -> list[PolicyLite]:
-        return [item async for item in paginator]
-
-    results = asyncio.run(run())
+    results: list[PolicyLite] = _run(_collect_async(paginator))
     assert len(results) == 1
     assert results[0].name == "Allow IT Ticket Access"
 
 
-def test_async_search_paginates_multiple_pages() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
+def test_async_search_paginates_multiple_pages():
+    client, service = _make_service()
     criteria = SearchCriteria().filter_effect_type("allow")
 
-    lite1 = _make_policy_lite_data()
+    lite1 = _policy_lite_data()
     lite2 = dict(
-        _make_policy_lite_data(),
+        _policy_lite_data(),
         id=83,
         name="Allow External Access",
         policyFullName="Allow External Access",
     )
 
-    page0 = _make_envelope(data=[lite1], total_pages=2, total_records=2)
-    page1 = _make_envelope(data=[lite2], page_no=1, total_pages=2, total_records=2)
+    page0 = _envelope(data=[lite1], total_pages=2, total_records=2)
+    page1 = _envelope(data=[lite2], page_no=1, total_pages=2, total_records=2)
 
     when(client).post(
         "/console/api/v1/policy/search",
@@ -131,120 +135,86 @@ def test_async_search_paginates_multiple_pages() -> None:
         json=criteria.page(1).to_dict(),
     ).thenReturn(page1)
 
-    async def run() -> list[PolicyLite]:
-        return [item async for item in service.search(criteria)]
-
-    results = asyncio.run(run())
+    results: list[PolicyLite] = _run(_collect_async(service.search(criteria)))
     assert len(results) == 2
     assert results[0].name == "Allow IT Ticket Access"
     assert results[1].name == "Allow External Access"
 
 
-def test_async_save_search_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
+def test_async_save_search_returns_id():
+    client, service = _make_service()
     payload: dict[str, object] = {
         "name": "My Search",
         "type": "POLICY",
         "criteria": {},
     }
-    response = _make_envelope(data=55)
     when(client).post(
         "/console/api/v1/policy/search/add",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=55))
 
-    assert asyncio.run(service.save_search(payload)) == 55
+    assert _run(service.save_search(payload)) == 55
 
 
-def test_async_get_saved_search_returns_model() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
-    response = _make_envelope(data=_make_saved_search_data())
+def test_async_get_saved_search_returns_model():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policy/search/saved/20",
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=_saved_search_data()))
 
-    async def run() -> SavedSearch:
-        return await service.get_saved_search(20)
-
-    ss = asyncio.run(run())
+    ss: SavedSearch = _run(service.get_saved_search(20))
     assert ss.id == 20
 
 
-def test_async_list_saved_searches_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
-    response = _make_envelope(data=[_make_saved_search_data()])
+def test_async_list_saved_searches_returns_paginator():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policy/search/savedlist",
         params={"pageNo": 0},
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_saved_search_data()]))
 
     paginator = service.list_saved_searches()
-
     assert isinstance(paginator, AsyncPaginator)
 
-    async def run() -> list[SavedSearch]:
-        return [item async for item in paginator]
-
-    results = asyncio.run(run())
+    results: list[SavedSearch] = _run(_collect_async(paginator))
     assert len(results) == 1
 
 
-def test_async_find_saved_search_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
-    response = _make_envelope(data=[_make_saved_search_data()])
+def test_async_find_saved_search_returns_paginator():
+    client, service = _make_service()
     when(client).get(
         "/console/api/v1/policy/search/savedlist/security",
         params={"pageNo": 0},
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_saved_search_data()]))
 
     paginator = service.find_saved_search("security")
-
     assert isinstance(paginator, AsyncPaginator)
 
-    async def run() -> list[SavedSearch]:
-        return [item async for item in paginator]
-
-    results = asyncio.run(run())
+    results: list[SavedSearch] = _run(_collect_async(paginator))
     assert len(results) == 1
 
 
-def test_async_delete_search_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_delete_search_succeeds():
+    client, service = _make_service()
     when(client).delete(
         "/console/api/v1/policy/search/remove/20",
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.delete_search(20))
+    _run(service.delete_search(20))
 
 
-def test_async_search_named_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicySearchService(client)
+def test_async_search_named_returns_paginator():
+    client, service = _make_service()
     criteria = SearchCriteria().filter_effect_type("allow")
-    response = _make_envelope(
-        data=[_make_policy_lite_data()],
-        total_pages=1,
-        total_records=1,
-    )
     when(client).post(
         "/console/api/v1/policy/search/custom-scope",
         json=criteria.page(0).to_dict(),
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=[_policy_lite_data()]))
 
     paginator = service.search_named("custom-scope", criteria)
-
     assert isinstance(paginator, AsyncPaginator)
 
-    async def run() -> list[PolicyLite]:
-        return [item async for item in paginator]
-
-    results = asyncio.run(run())
+    results: list[PolicyLite] = _run(_collect_async(paginator))
     assert len(results) == 1
     assert isinstance(results[0], PolicyLite)
     assert results[0].name == "Allow IT Ticket Access"

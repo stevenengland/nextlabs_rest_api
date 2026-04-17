@@ -9,27 +9,30 @@ from nextlabs_sdk._cloudaz._system_config_models import SystemConfig
 from nextlabs_sdk.exceptions import ServerError
 
 BASE_URL = "https://cloudaz.example.com"
+ENDPOINT = "/nextlabs-reporter/api/system-configuration/getUIConfigs"
 
 
-def _make_request(path: str = "/api") -> httpx.Request:
-    return httpx.Request("GET", f"{BASE_URL}{path}")
-
-
-def test_get_returns_system_config() -> None:
+def _stub(status: int, json_body: object) -> SystemConfigService:
     client = mock(httpx.Client)
     service = SystemConfigService(client)
     response = httpx.Response(
+        status,
+        json=json_body,
+        request=httpx.Request("GET", f"{BASE_URL}/api"),
+    )
+    when(client).get(ENDPOINT).thenReturn(response)
+    return service
+
+
+def test_get_returns_system_config():
+    service = _stub(
         200,
-        json={
+        {
             "skydrm.installed": "false",
             "dashboard.widget.top-policies-and-trends.enabled": "true",
             "application.version": "2025.02",
         },
-        request=_make_request(),
     )
-    when(client).get(
-        "/nextlabs-reporter/api/system-configuration/getUIConfigs",
-    ).thenReturn(response)
 
     config = service.get()
 
@@ -39,17 +42,7 @@ def test_get_returns_system_config() -> None:
     assert len(config.settings) == 3
 
 
-def test_get_raises_on_error() -> None:
-    client = mock(httpx.Client)
-    service = SystemConfigService(client)
-    response = httpx.Response(
-        500,
-        json={"message": "Server error"},
-        request=_make_request(),
-    )
-    when(client).get(
-        "/nextlabs-reporter/api/system-configuration/getUIConfigs",
-    ).thenReturn(response)
-
+def test_get_raises_on_error():
+    service = _stub(500, {"message": "Server error"})
     with pytest.raises(ServerError):
         service.get()

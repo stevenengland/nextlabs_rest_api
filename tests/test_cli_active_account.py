@@ -18,8 +18,11 @@ from nextlabs_sdk._cloudaz._operators import OperatorService
 
 runner = CliRunner()
 
-
-# ─────────────────────────── helpers ──────────────────────────────────────
+ALPHA = "https://alpha.example.com"
+BETA = "https://beta.example.com"
+CLIENT = "ControlCenterOIDCClient"
+ACC_ALICE = (ALPHA, "alice", CLIENT)
+ACC_BOB = (BETA, "bob", CLIENT)
 
 
 def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,93 +82,71 @@ def _read_active(tmp_path: Path) -> dict[str, str] | None:
 def _write_active(tmp_path: Path, base_url: str, username: str, client_id: str) -> None:
     (tmp_path / "active_account.json").write_text(
         json.dumps(
-            {
-                "base_url": base_url,
-                "username": username,
-                "client_id": client_id,
-            },
+            {"base_url": base_url, "username": username, "client_id": client_id}
         ),
     )
+
+
+@pytest.fixture
+def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    _isolate(tmp_path, monkeypatch)
+    return tmp_path
 
 
 # ─────────────────────────── login → active ───────────────────────────────
 
 
-def test_login_promotes_account_to_active(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _capture_factory(monkeypatch)
-
-    result = runner.invoke(
-        app,
-        [
-            "--base-url",
-            "https://alpha.example.com",
-            "--username",
+@pytest.mark.parametrize(
+    "pre_active,base_url,username,expected",
+    [
+        pytest.param(
+            None,
+            ALPHA,
             "alice",
-            "auth",
-            "login",
-        ],
-        input="s3cret\n",
-    )
-
-    assert result.exit_code == 0, result.output
-    assert _read_active(tmp_path) == {
-        "base_url": "https://alpha.example.com",
-        "username": "alice",
-        "client_id": "ControlCenterOIDCClient",
-    }
-
-
-def test_login_overwrites_previous_active(
-    tmp_path: Path,
+            {"base_url": ALPHA, "username": "alice", "client_id": CLIENT},
+            id="promote-new",
+        ),
+        pytest.param(
+            ("https://old.example.com", "old", CLIENT),
+            "https://new.example.com",
+            "newbie",
+            {
+                "base_url": "https://new.example.com",
+                "username": "newbie",
+                "client_id": CLIENT,
+            },
+            id="overwrite-existing",
+        ),
+    ],
+)
+def test_login_sets_active(
+    env: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _write_active(tmp_path, "https://old.example.com", "old", "ControlCenterOIDCClient")
+    pre_active: tuple[str, str, str] | None,
+    base_url: str,
+    username: str,
+    expected: dict[str, str],
+):
+    if pre_active is not None:
+        _write_active(env, *pre_active)
     _capture_factory(monkeypatch)
 
     result = runner.invoke(
         app,
-        [
-            "--base-url",
-            "https://new.example.com",
-            "--username",
-            "newbie",
-            "auth",
-            "login",
-        ],
+        ["--base-url", base_url, "--username", username, "auth", "login"],
         input="s3cret\n",
     )
 
     assert result.exit_code == 0, result.output
-    assert _read_active(tmp_path) == {
-        "base_url": "https://new.example.com",
-        "username": "newbie",
-        "client_id": "ControlCenterOIDCClient",
-    }
+    assert _read_active(env) == expected
 
 
-# ─────────────────────────── status default ───────────────────────────────
+# ─────────────────────────── status ──────────────────────────────────────
 
 
-def test_status_uses_active_when_no_flags(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://alpha.example.com",
-        "alice",
-        "ControlCenterOIDCClient",
-    )
+def test_status_uses_active_when_no_flags(env: Path):
+    _seed_cache(env, ACC_ALICE)
+    _write_active(env, *ACC_ALICE)
 
     result = runner.invoke(app, ["auth", "status"])
 
@@ -173,12 +154,7 @@ def test_status_uses_active_when_no_flags(
     assert "valid" in result.output.lower()
 
 
-def test_status_without_active_prints_remediation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-
+def test_status_without_active_prints_remediation(env: Path):
     result = runner.invoke(app, ["auth", "status"])
 
     assert result.exit_code == 1
@@ -186,22 +162,9 @@ def test_status_without_active_prints_remediation(
     assert "auth use" in result.output
 
 
-def test_status_all_lists_every_account(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://beta.example.com",
-        "bob",
-        "ControlCenterOIDCClient",
-    )
+def test_status_all_lists_every_account(env: Path):
+    _seed_cache(env, ACC_ALICE, ACC_BOB)
+    _write_active(env, *ACC_BOB)
 
     result = runner.invoke(app, ["auth", "status", "--all"])
 
@@ -211,11 +174,7 @@ def test_status_all_lists_every_account(
     assert "*" in result.output  # active marker
 
 
-def test_status_all_empty_exits_nonzero(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
+def test_status_all_empty_exits_nonzero(env: Path):
     result = runner.invoke(app, ["auth", "status", "--all"])
     assert result.exit_code == 1
     assert "auth login" in result.output
@@ -224,22 +183,9 @@ def test_status_all_empty_exits_nonzero(
 # ─────────────────────────── accounts subcommand ──────────────────────────
 
 
-def test_accounts_lists_with_active_marker(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://beta.example.com",
-        "bob",
-        "ControlCenterOIDCClient",
-    )
+def test_accounts_lists_with_active_marker(env: Path):
+    _seed_cache(env, ACC_ALICE, ACC_BOB)
+    _write_active(env, *ACC_BOB)
 
     result = runner.invoke(app, ["auth", "accounts"])
 
@@ -248,11 +194,7 @@ def test_accounts_lists_with_active_marker(
     assert "bob" in result.output
 
 
-def test_accounts_empty_exits_nonzero(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
+def test_accounts_empty_exits_nonzero(env: Path):
     result = runner.invoke(app, ["auth", "accounts"])
     assert result.exit_code == 1
     assert "auth login" in result.output
@@ -261,183 +203,112 @@ def test_accounts_empty_exits_nonzero(
 # ─────────────────────────── use subcommand ───────────────────────────────
 
 
-def test_use_with_index(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-
-    result = runner.invoke(app, ["auth", "use", "2"])
-
-    assert result.exit_code == 0, result.output
-    assert _read_active(tmp_path) == {
-        "base_url": "https://beta.example.com",
-        "username": "bob",
-        "client_id": "ControlCenterOIDCClient",
-    }
-
-
-def test_use_with_username_at_base_url(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-
-    result = runner.invoke(
-        app,
-        ["auth", "use", "alice@https://alpha.example.com"],
-    )
-
-    assert result.exit_code == 0, result.output
-    active = _read_active(tmp_path)
-    assert active is not None
-    assert active["username"] == "alice"
-
-
-def test_use_interactive(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-
-    result = runner.invoke(app, ["auth", "use"], input="2\n")
-
-    assert result.exit_code == 0, result.output
-    active = _read_active(tmp_path)
-    assert active is not None
-    assert active["username"] == "bob"
-
-
-def test_use_unknown_index_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-    )
-
-    result = runner.invoke(app, ["auth", "use", "9"])
-
-    assert result.exit_code == 1
-    assert "9" in result.output
-
-
-def test_use_unknown_selector_fails(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-    )
-
-    result = runner.invoke(
-        app,
-        ["auth", "use", "ghost@https://nope.example.com"],
-    )
-
-    assert result.exit_code == 1
-    assert "ghost" in result.output
-
-
-def test_use_empty_cache_exits_nonzero(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    result = runner.invoke(app, ["auth", "use"])
-    assert result.exit_code == 1
-    assert "auth login" in result.output
-
-
-# ─────────────────────────── logout default ───────────────────────────────
-
-
-def test_logout_uses_active_when_no_flags(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://alpha.example.com",
-        "alice",
-        "ControlCenterOIDCClient",
-    )
-
-    result = runner.invoke(app, ["auth", "logout"])
-
-    assert result.exit_code == 0, result.output
-    cache = FileTokenCache(path=tmp_path / "tokens.json")
-    assert cache.keys() == []
-    assert _read_active(tmp_path) is None
-
-
-def test_logout_without_active_prints_remediation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-
-    result = runner.invoke(app, ["auth", "logout"])
-
-    assert result.exit_code == 1
-    assert "auth login" in result.output
-
-
-def test_logout_explicit_flags_does_not_clear_unrelated_active(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-        ("https://beta.example.com", "bob", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://beta.example.com",
-        "bob",
-        "ControlCenterOIDCClient",
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "--base-url",
-            "https://alpha.example.com",
-            "--username",
+@pytest.mark.parametrize(
+    "accounts,args,stdin,expected_username",
+    [
+        pytest.param(
+            [ACC_ALICE, ACC_BOB],
+            ["auth", "use", "2"],
+            None,
+            "bob",
+            id="by-index",
+        ),
+        pytest.param(
+            [ACC_ALICE, ACC_BOB],
+            ["auth", "use", f"alice@{ALPHA}"],
+            None,
             "alice",
-            "auth",
-            "logout",
-        ],
+            id="by-user-at-base-url",
+        ),
+        pytest.param(
+            [ACC_ALICE, ACC_BOB],
+            ["auth", "use"],
+            "2\n",
+            "bob",
+            id="interactive",
+        ),
+    ],
+)
+def test_use_selects_active_account(
+    env: Path,
+    accounts: list[tuple[str, str, str]],
+    args: list[str],
+    stdin: str | None,
+    expected_username: str,
+):
+    _seed_cache(env, *accounts)
+
+    result = (
+        runner.invoke(app, args, input=stdin) if stdin else runner.invoke(app, args)
     )
 
     assert result.exit_code == 0, result.output
-    active = _read_active(tmp_path)
+    active = _read_active(env)
+    assert active is not None
+    assert active["username"] == expected_username
+
+
+@pytest.mark.parametrize(
+    "accounts,args,expected_in_output",
+    [
+        pytest.param([ACC_ALICE], ["auth", "use", "9"], "9", id="unknown-index"),
+        pytest.param(
+            [ACC_ALICE],
+            ["auth", "use", "ghost@https://nope.example.com"],
+            "ghost",
+            id="unknown-selector",
+        ),
+        pytest.param([], ["auth", "use"], "auth login", id="empty-cache"),
+    ],
+)
+def test_use_failure_modes(
+    env: Path,
+    accounts: list[tuple[str, str, str]],
+    args: list[str],
+    expected_in_output: str,
+):
+    if accounts:
+        _seed_cache(env, *accounts)
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 1
+    assert expected_in_output in result.output
+
+
+# ─────────────────────────── logout ───────────────────────────────────────
+
+
+def test_logout_uses_active_when_no_flags(env: Path):
+    _seed_cache(env, ACC_ALICE)
+    _write_active(env, *ACC_ALICE)
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    cache = FileTokenCache(path=env / "tokens.json")
+    assert cache.keys() == []
+    assert _read_active(env) is None
+
+
+def test_logout_without_active_prints_remediation(env: Path):
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 1
+    assert "auth login" in result.output
+
+
+def test_logout_explicit_flags_does_not_clear_unrelated_active(env: Path):
+    _seed_cache(env, ACC_ALICE, ACC_BOB)
+    _write_active(env, *ACC_BOB)
+
+    result = runner.invoke(
+        app,
+        ["--base-url", ALPHA, "--username", "alice", "auth", "logout"],
+    )
+
+    assert result.exit_code == 0, result.output
+    active = _read_active(env)
     assert active is not None
     assert active["username"] == "bob"
 
@@ -445,35 +316,17 @@ def test_logout_explicit_flags_does_not_clear_unrelated_active(
 # ─────────────────────────── factory fallback ─────────────────────────────
 
 
-def test_factory_uses_active_when_no_flags(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        ("https://alpha.example.com", "alice", "ControlCenterOIDCClient"),
-    )
-    _write_active(
-        tmp_path,
-        "https://alpha.example.com",
-        "alice",
-        "ControlCenterOIDCClient",
-    )
+def test_factory_uses_active_when_no_flags(env: Path):
+    _seed_cache(env, ACC_ALICE)
+    _write_active(env, *ACC_ALICE)
     when(_client_factory).make_cloudaz_client(...).thenReturn(_mock_cloudaz_client())
 
-    # No --base-url / --username on the command line.
     result = runner.invoke(app, ["auth", "test"])
 
     assert result.exit_code == 0, result.output
 
 
-def test_factory_error_mentions_login_and_use(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate(tmp_path, monkeypatch)
-
+def test_factory_error_mentions_login_and_use(env: Path):
     result = runner.invoke(app, ["auth", "test"])
 
     assert result.exit_code == 1
