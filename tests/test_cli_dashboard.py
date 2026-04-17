@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
@@ -27,7 +28,6 @@ _GLOBAL_OPTS = (
     "--password",
     "secret",
 )
-
 _DATE_OPTS = ("--from-date", "1713264000000", "--to-date", "1713350400000")
 
 
@@ -46,18 +46,13 @@ def _make_alert() -> Alert:
             "alertMessage": "CPU usage exceeded 90%",
             "monitorName": "System Monitor",
             "triggeredAt": "2024-04-16T12:00:00Z",
-        }
+        },
     )
 
 
 def _make_activity(name: str = "admin_user") -> ActivityByEntity:
     return ActivityByEntity.model_validate(
-        {
-            "name": name,
-            "allowCount": 100,
-            "denyCount": 5,
-            "decisionCount": 105,
-        }
+        {"name": name, "allowCount": 100, "denyCount": 5, "decisionCount": 105},
     )
 
 
@@ -71,157 +66,91 @@ def _make_policy_activity() -> PolicyActivity:
     )
 
 
-# --- alerts ---
-
-
-def test_alerts_table_output() -> None:
-    _, mock_dashboard = _stub_client()
-    alert = _make_alert()
-    when(mock_dashboard).latest_alerts(...).thenReturn([alert])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "dashboard", "alerts", *_DATE_OPTS],
+def _invoke(command: str, *, json_flag: bool, extra: tuple[str, ...] = ()) -> Any:
+    prefix = (
+        *_GLOBAL_OPTS,
+        *(("--json",) if json_flag else ()),
+        "dashboard",
+        command,
+        *_DATE_OPTS,
+        *extra,
     )
+    return runner.invoke(app, list(prefix))
+
+
+@pytest.mark.parametrize(
+    "command,service_method,factory,table_checks,json_checks",
+    [
+        pytest.param(
+            "alerts",
+            "latest_alerts",
+            _make_alert,
+            ["CRITICAL", "CPU usage exceeded 90%", "System Monitor"],
+            {"level": "CRITICAL", "alert_message": "CPU usage exceeded 90%"},
+            id="alerts",
+        ),
+        pytest.param(
+            "top-users",
+            "top_users",
+            _make_activity,
+            ["admin_user", "100", "105"],
+            {"name": "admin_user", "allow_count": 100},
+            id="top-users",
+        ),
+        pytest.param(
+            "top-resources",
+            "top_resources",
+            lambda: _make_activity(name="SharePoint"),
+            ["SharePoint", "100"],
+            {"name": "SharePoint"},
+            id="top-resources",
+        ),
+    ],
+)
+@pytest.mark.parametrize("json_flag", [False, True], ids=["table", "json"])
+def test_dashboard_command_output(
+    command, service_method, factory, table_checks, json_checks, json_flag
+):
+    _, mock_dashboard = _stub_client()
+    getattr(when(mock_dashboard), service_method)(...).thenReturn([factory()])
+
+    result = _invoke(command, json_flag=json_flag)
 
     assert result.exit_code == 0
-    assert "CRITICAL" in result.output
-    assert "CPU usage exceeded 90%" in result.output
-    assert "System Monitor" in result.output
+    if json_flag:
+        parsed = json.loads(result.output)
+        assert isinstance(parsed, list)
+        for key, value in json_checks.items():
+            assert parsed[0][key] == value
+    else:
+        for fragment in table_checks:
+            assert fragment in result.output
 
 
-def test_alerts_json_output() -> None:
-    _, mock_dashboard = _stub_client()
-    alert = _make_alert()
-    when(mock_dashboard).latest_alerts(...).thenReturn([alert])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "dashboard", "alerts", *_DATE_OPTS],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["level"] == "CRITICAL"
-    assert parsed[0]["alert_message"] == "CPU usage exceeded 90%"
-
-
-def test_alerts_missing_dates() -> None:
+def test_alerts_missing_dates():
     _stub_client()
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "dashboard", "alerts"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "dashboard", "alerts"])
 
     assert result.exit_code != 0
     assert "from-date" in result.output.lower() or "from_date" in result.output.lower()
 
 
-# --- top-users ---
-
-
-def test_top_users_table_output() -> None:
+def test_top_users_custom_decision():
     _, mock_dashboard = _stub_client()
-    activity = _make_activity()
-    when(mock_dashboard).top_users(...).thenReturn([activity])
+    when(mock_dashboard).top_users(...).thenReturn([_make_activity()])
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "dashboard", "top-users", *_DATE_OPTS],
-    )
-
-    assert result.exit_code == 0
-    assert "admin_user" in result.output
-    assert "100" in result.output
-    assert "105" in result.output
-
-
-def test_top_users_json_output() -> None:
-    _, mock_dashboard = _stub_client()
-    activity = _make_activity()
-    when(mock_dashboard).top_users(...).thenReturn([activity])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "dashboard", "top-users", *_DATE_OPTS],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["name"] == "admin_user"
-    assert parsed[0]["allow_count"] == 100
-
-
-def test_top_users_custom_decision() -> None:
-    _, mock_dashboard = _stub_client()
-    activity = _make_activity()
-    when(mock_dashboard).top_users(...).thenReturn([activity])
-
-    result = runner.invoke(
-        app,
-        [
-            *_GLOBAL_OPTS,
-            "dashboard",
-            "top-users",
-            *_DATE_OPTS,
-            "--decision",
-            "A",
-        ],
-    )
+    result = _invoke("top-users", json_flag=False, extra=("--decision", "A"))
 
     assert result.exit_code == 0
     assert "admin_user" in result.output
 
 
-# --- top-resources ---
-
-
-def test_top_resources_table_output() -> None:
+def test_top_policies_json_output():
     _, mock_dashboard = _stub_client()
-    activity = _make_activity(name="SharePoint")
-    when(mock_dashboard).top_resources(...).thenReturn([activity])
+    when(mock_dashboard).top_policies(...).thenReturn([_make_policy_activity()])
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "dashboard", "top-resources", *_DATE_OPTS],
-    )
-
-    assert result.exit_code == 0
-    assert "SharePoint" in result.output
-    assert "100" in result.output
-
-
-def test_top_resources_json_output() -> None:
-    _, mock_dashboard = _stub_client()
-    activity = _make_activity(name="SharePoint")
-    when(mock_dashboard).top_resources(...).thenReturn([activity])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "dashboard", "top-resources", *_DATE_OPTS],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["name"] == "SharePoint"
-
-
-# --- top-policies ---
-
-
-def test_top_policies_json_output() -> None:
-    _, mock_dashboard = _stub_client()
-    policy = _make_policy_activity()
-    when(mock_dashboard).top_policies(...).thenReturn([policy])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "dashboard", "top-policies", *_DATE_OPTS],
-    )
+    result = _invoke("top-policies", json_flag=False)
 
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -230,22 +159,11 @@ def test_top_policies_json_output() -> None:
     assert len(parsed[0]["policy_decisions"]) == 2
 
 
-def test_top_policies_custom_decision() -> None:
+def test_top_policies_custom_decision():
     _, mock_dashboard = _stub_client()
-    policy = _make_policy_activity()
-    when(mock_dashboard).top_policies(...).thenReturn([policy])
+    when(mock_dashboard).top_policies(...).thenReturn([_make_policy_activity()])
 
-    result = runner.invoke(
-        app,
-        [
-            *_GLOBAL_OPTS,
-            "dashboard",
-            "top-policies",
-            *_DATE_OPTS,
-            "--decision",
-            "D",
-        ],
-    )
+    result = _invoke("top-policies", json_flag=False, extra=("--decision", "D"))
 
     assert result.exit_code == 0
     parsed = json.loads(result.output)

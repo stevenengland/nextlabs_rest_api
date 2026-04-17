@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Coroutine, TypeVar
 
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._component_type_models import (
@@ -11,17 +13,20 @@ from nextlabs_sdk._cloudaz._component_type_models import (
 )
 from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
 
+T = TypeVar("T")
+
 BASE_URL = "https://cloudaz.example.com"
+
+
+def _run_async(coro: Coroutine[Any, Any, T]) -> T:
+    return asyncio.run(coro)
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_envelope(
-    data: object,
-    status_code: int = 200,
-) -> httpx.Response:
+def _make_envelope(data, status_code: int = 200) -> httpx.Response:
     return httpx.Response(
         status_code,
         json={
@@ -59,58 +64,51 @@ def _make_component_type_data() -> dict[str, object]:
     }
 
 
-def test_async_get_returns_component_type() -> None:
+@pytest.fixture
+def service_client():
     client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    response = _make_envelope(data=_make_component_type_data())
-    when(client).get("/console/api/v1/policyModel/mgmt/42").thenReturn(response)
+    return AsyncComponentTypeService(client), client
 
-    async def run() -> ComponentType:
-        return await service.get(42)
 
-    ct = asyncio.run(run())
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        pytest.param("get", "/console/api/v1/policyModel/mgmt/42", id="get"),
+        pytest.param(
+            "get_active", "/console/api/v1/policyModel/mgmt/active/42", id="get-active"
+        ),
+    ],
+)
+def test_async_get_returns_component_type(service_client, method, path):
+    service, client = service_client
+    when(client).get(path).thenReturn(_make_envelope(data=_make_component_type_data()))
+
+    ct = _run_async(getattr(service, method)(42))
+
+    assert isinstance(ct, ComponentType)
     assert ct.id == 42
     assert ct.name == "Support Tickets"
 
 
-def test_async_get_active_returns_component_type() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    response = _make_envelope(data=_make_component_type_data())
-    when(client).get("/console/api/v1/policyModel/mgmt/active/42").thenReturn(response)
-
-    async def run() -> ComponentType:
-        return await service.get_active(42)
-
-    ct = asyncio.run(run())
-    assert ct.id == 42
-
-
-def test_async_create_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    payload: dict[str, object] = {
+def test_async_create_returns_id(service_client):
+    service, client = service_client
+    payload = {
         "name": "New",
         "shortName": "new",
         "type": "RESOURCE",
         "status": "ACTIVE",
     }
-    response = _make_envelope(data=99)
     when(client).post(
         "/console/api/v1/policyModel/mgmt/add",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=99))
 
-    async def run() -> int:
-        return await service.create(payload)
-
-    assert asyncio.run(run()) == 99
+    assert _run_async(service.create(payload)) == 99
 
 
-def test_async_modify_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    payload: dict[str, object] = {
+def test_async_modify_returns_id(service_client):
+    service, client = service_client
+    payload = {
         "id": 42,
         "name": "Updated",
         "shortName": "updated",
@@ -118,60 +116,46 @@ def test_async_modify_returns_id() -> None:
         "status": "ACTIVE",
         "version": 1,
     }
-    response = _make_envelope(data=42)
     when(client).put(
         "/console/api/v1/policyModel/mgmt/modify",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=42))
 
-    async def run() -> int:
-        return await service.modify(payload)
-
-    assert asyncio.run(run()) == 42
+    assert _run_async(service.modify(payload)) == 42
 
 
-def test_async_delete_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    response = httpx.Response(200, request=_make_request())
-    when(client).delete(
-        "/console/api/v1/policyModel/mgmt/remove/42",
-    ).thenReturn(response)
+def test_async_delete_succeeds(service_client):
+    service, client = service_client
+    when(client).delete("/console/api/v1/policyModel/mgmt/remove/42").thenReturn(
+        httpx.Response(200, request=_make_request()),
+    )
 
-    asyncio.run(service.delete(42))
+    _run_async(service.delete(42))
 
 
-def test_async_bulk_delete_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_bulk_delete_succeeds(service_client):
+    service, client = service_client
     when(client).request(
         "DELETE",
         "/console/api/v1/policyModel/mgmt/bulkDelete",
         json=[1, 2],
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.bulk_delete([1, 2]))
+    _run_async(service.bulk_delete([1, 2]))
 
 
-def test_async_clone_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
-    response = _make_envelope(data=100)
+def test_async_clone_returns_id(service_client):
+    service, client = service_client
     when(client).post(
         "/console/api/v1/policyModel/mgmt/clone",
         json=42,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=100))
 
-    async def run() -> int:
-        return await service.clone(42)
-
-    assert asyncio.run(run()) == 100
+    assert _run_async(service.clone(42)) == 100
 
 
-def test_async_list_extra_subject_attributes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentTypeService(client)
+def test_async_list_extra_subject_attributes(service_client):
+    service, client = service_client
     attr_data = [
         {
             "name": "SID",
@@ -181,14 +165,13 @@ def test_async_list_extra_subject_attributes() -> None:
             "sortOrder": 0,
         },
     ]
-    response = _make_envelope(data=attr_data)
     when(client).get(
         "/console/api/v1/policyModel/mgmt/extraSubjectAttribs/USER",
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=attr_data))
 
-    async def run() -> list[AttributeConfig]:
-        return await service.list_extra_subject_attributes("USER")
+    attrs: list[AttributeConfig] = _run_async(
+        service.list_extra_subject_attributes("USER")
+    )
 
-    attrs = asyncio.run(run())
     assert len(attrs) == 1
     assert attrs[0].short_name == "sid"

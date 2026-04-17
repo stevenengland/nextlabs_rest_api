@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 from mockito import mock, when
+import pytest
 
 from nextlabs_sdk._cloudaz._models import Tag, TagType
 from nextlabs_sdk._cloudaz._tags import TagService
@@ -40,28 +40,35 @@ def _make_envelope(
     )
 
 
-def _make_tag_data() -> dict[str, object]:
+def _tag_data(
+    tag_id: int = 10,
+    key: str = "dept",
+    label: str = "Department",
+) -> dict[str, object]:
     return {
-        "id": 10,
-        "key": "dept",
-        "label": "Department",
+        "id": tag_id,
+        "key": key,
+        "label": label,
         "type": "COMPONENT_TAG",
         "status": "ACTIVE",
     }
 
 
-def test_list_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    response = _make_envelope(
-        data=[_make_tag_data()],
-        total_pages=1,
-        total_records=1,
-    )
+@pytest.fixture
+def client():
+    return mock(httpx.Client)
+
+
+@pytest.fixture
+def service(client):
+    return TagService(client)
+
+
+def test_list_returns_paginator(client, service):
     when(client).get(
         "/console/api/v1/config/tags/list/COMPONENT_TAG",
         params={"pageNo": 0},
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=[_tag_data()]))
 
     paginator = service.list(TagType.COMPONENT)
 
@@ -72,26 +79,18 @@ def test_list_returns_paginator() -> None:
     assert tags[0].key == "dept"
 
 
-def test_list_paginates_multiple_pages() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    tag1 = {
-        "id": 1,
-        "key": "t1",
-        "label": "Tag1",
-        "type": "COMPONENT_TAG",
-        "status": "ACTIVE",
-    }
-    tag2 = {
-        "id": 2,
-        "key": "t2",
-        "label": "Tag2",
-        "type": "COMPONENT_TAG",
-        "status": "ACTIVE",
-    }
-
-    page0 = _make_envelope(data=[tag1], total_pages=2, total_records=2)
-    page1 = _make_envelope(data=[tag2], page_no=1, total_pages=2, total_records=2)
+def test_list_paginates_multiple_pages(client, service):
+    page0 = _make_envelope(
+        data=[_tag_data(1, "t1", "Tag1")],
+        total_pages=2,
+        total_records=2,
+    )
+    page1 = _make_envelope(
+        data=[_tag_data(2, "t2", "Tag2")],
+        page_no=1,
+        total_pages=2,
+        total_records=2,
+    )
 
     when(client).get(
         "/console/api/v1/config/tags/list/COMPONENT_TAG",
@@ -109,11 +108,10 @@ def test_list_paginates_multiple_pages() -> None:
     assert tags[1].key == "t2"
 
 
-def test_get_returns_single_tag() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    response = _make_envelope(data=_make_tag_data())
-    when(client).get("/console/api/v1/config/tags/10").thenReturn(response)
+def test_get_returns_single_tag(client, service):
+    when(client).get("/console/api/v1/config/tags/10").thenReturn(
+        _make_envelope(data=_tag_data()),
+    )
 
     tag = service.get(10)
 
@@ -122,10 +120,7 @@ def test_get_returns_single_tag() -> None:
     assert tag.key == "dept"
 
 
-def test_create_returns_id() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    response = _make_envelope(data=42)
+def test_create_returns_id(client, service):
     when(client).post(
         "/console/api/v1/config/tags/add/COMPONENT_TAG",
         json={
@@ -134,31 +129,23 @@ def test_create_returns_id() -> None:
             "type": "COMPONENT_TAG",
             "status": "ACTIVE",
         },
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=42))
 
-    tag_id = service.create(TagType.COMPONENT, key="env", label="Environment")
-
-    assert tag_id == 42
+    assert service.create(TagType.COMPONENT, key="env", label="Environment") == 42
 
 
-def test_delete_succeeds() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    response = httpx.Response(200, request=_make_request())
-    when(client).delete("/console/api/v1/config/tags/remove/10").thenReturn(response)
+def test_delete_succeeds(client, service):
+    when(client).delete("/console/api/v1/config/tags/remove/10").thenReturn(
+        httpx.Response(200, request=_make_request()),
+    )
 
     service.delete(10)
 
 
-def test_get_raises_not_found() -> None:
-    client = mock(httpx.Client)
-    service = TagService(client)
-    response = httpx.Response(
-        404,
-        json={"message": "Not found"},
-        request=_make_request(),
+def test_get_raises_not_found(client, service):
+    when(client).get("/console/api/v1/config/tags/999").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
     )
-    when(client).get("/console/api/v1/config/tags/999").thenReturn(response)
 
     with pytest.raises(NotFoundError):
         service.get(999)

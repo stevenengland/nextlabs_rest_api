@@ -1,9 +1,3 @@
-"""Tests for the ``tools/tests.py`` marker-argument builder.
-
-The script lives under ``tools/`` (excluded from pytest's ``norecursedirs``),
-so we load it as a standalone module to exercise the pure helper logic.
-"""
-
 from __future__ import annotations
 
 from importlib import util as importlib_util
@@ -39,58 +33,59 @@ def _clear_e2e_env() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
             os.environ["E2E_COLLECT"] = prior
 
 
-def test_default_excludes_e2e_marker() -> None:
-    argv: list[str] = []
-
+@pytest.mark.parametrize(
+    "argv,expected_extra,expected_env,expected_argv",
+    [
+        pytest.param(
+            [],
+            ["-m", "not e2e"],
+            None,
+            [],
+            id="default-excludes-e2e",
+        ),
+        pytest.param(
+            ["--no-cov"],
+            ["-m", "not e2e", "--no-cov"],
+            None,
+            [],
+            id="default-with-no-cov-appends-flag",
+        ),
+        pytest.param(
+            ["--e2e"],
+            ["-m", "e2e", "--no-cov"],
+            "1",
+            [],
+            id="e2e-flag-selects-e2e-and-disables-coverage",
+        ),
+        pytest.param(
+            ["--all"],
+            ["-m", "e2e or not e2e"],
+            "1",
+            [],
+            id="all-flag-selects-everything-with-coverage",
+        ),
+        pytest.param(
+            ["--all", "--no-cov"],
+            ["-m", "e2e or not e2e", "--no-cov"],
+            "1",
+            [],
+            id="all-flag-with-no-cov-disables-coverage",
+        ),
+    ],
+)
+def test_build_marker_args(argv, expected_extra, expected_env, expected_argv):
     extra = tests_runner._build_marker_args(argv)
 
-    assert extra == ["-m", "not e2e"]
-    assert "E2E_COLLECT" not in os.environ
+    assert extra == expected_extra
+    assert argv == expected_argv
+    if expected_env is None:
+        assert "E2E_COLLECT" not in os.environ
+    else:
+        assert os.environ.get("E2E_COLLECT") == expected_env
 
 
-def test_default_with_no_cov_appends_flag() -> None:
-    argv = ["--no-cov"]
-
-    extra = tests_runner._build_marker_args(argv)
-
-    assert extra == ["-m", "not e2e", "--no-cov"]
-    assert argv == []
-
-
-def test_e2e_flag_selects_e2e_and_disables_coverage() -> None:
-    argv = ["--e2e"]
-
-    extra = tests_runner._build_marker_args(argv)
-
-    assert extra == ["-m", "e2e", "--no-cov"]
-    assert os.environ.get("E2E_COLLECT") == "1"
-    assert argv == []
-
-
-def test_all_flag_selects_everything_with_coverage() -> None:
-    argv = ["--all"]
-
-    extra = tests_runner._build_marker_args(argv)
-
-    assert extra == ["-m", "e2e or not e2e"]
-    assert os.environ.get("E2E_COLLECT") == "1"
-    assert argv == []
-
-
-def test_all_flag_with_no_cov_disables_coverage() -> None:
-    argv = ["--all", "--no-cov"]
-
-    extra = tests_runner._build_marker_args(argv)
-
-    assert extra == ["-m", "e2e or not e2e", "--no-cov"]
-    assert os.environ.get("E2E_COLLECT") == "1"
-    assert argv == []
-
-
-def test_all_and_e2e_are_mutually_exclusive() -> None:
-    argv = ["--all", "--e2e"]
-
+def test_all_and_e2e_are_mutually_exclusive():
     with pytest.raises(SystemExit) as exc_info:
-        tests_runner._build_marker_args(argv)
+        tests_runner._build_marker_args(["--all", "--e2e"])
 
     assert exc_info.value.code == 2

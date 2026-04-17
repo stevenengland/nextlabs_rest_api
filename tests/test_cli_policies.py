@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
@@ -28,7 +29,8 @@ _GLOBAL_OPTS = (
 )
 
 
-def _stub_client() -> tuple[Any, Any, Any]:
+@pytest.fixture
+def stub() -> tuple[Any, Any, Any]:
     mock_client = mock(CloudAzClient)
     mock_policies = mock(PolicyService)
     mock_policy_search = mock(PolicySearchService)
@@ -48,10 +50,7 @@ def _make_policy() -> Policy:
     )
 
 
-def _make_policy_lite(
-    policy_id: int = 82,
-    name: str = "Allow IT Access",
-) -> PolicyLite:
+def _make_policy_lite(policy_id: int = 82, name: str = "Allow IT Access") -> PolicyLite:
     return PolicyLite(
         id=policy_id,
         folder_id=1,
@@ -81,9 +80,7 @@ def _make_policy_lite(
     )
 
 
-def _make_paginator(
-    items: list[PolicyLite],
-) -> SyncPaginator[PolicyLite]:
+def _make_paginator(items: list[PolicyLite]) -> SyncPaginator[PolicyLite]:
     page = PageResult(
         entries=items,
         page_no=0,
@@ -98,267 +95,229 @@ def _make_paginator(
     return SyncPaginator(fetch_page=fetch_page)
 
 
-def test_policies_get_table() -> None:
-    _, mock_policies, _ = _stub_client()
-    policy = _make_policy()
-    when(mock_policies).get(82).thenReturn(policy)
+# --- get (table vs json) ---
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "get", "82"],
-    )
+
+@pytest.mark.parametrize(
+    "flags,check",
+    [
+        pytest.param(
+            (),
+            lambda out: "Allow IT Access" in out,
+            id="table",
+        ),
+        pytest.param(
+            ("--json",),
+            lambda out: json.loads(out)["name"] == "Allow IT Access",
+            id="json",
+        ),
+    ],
+)
+def test_policies_get(
+    stub: tuple[Any, Any, Any],
+    flags: tuple[str, ...],
+    check: Any,
+) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).get(82).thenReturn(_make_policy())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *flags, "policies", "get", "82"])
 
     assert result.exit_code == 0
-    assert "Allow IT Access" in result.output
+    assert check(result.output)
 
 
-def test_policies_get_json() -> None:
-    _, mock_policies, _ = _stub_client()
-    policy = _make_policy()
-    when(mock_policies).get(82).thenReturn(policy)
+def test_policies_get_not_found(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).get(999).thenRaise(NotFoundError(message="HTTP 404"))
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "policies", "get", "82"],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed["name"] == "Allow IT Access"
-
-
-def test_policies_get_not_found() -> None:
-    _, mock_policies, _ = _stub_client()
-    when(mock_policies).get(999).thenRaise(
-        NotFoundError(message="HTTP 404"),
-    )
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "get", "999"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "get", "999"])
 
     assert result.exit_code == 1
     assert "Not found" in result.output
 
 
-def test_policies_create_success() -> None:
-    _, mock_policies, _ = _stub_client()
+# --- create ---
+
+
+def test_policies_create_success(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
     payload = {"name": "New Policy", "effectType": "ALLOW"}
     when(mock_policies).create(payload).thenReturn(100)
 
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "policies",
-            "create",
-            "--data",
-            json.dumps(payload),
-        ],
+        [*_GLOBAL_OPTS, "policies", "create", "--data", json.dumps(payload)],
     )
 
     assert result.exit_code == 0
     assert "100" in result.output
 
 
-def test_policies_create_invalid_json() -> None:
-    _stub_client()
-
+@pytest.mark.parametrize(
+    "data,expected_msg",
+    [
+        pytest.param("not-json", "Invalid JSON", id="invalid-json"),
+        pytest.param("[1, 2]", "must be an object", id="json-array-rejected"),
+    ],
+)
+def test_policies_create_invalid_data(
+    stub: tuple[Any, Any, Any],
+    data: str,
+    expected_msg: str,
+) -> None:
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", "not-json"],
+        [*_GLOBAL_OPTS, "policies", "create", "--data", data],
     )
 
     assert result.exit_code == 1
-    assert "Invalid JSON" in result.output
+    assert expected_msg in result.output
 
 
-def test_policies_create_json_array_rejected() -> None:
-    _stub_client()
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", "[1, 2]"],
-    )
-
-    assert result.exit_code == 1
-    assert "must be an object" in result.output
-
-
-def test_policies_modify_success() -> None:
-    _, mock_policies, _ = _stub_client()
+def test_policies_modify_success(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
     payload = {"id": 82, "name": "Updated Policy"}
     when(mock_policies).modify(payload).thenReturn(82)
 
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "policies",
-            "modify",
-            "--data",
-            json.dumps(payload),
-        ],
+        [*_GLOBAL_OPTS, "policies", "modify", "--data", json.dumps(payload)],
     )
 
     assert result.exit_code == 0
     assert "Modified" in result.output
 
 
-def test_policies_delete_success() -> None:
-    _, mock_policies, _ = _stub_client()
+def test_policies_delete_success(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
     when(mock_policies).delete(82).thenReturn(None)
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "delete", "82"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "delete", "82"])
 
     assert result.exit_code == 0
     assert "Deleted" in result.output
 
 
-def test_policies_search_table() -> None:
-    _, _, mock_search = _stub_client()
-    policy = _make_policy_lite()
-    paginator = _make_paginator([policy])
-    when(mock_search).search(...).thenReturn(paginator)
+# --- search (table / json / with filters) ---
+
+
+@pytest.mark.parametrize(
+    "extra_args,check",
+    [
+        pytest.param(
+            (),
+            lambda out: "Allow IT Access" in out,
+            id="table",
+        ),
+        pytest.param(
+            ("--json",),
+            lambda out: json.loads(out)[0]["name"] == "Allow IT Access",
+            id="json",
+        ),
+        pytest.param(
+            (
+                "--status",
+                "DRAFT",
+                "--effect",
+                "ALLOW",
+                "--text",
+                "IT",
+                "--tag",
+                "department",
+                "--sort",
+                "name",
+                "--page-size",
+                "50",
+            ),
+            lambda out: "Allow IT Access" in out,
+            id="with-filters",
+        ),
+    ],
+)
+def test_policies_search(
+    stub: tuple[Any, Any, Any],
+    extra_args: tuple[str, ...],
+    check: Any,
+) -> None:
+    _, _, mock_search = stub
+    when(mock_search).search(...).thenReturn(_make_paginator([_make_policy_lite()]))
+
+    json_flag = ("--json",) if "--json" in extra_args else ()
+    positional_args = tuple(a for a in extra_args if a != "--json")
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "search"],
+        [*_GLOBAL_OPTS, *json_flag, "policies", "search", *positional_args],
     )
 
     assert result.exit_code == 0
-    assert "Allow IT Access" in result.output
+    assert check(result.output)
 
 
-def test_policies_search_json() -> None:
-    _, _, mock_search = _stub_client()
-    policy = _make_policy_lite()
-    paginator = _make_paginator([policy])
-    when(mock_search).search(...).thenReturn(paginator)
+# --- deploy / undeploy ---
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "policies", "search"],
+
+@pytest.mark.parametrize(
+    "extra_args,expected_call",
+    [
+        pytest.param((), [{"id": 82, "push": False}], id="default"),
+        pytest.param(("--push",), [{"id": 82, "push": True}], id="with-push"),
+    ],
+)
+def test_policies_deploy(
+    stub: tuple[Any, Any, Any],
+    extra_args: tuple[str, ...],
+    expected_call: list[dict[str, Any]],
+) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).deploy(expected_call).thenReturn(
+        [DeploymentResult(id=82, push_results=[])],
     )
 
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["name"] == "Allow IT Access"
-
-
-def test_policies_search_with_filters() -> None:
-    _, _, mock_search = _stub_client()
-    policy = _make_policy_lite()
-    paginator = _make_paginator([policy])
-    when(mock_search).search(...).thenReturn(paginator)
-
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "policies",
-            "search",
-            "--status",
-            "DRAFT",
-            "--effect",
-            "ALLOW",
-            "--text",
-            "IT",
-            "--tag",
-            "department",
-            "--sort",
-            "name",
-            "--page-size",
-            "50",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert "Allow IT Access" in result.output
-
-
-def test_policies_deploy_success() -> None:
-    _, mock_policies, _ = _stub_client()
-    when(mock_policies).deploy(
-        [{"id": 82, "push": False}],
-    ).thenReturn([DeploymentResult(id=82, push_results=[])])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "deploy", "82"],
-    )
-
-    assert result.exit_code == 0
-    assert "Deployed" in result.output
-
-
-def test_policies_deploy_with_push() -> None:
-    _, mock_policies, _ = _stub_client()
-    when(mock_policies).deploy(
-        [{"id": 82, "push": True}],
-    ).thenReturn([DeploymentResult(id=82, push_results=[])])
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "deploy", "82", "--push"],
+        [*_GLOBAL_OPTS, "policies", "deploy", "82", *extra_args],
     )
 
     assert result.exit_code == 0
     assert "Deployed" in result.output
 
 
-def test_policies_undeploy_success() -> None:
-    _, mock_policies, _ = _stub_client()
+def test_policies_undeploy_success(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
     when(mock_policies).undeploy([82]).thenReturn(None)
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "policies", "undeploy", "82"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "undeploy", "82"])
 
     assert result.exit_code == 0
     assert "Undeployed" in result.output
 
 
-def test_policies_export_success() -> None:
-    _, mock_policies, _ = _stub_client()
-    when(mock_policies).export(
-        [{"id": 82}],
-        export_mode="PLAIN",
-    ).thenReturn('{"policies": []}')
+# --- export / import ---
+
+
+@pytest.mark.parametrize("json_flag", [(), ("--json",)], ids=["plain", "json-flag"])
+def test_policies_export_success(
+    stub: tuple[Any, Any, Any],
+    json_flag: tuple[str, ...],
+) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).export([{"id": 82}], export_mode="PLAIN").thenReturn(
+        '{"policies": []}',
+    )
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "export", "82"],
+        [*_GLOBAL_OPTS, *json_flag, "policies", "export", "82"],
     )
 
     assert result.exit_code == 0
     assert '{"policies": []}' in result.output
 
 
-def test_policies_export_json_flag() -> None:
-    _, mock_policies, _ = _stub_client()
-    when(mock_policies).export(
-        [{"id": 82}],
-        export_mode="PLAIN",
-    ).thenReturn('{"policies": []}')
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "policies", "export", "82"],
-    )
-
-    assert result.exit_code == 0
-    assert '{"policies": []}' in result.output
-
-
-def test_policies_import_success(tmp_path: Any) -> None:
-    _, mock_policies, _ = _stub_client()
+def test_policies_import_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
+    _, mock_policies, _ = stub
     import_file = tmp_path / "policies.bin"
     import_file.write_bytes(b"file-content")
     when(mock_policies).import_policies(
@@ -390,9 +349,7 @@ def test_policies_import_success(tmp_path: Any) -> None:
     assert "1 policies" in result.output
 
 
-def test_policies_import_file_not_found() -> None:
-    _stub_client()
-
+def test_policies_import_file_not_found(stub: tuple[Any, Any, Any]) -> None:
     result = runner.invoke(
         app,
         [

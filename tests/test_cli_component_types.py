@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
+import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
@@ -51,20 +51,8 @@ def _make_component_type(
     )
 
 
-def _stub_client() -> tuple[Any, Any, Any]:
-    mock_client = mock(CloudAzClient)
-    mock_ct = mock(ComponentTypeService)
-    mock_ct_search = mock(ComponentTypeSearchService)
-    mock_client.component_types = mock_ct
-    mock_client.component_type_search = mock_ct_search
-    when(_client_factory).make_cloudaz_client(...).thenReturn(mock_client)
-    return mock_client, mock_ct, mock_ct_search
-
-
-def _make_paginator(
-    items: list[ComponentType],
-) -> SyncPaginator[ComponentType]:
-    page = PageResult(
+def _make_paginator(items: list[ComponentType]) -> SyncPaginator[ComponentType]:
+    page: PageResult[ComponentType] = PageResult(
         entries=items,
         page_no=0,
         page_size=len(items),
@@ -78,73 +66,68 @@ def _make_paginator(
     return SyncPaginator(fetch_page=fetch_page)
 
 
-def test_component_types_get_table() -> None:
-    _, mock_ct, _ = _stub_client()
-    ct = _make_component_type()
-    when(mock_ct).get(1).thenReturn(ct)
+@pytest.fixture
+def stub_client():
+    mock_client = mock(CloudAzClient)
+    mock_ct = mock(ComponentTypeService)
+    mock_ct_search = mock(ComponentTypeSearchService)
+    mock_client.component_types = mock_ct
+    mock_client.component_type_search = mock_ct_search
+    when(_client_factory).make_cloudaz_client(...).thenReturn(mock_client)
+    return mock_client, mock_ct, mock_ct_search
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "component-types", "get", "1"],
-    )
+
+@pytest.mark.parametrize(
+    "as_json,check",
+    [
+        pytest.param(False, lambda out: "File Server" in out, id="table"),
+        pytest.param(
+            True,
+            lambda out: json.loads(out)["name"] == "File Server",
+            id="json",
+        ),
+    ],
+)
+def test_component_types_get(stub_client, as_json, check):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get(1).thenReturn(_make_component_type())
+
+    args = list(_GLOBAL_OPTS)
+    if as_json:
+        args.append("--json")
+    args.extend(["component-types", "get", "1"])
+
+    result = runner.invoke(app, args)
 
     assert result.exit_code == 0
-    assert "File Server" in result.output
+    assert check(result.output)
 
 
-def test_component_types_get_json() -> None:
-    _, mock_ct, _ = _stub_client()
-    ct = _make_component_type()
-    when(mock_ct).get(1).thenReturn(ct)
+def test_component_types_get_not_found(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get(999).thenRaise(NotFoundError(message="HTTP 404"))
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "component-types", "get", "1"],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed["name"] == "File Server"
-
-
-def test_component_types_get_not_found() -> None:
-    _, mock_ct, _ = _stub_client()
-    when(mock_ct).get(999).thenRaise(
-        NotFoundError(message="HTTP 404"),
-    )
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "component-types", "get", "999"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "component-types", "get", "999"])
 
     assert result.exit_code == 1
     assert "Not found" in result.output
 
 
-def test_component_types_create_success() -> None:
-    _, mock_ct, _ = _stub_client()
+def test_component_types_create_success(stub_client):
+    _, mock_ct, _ = stub_client
     payload = {"name": "New Type", "shortName": "new", "type": "RESOURCE"}
     when(mock_ct).create(payload).thenReturn(42)
 
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "component-types",
-            "create",
-            "--data",
-            json.dumps(payload),
-        ],
+        [*_GLOBAL_OPTS, "component-types", "create", "--data", json.dumps(payload)],
     )
 
     assert result.exit_code == 0
     assert "42" in result.output
 
 
-def test_component_types_create_invalid_json() -> None:
-    _stub_client()
-
+def test_component_types_create_invalid_json(stub_client):
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, "component-types", "create", "--data", "not-json"],
@@ -154,95 +137,69 @@ def test_component_types_create_invalid_json() -> None:
     assert "Invalid JSON" in result.output
 
 
-def test_component_types_modify_success() -> None:
-    _, mock_ct, _ = _stub_client()
+def test_component_types_modify_success(stub_client):
+    _, mock_ct, _ = stub_client
     payload = {"id": 1, "name": "Updated"}
     when(mock_ct).modify(payload).thenReturn(1)
 
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "component-types",
-            "modify",
-            "--data",
-            json.dumps(payload),
-        ],
+        [*_GLOBAL_OPTS, "component-types", "modify", "--data", json.dumps(payload)],
     )
 
     assert result.exit_code == 0
     assert "Modified" in result.output
 
 
-def test_component_types_delete_success() -> None:
-    _, mock_ct, _ = _stub_client()
+def test_component_types_delete_success(stub_client):
+    _, mock_ct, _ = stub_client
     when(mock_ct).delete(1).thenReturn(None)
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "component-types", "delete", "1"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "component-types", "delete", "1"])
 
     assert result.exit_code == 0
     assert "Deleted" in result.output
 
 
-def test_component_types_search_table() -> None:
-    _, _, mock_search = _stub_client()
-    ct = _make_component_type()
-    paginator = _make_paginator([ct])
-    when(mock_search).search(...).thenReturn(paginator)
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "component-types", "search"],
-    )
-
-    assert result.exit_code == 0
-    assert "File Server" in result.output
+def _json_list_has_file_server(out: str) -> bool:
+    parsed = json.loads(out)
+    return isinstance(parsed, list) and parsed[0]["name"] == "File Server"
 
 
-def test_component_types_search_json() -> None:
-    _, _, mock_search = _stub_client()
-    ct = _make_component_type()
-    paginator = _make_paginator([ct])
-    when(mock_search).search(...).thenReturn(paginator)
+@pytest.mark.parametrize(
+    "extra_args,as_json,check",
+    [
+        pytest.param((), False, lambda out: "File Server" in out, id="table"),
+        pytest.param((), True, _json_list_has_file_server, id="json"),
+        pytest.param(
+            (
+                "--type",
+                "RESOURCE",
+                "--text",
+                "file",
+                "--tag",
+                "dept",
+                "--sort",
+                "name",
+                "--page-size",
+                "50",
+            ),
+            False,
+            lambda out: "File Server" in out,
+            id="with-filters",
+        ),
+    ],
+)
+def test_component_types_search(stub_client, extra_args, as_json, check):
+    _, _, mock_search = stub_client
+    when(mock_search).search(...).thenReturn(_make_paginator([_make_component_type()]))
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "component-types", "search"],
-    )
+    args = list(_GLOBAL_OPTS)
+    if as_json:
+        args.append("--json")
+    args.extend(["component-types", "search", *extra_args])
 
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["name"] == "File Server"
-
-
-def test_component_types_search_with_filters() -> None:
-    _, _, mock_search = _stub_client()
-    ct = _make_component_type()
-    paginator = _make_paginator([ct])
-    when(mock_search).search(...).thenReturn(paginator)
-
-    result = runner.invoke(
-        app,
-        [
-            *_GLOBAL_OPTS,
-            "component-types",
-            "search",
-            "--type",
-            "RESOURCE",
-            "--text",
-            "file",
-            "--tag",
-            "dept",
-            "--sort",
-            "name",
-            "--page-size",
-            "50",
-        ],
-    )
+    result = runner.invoke(app, args)
 
     assert result.exit_code == 0
-    assert "File Server" in result.output
+    assert check(result.output)

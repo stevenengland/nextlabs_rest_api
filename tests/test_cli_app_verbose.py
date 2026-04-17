@@ -7,7 +7,7 @@ from nextlabs_sdk._cli._app import app
 runner = CliRunner()
 
 
-def test_verbose_flag_appears_in_help() -> None:
+def test_verbose_flag_appears_in_help():
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0

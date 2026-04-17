@@ -22,27 +22,32 @@ def _ctx(verbose: int) -> typer.Context:
         timeout=30.0,
         verbose=verbose,
     )
-    command = click.Command("x")
-    ctx = typer.Context(command)
+    ctx = typer.Context(click.Command("x"))
     ctx.obj = cli_ctx
     return ctx
 
 
-def test_verbose_zero_prints_only_base_message(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def _full_auth_error() -> AuthenticationError:
+    return AuthenticationError(
+        message="Token acquisition failed: HTTP 500",
+        status_code=500,
+        response_body="server went boom",
+        request_method="POST",
+        request_url="https://srv/cas/oidc/accessToken",
+    )
+
+
+def _run_failing(exc: Exception, verbose: int):
     @cli_error_handler
-    def failing(ctx: typer.Context) -> None:
-        raise AuthenticationError(
-            message="Token acquisition failed: HTTP 500",
-            status_code=500,
-            response_body="boom",
-            request_method="POST",
-            request_url="https://srv/cas/oidc/accessToken",
-        )
+    def failing(ctx: typer.Context):
+        raise exc
 
     with pytest.raises(click.exceptions.Exit):
-        failing(_ctx(verbose=0))
+        failing(_ctx(verbose=verbose))
+
+
+def test_verbose_zero_prints_only_base_message(capsys: pytest.CaptureFixture[str]):
+    _run_failing(_full_auth_error(), verbose=0)
 
     captured = capsys.readouterr()
     assert "Authentication failed" in captured.out
@@ -51,56 +56,29 @@ def test_verbose_zero_prints_only_base_message(
 
 def test_verbose_one_prints_request_context_on_stderr(
     capsys: pytest.CaptureFixture[str],
-) -> None:
-    @cli_error_handler
-    def failing(ctx: typer.Context) -> None:
-        raise AuthenticationError(
-            message="Token acquisition failed: HTTP 500",
-            status_code=500,
-            response_body="server went boom",
-            request_method="POST",
-            request_url="https://srv/cas/oidc/accessToken",
-        )
-
-    with pytest.raises(click.exceptions.Exit):
-        failing(_ctx(verbose=1))
+):
+    _run_failing(_full_auth_error(), verbose=1)
 
     captured = capsys.readouterr()
-    # Base message still on stdout
     assert "Authentication failed" in captured.out
-    # Extra context on stderr
     assert "POST" in captured.err
     assert "https://srv/cas/oidc/accessToken" in captured.err
     assert "500" in captured.err
     assert "server went boom" in captured.err
 
 
-def test_verbose_one_non_nextlabs_error_unchanged(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    @cli_error_handler
-    def failing(ctx: typer.Context) -> None:
-        raise typer.BadParameter("missing X")
-
-    with pytest.raises(click.exceptions.Exit):
-        failing(_ctx(verbose=1))
+def test_verbose_one_non_nextlabs_error_unchanged(capsys: pytest.CaptureFixture[str]):
+    _run_failing(typer.BadParameter("missing X"), verbose=1)
 
     captured = capsys.readouterr()
     assert "missing X" in captured.out
-    # No context lines appended
     assert "request:" not in captured.err
 
 
 def test_verbose_one_with_partial_exception_fields(
     capsys: pytest.CaptureFixture[str],
-) -> None:
-    @cli_error_handler
-    def failing(ctx: typer.Context) -> None:
-        raise AuthenticationError(message="no response yet")
-
-    with pytest.raises(click.exceptions.Exit):
-        failing(_ctx(verbose=1))
+):
+    _run_failing(AuthenticationError(message="no response yet"), verbose=1)
 
     captured = capsys.readouterr()
-    # No placeholders like "None" in stderr
     assert "None" not in captured.err

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TypeVar
 
 import httpx
 from mockito import mock, when
@@ -10,6 +11,8 @@ from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogServ
 from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"
+
+T = TypeVar("T")
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
@@ -22,11 +25,7 @@ def _make_reporter_envelope(content: list[object]) -> httpx.Response:
         json={
             "statusCode": "1003",
             "message": "Data found successfully",
-            "data": {
-                "content": content,
-                "totalPages": 1,
-                "totalElements": 1,
-            },
+            "data": {"content": content, "totalPages": 1, "totalElements": 1},
         },
         request=_make_request(),
     )
@@ -48,7 +47,14 @@ def _make_entry_data() -> dict[str, object]:
     }
 
 
-def test_async_search_returns_paginator() -> None:
+def _collect(paginator: AsyncPaginator[T]) -> list[T]:
+    async def run() -> list[T]:
+        return [item async for item in paginator]
+
+    return asyncio.run(run())
+
+
+def test_async_search_returns_paginator():
     client = mock(httpx.AsyncClient)
     service = AsyncReporterAuditLogService(client)
     response = _make_reporter_envelope(content=[_make_entry_data()])
@@ -58,13 +64,9 @@ def test_async_search_returns_paginator() -> None:
     ).thenReturn(response)
 
     paginator = service.search()
-
     assert isinstance(paginator, AsyncPaginator)
 
-    async def run() -> list[ReporterAuditLogEntry]:
-        return [item async for item in paginator]
-
-    results = asyncio.run(run())
+    results = _collect(paginator)
     assert len(results) == 1
     assert isinstance(results[0], ReporterAuditLogEntry)
     assert results[0].component == "REPORTER"

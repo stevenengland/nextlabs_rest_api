@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 from mockito import any as any_value, mock, when
 
 from nextlabs_sdk import _http_transport as transport_mod
@@ -15,66 +16,46 @@ from nextlabs_sdk._cloudaz._system_config import (
     SystemConfigService,
 )
 
+_BASE_URL = "https://cloudaz.example.com"
 
-def test_cloudaz_client_has_audit_logs() -> None:
-    mock_client = mock(httpx.Client)
+
+def _stub_sync_factory() -> None:
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
         http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="u",
-        password="p",
-    )
-    assert isinstance(client.audit_logs, EntityAuditLogService)
+    ).thenReturn(mock(httpx.Client))
 
 
-def test_cloudaz_client_has_system_config() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="u",
-        password="p",
-    )
-    assert isinstance(client.system_config, SystemConfigService)
-
-
-def test_async_cloudaz_client_has_audit_logs() -> None:
-    mock_client = mock(httpx.AsyncClient)
+def _stub_async_factory() -> None:
     when(transport_mod).create_async_http_client(
         base_url=any_value(),
         auth=any_value(),
         http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = AsyncCloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="u",
-        password="p",
-    )
-    assert isinstance(client.audit_logs, AsyncEntityAuditLogService)
+    ).thenReturn(mock(httpx.AsyncClient))
 
 
-def test_async_cloudaz_client_has_system_config() -> None:
-    mock_client = mock(httpx.AsyncClient)
-    when(transport_mod).create_async_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
+@pytest.mark.parametrize(
+    "attr,service_cls",
+    [
+        pytest.param("audit_logs", EntityAuditLogService, id="audit_logs"),
+        pytest.param("system_config", SystemConfigService, id="system_config"),
+    ],
+)
+def test_cloudaz_client_has_service(attr, service_cls):
+    _stub_sync_factory()
+    client = CloudAzClient(base_url=_BASE_URL, username="u", password="p")
+    assert isinstance(getattr(client, attr), service_cls)
 
-    client = AsyncCloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="u",
-        password="p",
-    )
-    assert isinstance(client.system_config, AsyncSystemConfigService)
+
+@pytest.mark.parametrize(
+    "attr,service_cls",
+    [
+        pytest.param("audit_logs", AsyncEntityAuditLogService, id="audit_logs"),
+        pytest.param("system_config", AsyncSystemConfigService, id="system_config"),
+    ],
+)
+def test_async_cloudaz_client_has_service(attr, service_cls):
+    _stub_async_factory()
+    client = AsyncCloudAzClient(base_url=_BASE_URL, username="u", password="p")
+    assert isinstance(getattr(client, attr), service_cls)

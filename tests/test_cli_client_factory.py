@@ -3,10 +3,7 @@ from __future__ import annotations
 import pytest
 import typer
 
-from nextlabs_sdk._cli._client_factory import (
-    make_cloudaz_client,
-    make_pdp_client,
-)
+from nextlabs_sdk._cli._client_factory import make_cloudaz_client, make_pdp_client
 from nextlabs_sdk._cli._context import CliContext
 
 
@@ -31,31 +28,29 @@ def _make_ctx(
     )
 
 
-def test_cloudaz_factory_raises_when_base_url_missing() -> None:
-    ctx = _make_ctx(base_url=None)
-    with pytest.raises(typer.BadParameter, match="base-url"):
-        make_cloudaz_client(ctx)
-
-
-def test_cloudaz_factory_raises_when_username_missing() -> None:
-    ctx = _make_ctx(username=None)
-    with pytest.raises(typer.BadParameter, match="username"):
-        make_cloudaz_client(ctx)
-
-
-def test_cloudaz_factory_raises_when_password_missing() -> None:
-    ctx = _make_ctx(password=None)
-    with pytest.raises(typer.BadParameter, match="password"):
-        make_cloudaz_client(ctx)
-
-
-def test_pdp_factory_raises_when_base_url_missing() -> None:
-    ctx = _make_ctx(base_url=None)
-    with pytest.raises(typer.BadParameter, match="base-url"):
-        make_pdp_client(ctx)
-
-
-def test_pdp_factory_raises_when_client_secret_missing() -> None:
-    ctx = _make_ctx(client_secret=None)
-    with pytest.raises(typer.BadParameter, match="client-secret"):
-        make_pdp_client(ctx)
+@pytest.mark.parametrize(
+    "factory,kwargs,match",
+    [
+        pytest.param(
+            make_cloudaz_client, {"base_url": None}, "base-url", id="cloudaz-base-url"
+        ),
+        pytest.param(
+            make_cloudaz_client, {"username": None}, "username", id="cloudaz-username"
+        ),
+        pytest.param(
+            make_cloudaz_client, {"password": None}, "password", id="cloudaz-password"
+        ),
+        pytest.param(
+            make_pdp_client, {"base_url": None}, "base-url", id="pdp-base-url"
+        ),
+        pytest.param(
+            make_pdp_client,
+            {"client_secret": None},
+            "client-secret",
+            id="pdp-client-secret",
+        ),
+    ],
+)
+def test_factory_raises_when_required_field_missing(factory, kwargs, match):
+    with pytest.raises(typer.BadParameter, match=match):
+        factory(_make_ctx(**kwargs))

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import httpx
 import pytest
-from mockito import mock, when, any as any_value, verify
+from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._config import HttpConfig, RetryConfig
@@ -16,7 +18,7 @@ from nextlabs_sdk._pdp._request_models import (
     Resource,
     Subject,
 )
-from nextlabs_sdk.exceptions import ValidationError
+from nextlabs_sdk.exceptions import ApiError, ValidationError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
@@ -35,7 +37,7 @@ def _make_permit_response() -> httpx.Response:
                     "Decision": "Permit",
                     "Status": {
                         "StatusCode": {
-                            "Value": "urn:oasis:names:tc:xacml:1.0:status:ok",
+                            "Value": "urn:oasis:names:tc:xacml:1.0:status:ok"
                         },
                     },
                 },
@@ -46,6 +48,17 @@ def _make_permit_response() -> httpx.Response:
 
 
 def _make_permissions_response() -> httpx.Response:
+    def _category(action: str) -> dict[str, Any]:
+        return {
+            "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
+            "Attribute": [
+                {
+                    "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
+                    "Value": action,
+                },
+            ],
+        }
+
     return httpx.Response(
         200,
         json={
@@ -53,32 +66,12 @@ def _make_permissions_response() -> httpx.Response:
                 {
                     "Decision": "Permit",
                     "Status": {"StatusCode": {"Value": "ok"}},
-                    "Category": [
-                        {
-                            "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                            "Attribute": [
-                                {
-                                    "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                    "Value": "VIEW",
-                                },
-                            ],
-                        },
-                    ],
+                    "Category": [_category("VIEW")],
                 },
                 {
                     "Decision": "Deny",
                     "Status": {"StatusCode": {"Value": "ok"}},
-                    "Category": [
-                        {
-                            "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                            "Attribute": [
-                                {
-                                    "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                    "Value": "DELETE",
-                                },
-                            ],
-                        },
-                    ],
+                    "Category": [_category("DELETE")],
                 },
             ],
         },
@@ -103,78 +96,61 @@ def _make_permissions_request() -> PermissionsRequest:
     )
 
 
-def test_evaluate_returns_permit() -> None:
+def _stub_transport(http_config: Any = None) -> httpx.Client:
     mock_client = mock(httpx.Client)
     when(transport_mod).create_http_client(
-        base_url=any_value(),
+        base_url=any_value() if http_config is None else BASE_URL,
         auth=any_value(),
-        http_config=any_value(),
+        http_config=any_value() if http_config is None else http_config,
     ).thenReturn(mock_client)
+    return cast(httpx.Client, mock_client)
 
+
+def _make_pdp(**kwargs: Any) -> PdpClient:
+    defaults: dict[str, Any] = {
+        "base_url": BASE_URL,
+        "client_id": "c",
+        "client_secret": "s",
+    }
+    defaults.update(kwargs)
+    return PdpClient(**defaults)
+
+
+def test_evaluate_returns_permit():
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
     ).thenReturn(_make_permit_response())
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="my-client",
-        client_secret="my-secret",
-    )
-    response = pdp.evaluate(_make_eval_request())
+    response = _make_pdp().evaluate(_make_eval_request())
 
     assert response.first_result.decision == Decision.PERMIT
 
 
-def test_evaluate_posts_to_correct_endpoint() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def test_evaluate_posts_to_correct_endpoint():
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
     ).thenReturn(_make_permit_response())
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
-    pdp.evaluate(_make_eval_request())
+    _make_pdp().evaluate(_make_eval_request())
 
-    verify(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    )
+    verify(mock_client).post(PDP_ENDPOINT, json=any_value(), headers=any_value())
 
 
-def test_evaluate_sets_json_content_type_header() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def test_evaluate_sets_json_content_type_header():
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers={"Content-Type": "application/json"},
     ).thenReturn(_make_permit_response())
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
-    pdp.evaluate(_make_eval_request(), content_type=ContentType.JSON)
+    _make_pdp().evaluate(_make_eval_request(), content_type=ContentType.JSON)
 
     verify(mock_client).post(
         PDP_ENDPOINT,
@@ -183,26 +159,15 @@ def test_evaluate_sets_json_content_type_header() -> None:
     )
 
 
-def test_permissions_returns_grouped_actions() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def test_permissions_returns_grouped_actions():
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
     ).thenReturn(_make_permissions_response())
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
-    response = pdp.permissions(_make_permissions_request())
+    response = _make_pdp().permissions(_make_permissions_request())
 
     assert len(response.allowed) == 1
     assert response.allowed[0].name == "VIEW"
@@ -210,85 +175,29 @@ def test_permissions_returns_grouped_actions() -> None:
     assert response.denied[0].name == "DELETE"
 
 
-def test_client_uses_custom_http_config() -> None:
-    mock_client = mock(httpx.Client)
+def test_client_uses_custom_http_config():
     custom_retry = RetryConfig(max_retries=5)
     custom_config = HttpConfig(timeout=60.0, verify_ssl=False, retry=custom_retry)
+    _stub_transport(http_config=custom_config)
 
-    when(transport_mod).create_http_client(
-        base_url=BASE_URL,
-        auth=any_value(),
-        http_config=custom_config,
-    ).thenReturn(mock_client)
-
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-        http_config=custom_config,
-    )
+    pdp = _make_pdp(http_config=custom_config)
 
     assert pdp is not None
 
 
-def test_client_context_manager_closes() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
+def test_client_context_manager_closes():
+    mock_client = _stub_transport()
     when(mock_client).close().thenReturn(None)
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
+    pdp = _make_pdp()
     pdp.__enter__()
     pdp.__exit__(None, None, None)
 
     verify(mock_client).close()
 
 
-def test_evaluate_raises_on_400() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    when(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    ).thenReturn(
-        httpx.Response(
-            400,
-            json={"error": "bad request"},
-            request=_make_request(),
-        )
-    )
-
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
-
-    with pytest.raises(ValidationError):
-        pdp.evaluate(_make_eval_request())
-
-
-def test_evaluate_with_xml_content_type() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+def test_evaluate_with_xml_content_type():
+    mock_client = _stub_transport()
     xml_response_body = (
         '<Response xmlns="urn:oasis:names:tc:xacml:3.0:core:schema:wd-17">'
         "<Result>"
@@ -305,96 +214,60 @@ def test_evaluate_with_xml_content_type() -> None:
         headers={"Content-Type": "application/xml"},
     ).thenReturn(
         httpx.Response(
-            200,
-            content=xml_response_body.encode(),
-            request=_make_request(),
-        )
+            200, content=xml_response_body.encode(), request=_make_request()
+        ),
     )
 
-    pdp = PdpClient(
-        base_url=BASE_URL,
-        client_id="c",
-        client_secret="s",
-    )
-    response = pdp.evaluate(
-        _make_eval_request(),
-        content_type=ContentType.XML,
-    )
+    response = _make_pdp().evaluate(_make_eval_request(), content_type=ContentType.XML)
 
     assert response.first_result.decision == Decision.PERMIT
 
 
-def test_evaluate_raises_api_error_on_non_json_response() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    bad_response = httpx.Response(
-        200,
-        content=b"<html>oops</html>",
-        request=_make_request(),
-    )
+@pytest.mark.parametrize(
+    "response,expected_exc,match",
+    [
+        pytest.param(
+            httpx.Response(400, json={"error": "bad request"}, request=_make_request()),
+            ValidationError,
+            None,
+            id="evaluate-400-validation-error",
+        ),
+        pytest.param(
+            httpx.Response(200, content=b"<html>oops</html>", request=_make_request()),
+            ApiError,
+            "Invalid JSON response",
+            id="evaluate-non-json-body",
+        ),
+        pytest.param(
+            httpx.Response(200, json={"nope": True}, request=_make_request()),
+            ApiError,
+            "Unexpected PDP response shape",
+            id="evaluate-unexpected-shape",
+        ),
+    ],
+)
+def test_evaluate_error_dispatch(response, expected_exc, match):
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
-    ).thenReturn(bad_response)
+    ).thenReturn(response)
 
-    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
-    with pytest.raises(ApiError) as exc_info:
+    pdp = _make_pdp()
+    with pytest.raises(expected_exc) as exc_info:
         pdp.evaluate(_make_eval_request())
-    assert "Invalid JSON response" in exc_info.value.message
+    if match is not None:
+        assert match in exc_info.value.message
 
 
-def test_evaluate_raises_api_error_on_unexpected_shape() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    bad_response = httpx.Response(
-        200,
-        json={"nope": True},
-        request=_make_request(),
-    )
+def test_permissions_raises_api_error_on_non_json_response():
+    mock_client = _stub_transport()
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
         headers=any_value(),
-    ).thenReturn(bad_response)
+    ).thenReturn(httpx.Response(200, content=b"x", request=_make_request()))
 
-    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
-    with pytest.raises(ApiError) as exc_info:
-        pdp.evaluate(_make_eval_request())
-    assert "Unexpected PDP response shape" in exc_info.value.message
-
-
-def test_permissions_raises_api_error_on_non_json_response() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    bad_response = httpx.Response(200, content=b"x", request=_make_request())
-    when(mock_client).post(
-        PDP_ENDPOINT,
-        json=any_value(),
-        headers=any_value(),
-    ).thenReturn(bad_response)
-
-    pdp = PdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
     with pytest.raises(ApiError):
-        pdp.permissions(_make_permissions_request())
+        _make_pdp().permissions(_make_permissions_request())

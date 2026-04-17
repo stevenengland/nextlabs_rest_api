@@ -49,16 +49,34 @@ def _find_attribute(category: Any, attr_id: str) -> dict[str, object]:
     raise AssertionError(msg)
 
 
-def test_serialize_minimal_eval_request() -> None:
-    request = EvalRequest(
-        subject=Subject(id="user@example.com"),
-        action=Action(id="VIEW"),
-        resource=Resource(id="doc:1", type="documents"),
-        application=Application(id="my-app"),
-    )
+def _eval_body(request: EvalRequest) -> dict[str, Any]:
+    return cast(dict[str, Any], serialize_eval_request(request))
 
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+
+def _perm_body(request: PermissionsRequest) -> dict[str, Any]:
+    return cast(dict[str, Any], serialize_permissions_request(request))
+
+
+def _minimal_eval(**overrides: Any) -> EvalRequest:
+    kwargs: dict[str, Any] = {
+        "subject": Subject(id="u"),
+        "action": Action(id="a"),
+        "resource": Resource(id="r", type="t"),
+        "application": Application(id="app"),
+    }
+    kwargs.update(overrides)
+    return EvalRequest(**kwargs)
+
+
+def test_serialize_minimal_eval_request():
+    body = _eval_body(
+        EvalRequest(
+            subject=Subject(id="user@example.com"),
+            action=Action(id="VIEW"),
+            resource=Resource(id="doc:1", type="documents"),
+            application=Application(id="my-app"),
+        ),
+    )
 
     assert body["Request"]["ReturnPolicyIdList"] is False
     subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
@@ -77,31 +95,14 @@ def test_serialize_minimal_eval_request() -> None:
     assert _find_attribute(app_cat, urns.APPLICATION_ID)["Value"] == "my-app"
 
 
-def test_serialize_return_policy_ids() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-        return_policy_ids=True,
-    )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+def test_serialize_return_policy_ids():
+    body = _eval_body(_minimal_eval(return_policy_ids=True))
 
     assert body["Request"]["ReturnPolicyIdList"] is True
 
 
-def test_serialize_subject_extra_kwargs_auto_prefixed() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u", department="IT", level=3),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-    )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+def test_serialize_subject_extra_kwargs_auto_prefixed():
+    body = _eval_body(_minimal_eval(subject=Subject(id="u", department="IT", level=3)))
     subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
 
     dept = _find_attribute(subject_cat, f"{urns.SUBJECT_PREFIX}department")
@@ -113,40 +114,29 @@ def test_serialize_subject_extra_kwargs_auto_prefixed() -> None:
     assert level["DataType"] == urns.INTEGER_DATATYPE
 
 
-def test_serialize_subject_attributes_dict_not_prefixed() -> None:
-    request = EvalRequest(
-        subject=Subject(
-            id="u",
-            attributes={"custom:vendor:field": "value"},
+def test_serialize_subject_attributes_dict_not_prefixed():
+    body = _eval_body(
+        _minimal_eval(
+            subject=Subject(id="u", attributes={"custom:vendor:field": "value"})
         ),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
     )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
     subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
 
     custom = _find_attribute(subject_cat, "custom:vendor:field")
     assert custom["Value"] == "value"
 
 
-def test_serialize_resource_dimension_and_nocache() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(
-            id="r",
-            type="t",
-            dimension=ResourceDimension.FROM,
-            nocache=True,
+def test_serialize_resource_dimension_and_nocache():
+    body = _eval_body(
+        _minimal_eval(
+            resource=Resource(
+                id="r",
+                type="t",
+                dimension=ResourceDimension.FROM,
+                nocache=True,
+            ),
         ),
-        application=Application(id="app"),
     )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
     resource_cat = _find_category(body, urns.RESOURCE_CATEGORY)
 
     dim = _find_attribute(resource_cat, urns.RESOURCE_DIMENSION)
@@ -157,50 +147,31 @@ def test_serialize_resource_dimension_and_nocache() -> None:
     assert nc["DataType"] == urns.BOOLEAN_DATATYPE
 
 
-def test_serialize_resource_extra_kwargs_auto_prefixed() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t", category="security"),
-        application=Application(id="app"),
+def test_serialize_resource_extra_kwargs_auto_prefixed():
+    body = _eval_body(
+        _minimal_eval(resource=Resource(id="r", type="t", category="security"))
     )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
     resource_cat = _find_category(body, urns.RESOURCE_CATEGORY)
     cat_attr = _find_attribute(resource_cat, f"{urns.RESOURCE_PREFIX}category")
     assert cat_attr["Value"] == "security"
 
 
-def test_serialize_application_extra_kwargs() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app", version="2.0"),
-    )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+def test_serialize_application_extra_kwargs():
+    body = _eval_body(_minimal_eval(application=Application(id="app", version="2.0")))
     app_cat = _find_category(body, urns.APPLICATION_CATEGORY)
     ver = _find_attribute(app_cat, f"{urns.APPLICATION_PREFIX}version")
     assert ver["Value"] == "2.0"
 
 
-def test_serialize_environment() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-        environment=Environment(
-            attributes={"ip": "10.0.0.1"},
-            time_of_day="morning",
+def test_serialize_environment():
+    body = _eval_body(
+        _minimal_eval(
+            environment=Environment(
+                attributes={"ip": "10.0.0.1"},
+                time_of_day="morning",
+            ),
         ),
     )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
     env_cat = _find_category(body, urns.ENVIRONMENT_CATEGORY)
     ip_attr = _find_attribute(env_cat, "ip")
     assert ip_attr["Value"] == "10.0.0.1"
@@ -208,72 +179,52 @@ def test_serialize_environment() -> None:
     assert tod["Value"] == "morning"
 
 
-def test_serialize_no_environment_category_when_none() -> None:
-    request = EvalRequest(
-        subject=Subject(id="u"),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-    )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+def test_serialize_no_environment_category_when_none():
+    body = _eval_body(_minimal_eval())
     category_ids = [c["CategoryId"] for c in body["Request"]["Category"]]
     assert urns.ENVIRONMENT_CATEGORY not in category_ids
 
 
-def test_serialize_permissions_request_no_action_category() -> None:
-    request = PermissionsRequest(
-        subject=Subject(id="u"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
+def test_serialize_permissions_request_no_action_category():
+    body = _perm_body(
+        PermissionsRequest(
+            subject=Subject(id="u"),
+            resource=Resource(id="r", type="t"),
+            application=Application(id="app"),
+        ),
     )
-
-    body_raw = serialize_permissions_request(request)
-    body = cast(dict[str, Any], body_raw)
     category_ids = [c["CategoryId"] for c in body["Request"]["Category"]]
     assert urns.ACTION_CATEGORY not in category_ids
 
 
-def test_serialize_permissions_request_with_record_matching() -> None:
-    request = PermissionsRequest(
-        subject=Subject(id="u"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-        record_matching_policies=True,
+def test_serialize_permissions_request_with_record_matching():
+    body = _perm_body(
+        PermissionsRequest(
+            subject=Subject(id="u"),
+            resource=Resource(id="r", type="t"),
+            application=Application(id="app"),
+            record_matching_policies=True,
+        ),
     )
-
-    body_raw = serialize_permissions_request(request)
-    body = cast(dict[str, Any], body_raw)
     assert body["Request"]["RecordMatchingPolicies"] is True
 
 
-def test_serialize_data_type_float() -> None:
+def test_serialize_data_type_float():
     expected_score = 9.5
-    request = EvalRequest(
-        subject=Subject(id="u", score=expected_score),
-        action=Action(id="a"),
-        resource=Resource(id="r", type="t"),
-        application=Application(id="app"),
-    )
-
-    body_raw = serialize_eval_request(request)
-    body = cast(dict[str, Any], body_raw)
+    body = _eval_body(_minimal_eval(subject=Subject(id="u", score=expected_score)))
     subject_cat = _find_category(body, urns.SUBJECT_CATEGORY)
     score = _find_attribute(subject_cat, f"{urns.SUBJECT_PREFIX}score")
     assert score["Value"] == expected_score
     assert score["DataType"] == urns.DOUBLE_DATATYPE
 
 
-def test_deserialize_permit_eval_response() -> None:
+def test_deserialize_permit_eval_response():
     body = {
         "Response": [
             {
                 "Decision": "Permit",
                 "Status": {
-                    "StatusCode": {
-                        "Value": "urn:oasis:names:tc:xacml:1.0:status:ok",
-                    },
+                    "StatusCode": {"Value": "urn:oasis:names:tc:xacml:1.0:status:ok"},
                 },
             },
         ],
@@ -288,24 +239,19 @@ def test_deserialize_permit_eval_response() -> None:
     assert response.first_result.policy_refs == []
 
 
-def test_deserialize_deny_with_obligations() -> None:
+def test_deserialize_deny_with_obligations():
     body = {
         "Response": [
             {
                 "Decision": "Deny",
                 "Status": {
-                    "StatusCode": {
-                        "Value": "urn:oasis:names:tc:xacml:1.0:status:ok",
-                    },
+                    "StatusCode": {"Value": "urn:oasis:names:tc:xacml:1.0:status:ok"},
                 },
                 "Obligations": [
                     {
                         "Id": "log-access",
                         "AttributeAssignment": [
-                            {
-                                "AttributeId": "log-level",
-                                "Value": "warn",
-                            },
+                            {"AttributeId": "log-level", "Value": "warn"},
                         ],
                     },
                 ],
@@ -322,14 +268,12 @@ def test_deserialize_deny_with_obligations() -> None:
     assert response.first_result.obligations[0].attributes[0].attr_value == "warn"
 
 
-def test_deserialize_with_policy_refs() -> None:
+def test_deserialize_with_policy_refs():
     body = {
         "Response": [
             {
                 "Decision": "Permit",
-                "Status": {
-                    "StatusCode": {"Value": "ok"},
-                },
+                "Status": {"StatusCode": {"Value": "ok"}},
                 "PolicyIdentifierList": {
                     "PolicyIdReference": [
                         {"Id": "allow-view", "Version": "1.0"},
@@ -348,7 +292,7 @@ def test_deserialize_with_policy_refs() -> None:
     assert response.first_result.policy_refs[1].id == "allow-edit"
 
 
-def test_deserialize_with_status_message() -> None:
+def test_deserialize_with_status_message():
     body = {
         "Response": [
             {
@@ -367,55 +311,30 @@ def test_deserialize_with_status_message() -> None:
     assert response.first_result.status.message == "Policy evaluation error"
 
 
-def test_deserialize_permissions_response() -> None:
+def test_deserialize_permissions_response():
+    action_cat = "urn:oasis:names:tc:xacml:3.0:attribute-category:action"
+    action_id = "urn:oasis:names:tc:xacml:1.0:action:action-id"
+
+    def _entry(decision: str, value: str) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "Decision": decision,
+            "Status": {"StatusCode": {"Value": "ok"}},
+            "Category": [
+                {
+                    "CategoryId": action_cat,
+                    "Attribute": [{"AttributeId": action_id, "Value": value}],
+                },
+            ],
+        }
+        if decision == "Permit":
+            entry["Obligations"] = []
+        return entry
+
     body = {
         "Response": [
-            {
-                "Decision": "Permit",
-                "Status": {"StatusCode": {"Value": "ok"}},
-                "Obligations": [],
-                "Category": [
-                    {
-                        "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                        "Attribute": [
-                            {
-                                "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                "Value": "VIEW",
-                            },
-                        ],
-                    },
-                ],
-            },
-            {
-                "Decision": "Deny",
-                "Status": {"StatusCode": {"Value": "ok"}},
-                "Category": [
-                    {
-                        "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                        "Attribute": [
-                            {
-                                "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                "Value": "DELETE",
-                            },
-                        ],
-                    },
-                ],
-            },
-            {
-                "Decision": "NotApplicable",
-                "Status": {"StatusCode": {"Value": "ok"}},
-                "Category": [
-                    {
-                        "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                        "Attribute": [
-                            {
-                                "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                "Value": "ARCHIVE",
-                            },
-                        ],
-                    },
-                ],
-            },
+            _entry("Permit", "VIEW"),
+            _entry("Deny", "DELETE"),
+            _entry("NotApplicable", "ARCHIVE"),
         ],
     }
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import httpx
 import pytest
 from mockito import mock, when
@@ -15,10 +17,13 @@ from nextlabs_sdk._pagination import SyncPaginator
 from nextlabs_sdk.exceptions import ServerError
 
 BASE_URL = "https://cloudaz.example.com"
+_SEARCH = "/nextlabs-reporter/api/v1/auditLogs/search"
+_EXPORT = "/nextlabs-reporter/api/v1/auditLogs/export"
+_USERS = "/nextlabs-reporter/api/v1/auditLogs/users"
 
 
-def _make_request(path: str = "/api") -> httpx.Request:
-    return httpx.Request("POST", f"{BASE_URL}{path}")
+def _request() -> httpx.Request:
+    return httpx.Request("POST", f"{BASE_URL}/api")
 
 
 def _make_reporter_envelope(
@@ -37,19 +42,15 @@ def _make_reporter_envelope(
                 "totalElements": total_elements,
             },
         },
-        request=_make_request(),
+        request=_request(),
     )
 
 
 def _make_data_envelope(data: object) -> httpx.Response:
     return httpx.Response(
         200,
-        json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": data,
-        },
-        request=_make_request(),
+        json={"statusCode": "1003", "message": "Data found successfully", "data": data},
+        request=_request(),
     )
 
 
@@ -67,25 +68,23 @@ def _make_audit_entry_data() -> dict[str, object]:
     }
 
 
-def test_search_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
-    query = AuditLogQuery(start_date=100, end_date=200)
-    response = _make_reporter_envelope(
-        content=[_make_audit_entry_data()],
-        total_pages=1,
-        total_elements=1,
-    )
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
-        json={
-            "startDate": 100,
-            "endDate": 200,
-            "pageNumber": 0,
-        },
-    ).thenReturn(response)
+@pytest.fixture
+def service() -> tuple[EntityAuditLogService, httpx.Client]:
+    client = cast(httpx.Client, mock(httpx.Client))
+    return EntityAuditLogService(client), client
 
-    paginator = service.search(query)
+
+def test_search_returns_paginator(
+    service: tuple[EntityAuditLogService, httpx.Client],
+) -> None:
+    svc, client = service
+    query = AuditLogQuery(start_date=100, end_date=200)
+    when(client).post(
+        _SEARCH,
+        json={"startDate": 100, "endDate": 200, "pageNumber": 0},
+    ).thenReturn(_make_reporter_envelope([_make_audit_entry_data()]))
+
+    paginator = svc.search(query)
 
     assert isinstance(paginator, SyncPaginator)
     entries = list(paginator)
@@ -94,37 +93,36 @@ def test_search_returns_paginator() -> None:
     assert entries[0].action == "LOGOUT"
 
 
-def test_search_paginates_multiple_pages() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
+def test_search_paginates_multiple_pages(
+    service: tuple[EntityAuditLogService, httpx.Client],
+) -> None:
+    svc, client = service
     query = AuditLogQuery(start_date=100, end_date=200)
     entry1 = _make_audit_entry_data()
     entry1["id"] = 1
     entry2 = _make_audit_entry_data()
     entry2["id"] = 2
 
-    page0 = _make_reporter_envelope(content=[entry1], total_pages=2, total_elements=2)
-    page1 = _make_reporter_envelope(content=[entry2], total_pages=2, total_elements=2)
-
     when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
+        _SEARCH,
         json={"startDate": 100, "endDate": 200, "pageNumber": 0},
-    ).thenReturn(page0)
+    ).thenReturn(_make_reporter_envelope([entry1], total_pages=2, total_elements=2))
     when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
+        _SEARCH,
         json={"startDate": 100, "endDate": 200, "pageNumber": 1},
-    ).thenReturn(page1)
+    ).thenReturn(_make_reporter_envelope([entry2], total_pages=2, total_elements=2))
 
-    entries = list(service.search(query))
+    entries = list(svc.search(query))
 
     assert len(entries) == 2
     assert entries[0].id == 1
     assert entries[1].id == 2
 
 
-def test_search_with_filters() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
+def test_search_with_filters(
+    service: tuple[EntityAuditLogService, httpx.Client],
+) -> None:
+    svc, client = service
     query = AuditLogQuery(
         start_date=100,
         end_date=200,
@@ -132,9 +130,8 @@ def test_search_with_filters() -> None:
         entity_type="AU",
         usernames=["admin"],
     )
-    response = _make_reporter_envelope(content=[], total_elements=0)
     when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
+        _SEARCH,
         json={
             "startDate": 100,
             "endDate": 200,
@@ -143,86 +140,73 @@ def test_search_with_filters() -> None:
             "usernames": ["admin"],
             "pageNumber": 0,
         },
-    ).thenReturn(response)
+    ).thenReturn(_make_reporter_envelope([], total_elements=0))
 
-    entries = list(service.search(query))
-
-    assert entries == []
+    assert list(svc.search(query)) == []
 
 
-def test_export_returns_bytes() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
-    request_body = ExportAuditLogsRequest(ids=[5, 10])
-    csv_content = b"id,timestamp,action\n5,100,LOGIN\n"
-    response = httpx.Response(
-        200,
-        content=csv_content,
-        request=_make_request(),
+@pytest.mark.parametrize(
+    "request_body,expected_json,csv_content",
+    [
+        pytest.param(
+            ExportAuditLogsRequest(ids=[5, 10]),
+            {"ids": [5, 10]},
+            b"id,timestamp,action\n5,100,LOGIN\n",
+            id="ids",
+        ),
+        pytest.param(
+            ExportAuditLogsRequest(query=AuditLogQuery(start_date=100, end_date=200)),
+            {"query": {"startDate": 100, "endDate": 200}},
+            b"id,timestamp,action\n",
+            id="query",
+        ),
+    ],
+)
+def test_export_returns_bytes(
+    service: tuple[EntityAuditLogService, httpx.Client],
+    request_body: ExportAuditLogsRequest,
+    expected_json: dict[str, object],
+    csv_content: bytes,
+) -> None:
+    svc, client = service
+    when(client).post(_EXPORT, json=expected_json).thenReturn(
+        httpx.Response(200, content=csv_content, request=_request())
     )
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/export",
-        json={"ids": [5, 10]},
-    ).thenReturn(response)
 
-    result = service.export(request_body)
-
-    assert result == csv_content
+    assert svc.export(request_body) == csv_content
 
 
-def test_export_with_query() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
-    query = AuditLogQuery(start_date=100, end_date=200)
-    request_body = ExportAuditLogsRequest(query=query)
-    csv_content = b"id,timestamp,action\n"
-    response = httpx.Response(
-        200,
-        content=csv_content,
-        request=_make_request(),
-    )
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/export",
-        json={"query": {"startDate": 100, "endDate": 200}},
-    ).thenReturn(response)
-
-    result = service.export(request_body)
-
-    assert result == csv_content
-
-
-def test_export_raises_on_error() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
+def test_export_raises_on_error(
+    service: tuple[EntityAuditLogService, httpx.Client],
+) -> None:
+    svc, client = service
     request_body = ExportAuditLogsRequest(ids=[999])
-    response = httpx.Response(
-        500,
-        json={"statusCode": "5001", "message": "Export error"},
-        request=_make_request(),
+    when(client).post(_EXPORT, json={"ids": [999]}).thenReturn(
+        httpx.Response(
+            500,
+            json={"statusCode": "5001", "message": "Export error"},
+            request=_request(),
+        )
     )
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/export",
-        json={"ids": [999]},
-    ).thenReturn(response)
 
     with pytest.raises(ServerError):
-        service.export(request_body)
+        svc.export(request_body)
 
 
-def test_list_users_returns_user_list() -> None:
-    client = mock(httpx.Client)
-    service = EntityAuditLogService(client)
-    response = _make_data_envelope(
-        data=[
-            {"firstName": "Test", "lastName": "User", "username": "testuser"},
-            {"firstName": "Admin", "lastName": "User", "username": "admin"},
-        ]
+def test_list_users_returns_user_list(
+    service: tuple[EntityAuditLogService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(_USERS).thenReturn(
+        _make_data_envelope(
+            [
+                {"firstName": "Test", "lastName": "User", "username": "testuser"},
+                {"firstName": "Admin", "lastName": "User", "username": "admin"},
+            ]
+        )
     )
-    when(client).get(
-        "/nextlabs-reporter/api/v1/auditLogs/users",
-    ).thenReturn(response)
 
-    users = service.list_users()
+    users = svc.list_users()
 
     assert len(users) == 2
     assert isinstance(users[0], AuditLogUser)

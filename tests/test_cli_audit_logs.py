@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
@@ -22,6 +23,12 @@ _GLOBAL_OPTS = (
     "admin",
     "--password",
     "secret",
+)
+_DATE_OPTS = (
+    "--start-date",
+    "1700000000000",
+    "--end-date",
+    "1700100000000",
 )
 
 
@@ -52,9 +59,7 @@ def _make_entry(
     )
 
 
-def _make_paginator(
-    entries: list[AuditLogEntry],
-) -> SyncPaginator[AuditLogEntry]:
+def _make_paginator(entries: list[AuditLogEntry]) -> SyncPaginator[AuditLogEntry]:
     page = PageResult(
         entries=entries,
         page_no=0,
@@ -69,64 +74,48 @@ def _make_paginator(
     return SyncPaginator(fetch_page=fetch_page)
 
 
-def test_search_table_output() -> None:
+@pytest.fixture
+def stubbed_audit():
     _, mock_audit = _stub_client()
-    entry = _make_entry()
-    paginator = _make_paginator([entry])
-    when(mock_audit).search(...).thenReturn(paginator)
+    return mock_audit
+
+
+def _check_table(output: str) -> bool:
+    return all(s in output for s in ("UPDATE", "admin", "POLICY"))
+
+
+def _check_json(output: str) -> bool:
+    parsed = json.loads(output)
+    return (
+        isinstance(parsed, list)
+        and parsed[0]["action"] == "UPDATE"
+        and parsed[0]["actor"] == "admin"
+        and parsed[0]["entity_type"] == "POLICY"
+    )
+
+
+@pytest.mark.parametrize(
+    "extra_global,check",
+    [
+        pytest.param((), _check_table, id="table"),
+        pytest.param(("--json",), _check_json, id="json"),
+    ],
+)
+def test_search_output_formats(stubbed_audit, extra_global, check):
+    when(stubbed_audit).search(...).thenReturn(_make_paginator([_make_entry()]))
 
     result = runner.invoke(
         app,
-        [
-            *_GLOBAL_OPTS,
-            "audit-logs",
-            "search",
-            "--start-date",
-            "1700000000000",
-            "--end-date",
-            "1700100000000",
-        ],
+        [*_GLOBAL_OPTS, *extra_global, "audit-logs", "search", *_DATE_OPTS],
     )
 
     assert result.exit_code == 0
-    assert "UPDATE" in result.output
-    assert "admin" in result.output
-    assert "POLICY" in result.output
+    assert check(result.output)
 
 
-def test_search_json_output() -> None:
-    _, mock_audit = _stub_client()
-    entry = _make_entry()
-    paginator = _make_paginator([entry])
-    when(mock_audit).search(...).thenReturn(paginator)
-
-    result = runner.invoke(
-        app,
-        [
-            *_GLOBAL_OPTS,
-            "--json",
-            "audit-logs",
-            "search",
-            "--start-date",
-            "1700000000000",
-            "--end-date",
-            "1700100000000",
-        ],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["action"] == "UPDATE"
-    assert parsed[0]["actor"] == "admin"
-    assert parsed[0]["entity_type"] == "POLICY"
-
-
-def test_search_with_filter_options() -> None:
-    _, mock_audit = _stub_client()
+def test_search_with_filter_options(stubbed_audit):
     entry = _make_entry(action="CREATE", entity_type="COMPONENT")
-    paginator = _make_paginator([entry])
-    when(mock_audit).search(...).thenReturn(paginator)
+    when(stubbed_audit).search(...).thenReturn(_make_paginator([entry]))
 
     result = runner.invoke(
         app,
@@ -134,10 +123,7 @@ def test_search_with_filter_options() -> None:
             *_GLOBAL_OPTS,
             "audit-logs",
             "search",
-            "--start-date",
-            "1700000000000",
-            "--end-date",
-            "1700100000000",
+            *_DATE_OPTS,
             "--entity-type",
             "COMPONENT",
             "--action",
@@ -156,15 +142,11 @@ def test_search_with_filter_options() -> None:
     assert "COMPONENT" in result.output
 
 
-def test_search_missing_required_dates() -> None:
+def test_search_missing_required_dates():
     _stub_client()
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "audit-logs", "search"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "audit-logs", "search"])
 
     assert result.exit_code != 0
-    assert (
-        "start-date" in result.output.lower() or "start_date" in result.output.lower()
-    )
+    output = result.output.lower()
+    assert "start-date" in output or "start_date" in output

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import Any, Callable, cast
+
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._component_type_models import ComponentType
@@ -9,33 +12,32 @@ from nextlabs_sdk._cloudaz._search import SavedSearch, SavedSearchType, SearchCr
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"
-
-
-def _make_request(path: str = "/api") -> httpx.Request:
-    return httpx.Request("GET", f"{BASE_URL}{path}")
+_SEARCH = "/console/api/v1/policyModel/search"
+_SEARCH_ADD = "/console/api/v1/policyModel/search/add"
+_SEARCH_REMOVE = "/console/api/v1/policyModel/search/remove"
+_SEARCH_SAVED = "/console/api/v1/policyModel/search/saved"
+_SAVED_LIST = "/console/api/v1/policyModel/search/savedlist"
 
 
 def _make_envelope(
     data: object,
-    status_code: int = 200,
     page_no: int = 0,
-    page_size: int = 10,
     total_pages: int = 1,
     total_records: int = 1,
 ) -> httpx.Response:
     return httpx.Response(
-        status_code,
+        200,
         json={
             "statusCode": "1004",
             "message": "Data loaded successfully",
             "data": data,
             "pageNo": page_no,
-            "pageSize": page_size,
+            "pageSize": 10,
             "totalPages": total_pages,
             "totalNoOfRecords": total_records,
             "additionalAttributes": None,
         },
-        request=_make_request(),
+        request=httpx.Request("GET", f"{BASE_URL}/api"),
     )
 
 
@@ -70,21 +72,22 @@ def _make_saved_search_data() -> dict[str, object]:
     }
 
 
-def test_search_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
-    criteria = SearchCriteria().filter_type("RESOURCE")
-    response = _make_envelope(
-        data=[_make_component_type_data()],
-        total_pages=1,
-        total_records=1,
-    )
-    when(client).post(
-        "/console/api/v1/policyModel/search",
-        json=criteria.page(0).to_dict(),
-    ).thenReturn(response)
+@pytest.fixture
+def service() -> tuple[ComponentTypeSearchService, httpx.Client]:
+    client = cast(httpx.Client, mock(httpx.Client))
+    return ComponentTypeSearchService(client), client
 
-    paginator = service.search(criteria)
+
+def test_search_returns_paginator(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
+    criteria = SearchCriteria().filter_type("RESOURCE")
+    when(client).post(_SEARCH, json=criteria.page(0).to_dict()).thenReturn(
+        _make_envelope([_make_component_type_data()])
+    )
+
+    paginator = svc.search(criteria)
 
     assert isinstance(paginator, SyncPaginator)
     results = list(paginator)
@@ -93,11 +96,11 @@ def test_search_returns_paginator() -> None:
     assert results[0].name == "Support Tickets"
 
 
-def test_search_paginates_multiple_pages() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
+def test_search_paginates_multiple_pages(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
     criteria = SearchCriteria().filter_type("RESOURCE")
-
     ct1 = _make_component_type_data()
     ct2 = dict(
         _make_component_type_data(),
@@ -107,65 +110,54 @@ def test_search_paginates_multiple_pages() -> None:
         type="SUBJECT",
     )
 
-    page0 = _make_envelope(data=[ct1], total_pages=2, total_records=2)
-    page1 = _make_envelope(data=[ct2], page_no=1, total_pages=2, total_records=2)
+    when(client).post(_SEARCH, json=criteria.page(0).to_dict()).thenReturn(
+        _make_envelope([ct1], total_pages=2, total_records=2)
+    )
+    when(client).post(_SEARCH, json=criteria.page(1).to_dict()).thenReturn(
+        _make_envelope([ct2], page_no=1, total_pages=2, total_records=2)
+    )
 
-    when(client).post(
-        "/console/api/v1/policyModel/search",
-        json=criteria.page(0).to_dict(),
-    ).thenReturn(page0)
-    when(client).post(
-        "/console/api/v1/policyModel/search",
-        json=criteria.page(1).to_dict(),
-    ).thenReturn(page1)
-
-    results = list(service.search(criteria))
+    results = list(svc.search(criteria))
 
     assert len(results) == 2
     assert results[0].name == "Support Tickets"
     assert results[1].name == "Users"
 
 
-def test_save_search_returns_id() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
+def test_save_search_returns_id(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
     payload: dict[str, object] = {
         "name": "My Search",
         "desc": "description",
         "type": "POLICY_MODEL_RESOURCE",
         "criteria": {"fields": [], "pageNo": 0, "pageSize": 20},
     }
-    response = _make_envelope(data=55)
-    when(client).post(
-        "/console/api/v1/policyModel/search/add",
-        json=payload,
-    ).thenReturn(response)
+    when(client).post(_SEARCH_ADD, json=payload).thenReturn(_make_envelope(55))
 
-    result = service.save_search(payload)
-
-    assert result == 55
+    assert svc.save_search(payload) == 55
 
 
-def test_delete_search_succeeds() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
-    response = httpx.Response(200, request=_make_request())
-    when(client).delete(
-        "/console/api/v1/policyModel/search/remove/10",
-    ).thenReturn(response)
+def test_delete_search_succeeds(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
+    response = httpx.Response(200, request=httpx.Request("GET", f"{BASE_URL}/api"))
+    when(client).delete(f"{_SEARCH_REMOVE}/10").thenReturn(response)
 
-    service.delete_search(10)
+    svc.delete_search(10)
 
 
-def test_get_saved_search_returns_model() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
-    response = _make_envelope(data=_make_saved_search_data())
-    when(client).get(
-        "/console/api/v1/policyModel/search/saved/10",
-    ).thenReturn(response)
+def test_get_saved_search_returns_model(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(f"{_SEARCH_SAVED}/10").thenReturn(
+        _make_envelope(_make_saved_search_data())
+    )
 
-    ss = service.get_saved_search(10)
+    ss = svc.get_saved_search(10)
 
     assert isinstance(ss, SavedSearch)
     assert ss.id == 10
@@ -173,42 +165,34 @@ def test_get_saved_search_returns_model() -> None:
     assert ss.type == SavedSearchType.POLICY_MODEL_RESOURCE
 
 
-def test_list_saved_searches_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
-    response = _make_envelope(
-        data=[_make_saved_search_data()],
-        total_pages=1,
-        total_records=1,
+@pytest.mark.parametrize(
+    "endpoint,call_method",
+    [
+        pytest.param(
+            f"{_SAVED_LIST}/POLICY_MODEL_RESOURCE",
+            lambda svc: svc.list_saved_searches("POLICY_MODEL_RESOURCE"),
+            id="list-saved-searches",
+        ),
+        pytest.param(
+            f"{_SAVED_LIST}/POLICY_MODEL_RESOURCE/support",
+            lambda svc: svc.find_saved_search("POLICY_MODEL_RESOURCE", "support"),
+            id="find-saved-search",
+        ),
+    ],
+)
+def test_saved_search_paginator(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+    endpoint: str,
+    call_method: Callable[[ComponentTypeSearchService], Any],
+) -> None:
+    svc, client = service
+    when(client).get(endpoint, params={"pageNo": 0}).thenReturn(
+        _make_envelope([_make_saved_search_data()])
     )
-    when(client).get(
-        "/console/api/v1/policyModel/search/savedlist/POLICY_MODEL_RESOURCE",
-        params={"pageNo": 0},
-    ).thenReturn(response)
 
-    paginator = service.list_saved_searches("POLICY_MODEL_RESOURCE")
+    paginator = call_method(svc)
 
     assert isinstance(paginator, SyncPaginator)
     results = list(paginator)
     assert len(results) == 1
     assert isinstance(results[0], SavedSearch)
-
-
-def test_find_saved_search_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeSearchService(client)
-    response = _make_envelope(
-        data=[_make_saved_search_data()],
-        total_pages=1,
-        total_records=1,
-    )
-    when(client).get(
-        "/console/api/v1/policyModel/search/savedlist/POLICY_MODEL_RESOURCE/support",
-        params={"pageNo": 0},
-    ).thenReturn(response)
-
-    paginator = service.find_saved_search("POLICY_MODEL_RESOURCE", "support")
-
-    assert isinstance(paginator, SyncPaginator)
-    results = list(paginator)
-    assert len(results) == 1

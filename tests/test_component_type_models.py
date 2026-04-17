@@ -17,23 +17,23 @@ from nextlabs_sdk._cloudaz._component_type_models import (
 from nextlabs_sdk._cloudaz._models import TagType
 
 
-def test_component_type_type_values() -> None:
-    assert ComponentTypeType.SUBJECT.value == "SUBJECT"
-    assert ComponentTypeType.RESOURCE.value == "RESOURCE"
-    assert ComponentTypeType.DA_SUBJECT.value == "DA_SUBJECT"
-    assert ComponentTypeType.DA_RESOURCE.value == "DA_RESOURCE"
+@pytest.mark.parametrize(
+    "member,expected",
+    [
+        pytest.param(m, m.name, id=m.name)
+        for m in (
+            *ComponentTypeType,
+            *AttributeDataType,
+            *ObligationRunAt,
+            *ctm.ObligationParameterType,
+        )
+    ],
+)
+def test_enum_member_values_are_self_named(member, expected):
+    assert member.value == expected
 
 
-def test_attribute_data_type_values() -> None:
-    assert AttributeDataType.STRING.value == "STRING"
-    assert AttributeDataType.NUMBER.value == "NUMBER"
-    assert AttributeDataType.DATE.value == "DATE"
-    assert AttributeDataType.MULTIVAL.value == "MULTIVAL"
-    assert AttributeDataType.COLLECTION.value == "COLLECTION"
-    assert AttributeDataType.TIME_INTERVAL.value == "TIME_INTERVAL"
-
-
-def test_operator_config_from_api_payload() -> None:
+def test_operator_config_from_api_payload():
     raw = {"id": 5, "key": "!=", "label": "is not", "dataType": "STRING"}
     oc = OperatorConfig.model_validate(raw)
     assert oc.id == 5
@@ -42,19 +42,19 @@ def test_operator_config_from_api_payload() -> None:
     assert oc.data_type == AttributeDataType.STRING
 
 
-def test_operator_config_from_python_names() -> None:
+def test_operator_config_from_python_names():
     oc = OperatorConfig(key="=", label="is", data_type=AttributeDataType.NUMBER)
     assert oc.id is None
     assert oc.data_type == AttributeDataType.NUMBER
 
 
-def test_operator_config_is_frozen() -> None:
+def test_operator_config_is_frozen():
     oc = OperatorConfig(key="=", label="is", data_type=AttributeDataType.STRING)
     with pytest.raises(ValidationError):
         oc.key = "changed"  # type: ignore[misc]
 
 
-def test_attribute_config_from_api_payload() -> None:
+def test_attribute_config_from_api_payload():
     raw = {
         "id": 16,
         "name": "Priority",
@@ -79,7 +79,7 @@ def test_attribute_config_from_api_payload() -> None:
     assert ac.version == 4
 
 
-def test_attribute_config_from_python_names() -> None:
+def test_attribute_config_from_python_names():
     ac = AttributeConfig(
         name="Category",
         short_name="category",
@@ -90,7 +90,7 @@ def test_attribute_config_from_python_names() -> None:
     assert ac.operator_configs == []
 
 
-def test_action_config_from_api_payload() -> None:
+def test_action_config_from_api_payload():
     raw = {
         "id": 81,
         "name": "View",
@@ -107,24 +107,13 @@ def test_action_config_from_api_payload() -> None:
     assert ac.short_code == "cc"
 
 
-def test_action_config_from_python_names() -> None:
+def test_action_config_from_python_names():
     ac = ctm.ActionConfig(name="Edit", short_name="EDIT_TKTS", sort_order=1)
     assert ac.id is None
     assert ac.short_code is None
 
 
-def test_obligation_run_at_values() -> None:
-    assert ObligationRunAt.PEP.value == "PEP"
-    assert ObligationRunAt.PDP.value == "PDP"
-
-
-def test_obligation_parameter_type_values() -> None:
-    assert ctm.ObligationParameterType.TEXT_SINGLE_ROW.value == "TEXT_SINGLE_ROW"
-    assert ctm.ObligationParameterType.TEXT_MULTIPLE_ROW.value == "TEXT_MULTIPLE_ROW"
-    assert ctm.ObligationParameterType.LIST.value == "LIST"
-
-
-def test_parameter_config_from_api_payload() -> None:
+def test_parameter_config_from_api_payload():
     raw = {
         "id": 1,
         "name": "Ticket Id",
@@ -147,7 +136,7 @@ def test_parameter_config_from_api_payload() -> None:
     assert pc.mandatory is True
 
 
-def test_obligation_config_from_api_payload() -> None:
+def test_obligation_config_from_api_payload():
     raw = {
         "id": 6,
         "name": "Notify Violation",
@@ -227,9 +216,8 @@ def _make_full_component_type_data() -> dict[str, object]:
     }
 
 
-def test_component_type_from_api_payload() -> None:
-    raw = _make_full_component_type_data()
-    ct = ComponentType.model_validate(raw)
+def test_component_type_from_api_payload():
+    ct = ComponentType.model_validate(_make_full_component_type_data())
     assert ct.id == 42
     assert ct.name == "Support Tickets"
     assert ct.short_name == "support_tickets"
@@ -249,7 +237,7 @@ def test_component_type_from_api_payload() -> None:
     assert ct.created_date == 1713171640267
 
 
-def test_component_type_minimal() -> None:
+def test_component_type_minimal():
     raw = {
         "id": 1,
         "name": "User",
@@ -268,13 +256,13 @@ def test_component_type_minimal() -> None:
     assert ct.version is None
 
 
-def test_component_type_is_frozen() -> None:
+def test_component_type_is_frozen():
     ct = ComponentType.model_validate(_make_full_component_type_data())
     with pytest.raises(ValidationError):
         ct.name = "changed"  # type: ignore[misc]
 
 
-def test_component_type_rejects_invalid_type() -> None:
+def test_component_type_rejects_invalid_type():
     with pytest.raises(ValidationError):
         ComponentType.model_validate(
             {
@@ -283,5 +271,5 @@ def test_component_type_rejects_invalid_type() -> None:
                 "shortName": "x",
                 "type": "INVALID",
                 "status": "ACTIVE",
-            },
+            }
         )

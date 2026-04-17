@@ -41,9 +41,17 @@ def test_successful_request_returns_immediately() -> None:
     assert response.status_code == 200
 
 
-def test_retries_on_503_then_succeeds() -> None:
+@pytest.mark.parametrize(
+    "fail_status",
+    [
+        pytest.param(503, id="503"),
+        pytest.param(500, id="500"),
+        pytest.param(429, id="429"),
+    ],
+)
+def test_retries_on_retryable_status_then_succeeds(fail_status: int) -> None:
     request = _make_request()
-    fail_resp = _make_response(503, request)
+    fail_resp = _make_response(fail_status, request)
     ok_resp = _make_response(200, request)
     wrapped = mock(httpx.BaseTransport)
     when(wrapped).handle_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
@@ -55,56 +63,20 @@ def test_retries_on_503_then_succeeds() -> None:
     assert response.status_code == 200
 
 
-def test_retries_on_500_then_succeeds() -> None:
+@pytest.mark.parametrize(
+    "status",
+    [pytest.param(400, id="400"), pytest.param(404, id="404")],
+)
+def test_does_not_retry_on_non_retryable_status(status: int) -> None:
     request = _make_request()
-    fail_resp = _make_response(500, request)
-    ok_resp = _make_response(200, request)
-    wrapped = mock(httpx.BaseTransport)
-    when(wrapped).handle_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
-    when(time).sleep(...).thenReturn(None)
-
-    transport = _http_transport.RetryTransport(wrapped=wrapped, max_retries=3)
-    response = transport.handle_request(request)
-
-    assert response.status_code == 200
-
-
-def test_retries_on_429_then_succeeds() -> None:
-    request = _make_request()
-    fail_resp = _make_response(429, request)
-    ok_resp = _make_response(200, request)
-    wrapped = mock(httpx.BaseTransport)
-    when(wrapped).handle_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
-    when(time).sleep(...).thenReturn(None)
-
-    transport = _http_transport.RetryTransport(wrapped=wrapped, max_retries=3)
-    response = transport.handle_request(request)
-
-    assert response.status_code == 200
-
-
-def test_does_not_retry_on_400() -> None:
-    request = _make_request()
-    resp = _make_response(400, request)
+    resp = _make_response(status, request)
     wrapped = mock(httpx.BaseTransport)
     when(wrapped).handle_request(request).thenReturn(resp)
 
     transport = _http_transport.RetryTransport(wrapped=wrapped, max_retries=3)
     response = transport.handle_request(request)
 
-    assert response.status_code == 400
-
-
-def test_does_not_retry_on_404() -> None:
-    request = _make_request()
-    resp = _make_response(404, request)
-    wrapped = mock(httpx.BaseTransport)
-    when(wrapped).handle_request(request).thenReturn(resp)
-
-    transport = _http_transport.RetryTransport(wrapped=wrapped, max_retries=3)
-    response = transport.handle_request(request)
-
-    assert response.status_code == 404
+    assert response.status_code == status
 
 
 def test_returns_last_response_when_retries_exhausted() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Callable, Coroutine, TypeVar
 
 import httpx
 from mockito import mock, when
@@ -16,15 +17,15 @@ from nextlabs_sdk._pagination import AsyncPaginator
 BASE_URL = "https://cloudaz.example.com"
 _BASE_PATH = "/nextlabs-reporter/api/v1/report-activity-logs"
 
+_T = TypeVar("_T")
+
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("POST", f"{BASE_URL}{path}")
 
 
-def _make_reporter_envelope(
-    content: list[object],
-    total_pages: int = 1,
-    total_elements: int = 1,
+def _reporter_envelope(
+    content, total_pages: int = 1, total_elements: int = 1
 ) -> httpx.Response:
     return httpx.Response(
         200,
@@ -41,14 +42,10 @@ def _make_reporter_envelope(
     )
 
 
-def _make_data_envelope(data: object) -> httpx.Response:
+def _data_envelope(data) -> httpx.Response:
     return httpx.Response(
         200,
-        json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": data,
-        },
+        json={"statusCode": "1003", "message": "Data found successfully", "data": data},
         request=_make_request(),
     )
 
@@ -76,20 +73,30 @@ def _make_query() -> ActivityLogQuery:
     )
 
 
-def test_async_search_returns_paginator() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncReportActivityLogService(client)
-    query = _make_query()
-
-    response = _make_reporter_envelope(
-        content=[_make_enforcement_row()],
-        total_pages=1,
-        total_elements=1,
-    )
+def _paged_payload(
+    query: ActivityLogQuery, page: int = 0, size: int = 20
+) -> dict[str, object]:
     payload = query.model_dump(by_alias=True, exclude_none=True)
-    payload["page"] = 0
-    payload["size"] = 20
-    when(client).post(_BASE_PATH, json=payload).thenReturn(response)
+    payload["page"] = page
+    payload["size"] = size
+    return payload
+
+
+def _make_service() -> tuple[object, AsyncReportActivityLogService]:
+    client = mock(httpx.AsyncClient)
+    return client, AsyncReportActivityLogService(client)
+
+
+def _run(coro_factory: Callable[[], Coroutine[Any, Any, _T]]) -> _T:
+    return asyncio.run(coro_factory())
+
+
+def test_async_search_returns_paginator():
+    client, service = _make_service()
+    query = _make_query()
+    when(client).post(_BASE_PATH, json=_paged_payload(query)).thenReturn(
+        _reporter_envelope(content=[_make_enforcement_row()]),
+    )
 
     paginator = service.search(query)
     assert isinstance(paginator, AsyncPaginator)
@@ -99,15 +106,13 @@ def test_async_search_returns_paginator() -> None:
         async for entry in paginator:
             entries.append(entry)
 
-    asyncio.run(collect())
+    _run(collect)
     assert len(entries) == 1
     assert entries[0].row_id == 2
 
 
-def test_async_get_by_row_id_returns_attributes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncReportActivityLogService(client)
-
+def test_async_get_by_row_id_returns_attributes():
+    client, service = _make_service()
     raw_attrs = [
         {
             "isDynamic": False,
@@ -124,45 +129,31 @@ def test_async_get_by_row_id_returns_attributes() -> None:
             "value": "John",
         },
     ]
-    response = _make_data_envelope(raw_attrs)
-    when(client).get(f"{_BASE_PATH}/42").thenReturn(response)
+    when(client).get(f"{_BASE_PATH}/42").thenReturn(_data_envelope(raw_attrs))
 
-    async def run() -> list[ActivityLogAttribute]:
-        return await service.get_by_row_id(42)
-
-    attrs = asyncio.run(run())
+    attrs = _run(lambda: service.get_by_row_id(42))
     assert len(attrs) == 2
     assert isinstance(attrs[0], ActivityLogAttribute)
     assert attrs[0].name == "DATE"
 
 
-def test_async_export_returns_bytes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncReportActivityLogService(client)
+def test_async_export_returns_bytes():
+    client, service = _make_service()
     query = _make_query()
-
     csv_content = b"ROW_ID,TIME,USER_NAME\n1,2024-01-01,John\n"
     payload = query.model_dump(by_alias=True, exclude_none=True)
-    response = httpx.Response(200, content=csv_content, request=_make_request())
-    when(client).post(f"{_BASE_PATH}/export", json=payload).thenReturn(response)
+    when(client).post(f"{_BASE_PATH}/export", json=payload).thenReturn(
+        httpx.Response(200, content=csv_content, request=_make_request()),
+    )
 
-    async def run() -> bytes:
-        return await service.export(query)
-
-    result = asyncio.run(run())
-    assert result == csv_content
+    assert _run(lambda: service.export(query)) == csv_content
 
 
-def test_async_export_by_row_id_returns_bytes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncReportActivityLogService(client)
-
+def test_async_export_by_row_id_returns_bytes():
+    client, service = _make_service()
     csv_content = b"DATE,USER_NAME,ACTION\n2024-01-01,John,View\n"
-    response = httpx.Response(200, content=csv_content, request=_make_request())
-    when(client).post(f"{_BASE_PATH}/99/export").thenReturn(response)
+    when(client).post(f"{_BASE_PATH}/99/export").thenReturn(
+        httpx.Response(200, content=csv_content, request=_make_request()),
+    )
 
-    async def run() -> bytes:
-        return await service.export_by_row_id(99)
-
-    result = asyncio.run(run())
-    assert result == csv_content
+    assert _run(lambda: service.export_by_row_id(99)) == csv_content

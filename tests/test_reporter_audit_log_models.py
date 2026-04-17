@@ -4,21 +4,21 @@ from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEnt
 
 
 def test_reporter_audit_log_entry_parses_api_payload() -> None:
-    payload = {
-        "id": 1339,
-        "component": "REPORTER",
-        "createdBy": 0,
-        "createdDate": 1746587919483,
-        "hidden": False,
-        "lastUpdated": 1746587919483,
-        "lastUpdatedBy": 0,
-        "msgCode": "audit.export.generated.report",
-        "msgParams": '["Test Report"]',
-        "ownerDisplayName": "Administrator",
-        "activityMsg": "exported {0} generated report",
-    }
-
-    entry = ReporterAuditLogEntry.model_validate(payload)
+    entry = ReporterAuditLogEntry.model_validate(
+        {
+            "id": 1339,
+            "component": "REPORTER",
+            "createdBy": 0,
+            "createdDate": 1746587919483,
+            "hidden": False,
+            "lastUpdated": 1746587919483,
+            "lastUpdatedBy": 0,
+            "msgCode": "audit.export.generated.report",
+            "msgParams": '["Test Report"]',
+            "ownerDisplayName": "Administrator",
+            "activityMsg": "exported {0} generated report",
+        }
+    )
 
     assert entry.id == 1339
     assert entry.component == "REPORTER"

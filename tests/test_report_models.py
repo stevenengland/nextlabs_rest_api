@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from nextlabs_sdk._cloudaz._report_models import (
     ApplicationUser,
@@ -12,8 +14,6 @@ from nextlabs_sdk._cloudaz._report_models import (
     DeleteReportsRequest,
     EnforcementEntry,
     EnforcementTimeBucket,
-)
-from nextlabs_sdk._cloudaz._report_models import (
     FilterCriteria,
     FilterField,
     PolicyActivityReport,
@@ -22,8 +22,6 @@ from nextlabs_sdk._cloudaz._report_models import (
     PolicyModelAction,
     ReportCriteria,
     ReportFilterGeneral,
-)
-from nextlabs_sdk._cloudaz._report_models import (
     ReportFilters,
     ReportOrderBy,
     ReportWidget,
@@ -32,26 +30,41 @@ from nextlabs_sdk._cloudaz._report_models import (
     WidgetData,
 )
 
-
-def test_filter_field_construction() -> None:
-    field = FilterField(
-        name="log_level",
-        operator="in",
-        value=["3"],
-        has_multi_value=False,
-        function="",
-    )
-    assert field.name == "log_level"
-    assert field.operator == "in"
-    assert field.value == ["3"]
-    assert field.has_multi_value is False
+# --- FilterField ---
 
 
-def test_filter_field_optional_defaults() -> None:
-    field = FilterField(name="action", operator="in")
-    assert field.value is None
-    assert field.has_multi_value is None
-    assert field.function is None
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        pytest.param(
+            dict(
+                name="log_level",
+                operator="in",
+                value=["3"],
+                has_multi_value=False,
+                function="",
+            ),
+            {
+                "name": "log_level",
+                "operator": "in",
+                "value": ["3"],
+                "has_multi_value": False,
+            },
+            id="full",
+        ),
+        pytest.param(
+            dict(name="action", operator="in"),
+            {"value": None, "has_multi_value": None, "function": None},
+            id="defaults",
+        ),
+    ],
+)
+def test_filter_field_construction(
+    kwargs: dict[str, Any], expected: dict[str, Any]
+) -> None:
+    field = FilterField(**kwargs)
+    for attr, val in expected.items():
+        assert getattr(field, attr) == val
 
 
 def test_filter_field_round_trip_serialization() -> None:
@@ -62,9 +75,10 @@ def test_filter_field_round_trip_serialization() -> None:
         "has_multi_value": False,
         "function": "",
     }
-    field = FilterField.model_validate(raw)
-    dumped = field.model_dump(exclude_none=True)
-    assert dumped == raw
+    assert FilterField.model_validate(raw).model_dump(exclude_none=True) == raw
+
+
+# --- FilterCriteria ---
 
 
 def test_filter_criteria_with_look_up_field() -> None:
@@ -86,6 +100,9 @@ def test_filter_criteria_optional_defaults() -> None:
     criteria = FilterCriteria()
     assert criteria.look_up_field is None
     assert criteria.fields is None
+
+
+# --- Report structures ---
 
 
 def test_report_filter_general_construction() -> None:
@@ -199,16 +216,17 @@ def test_report_criteria_round_trip_from_api_response() -> None:
 
 
 def test_report_widget_from_api_payload() -> None:
-    raw = {
-        "id": 1,
-        "name": "enforcement",
-        "title": "Enforcement Trend",
-        "enabled": True,
-        "chartType": "line",
-        "attributeName": "decision",
-        "maxSize": 10,
-    }
-    widget = ReportWidget.model_validate(raw)
+    widget = ReportWidget.model_validate(
+        {
+            "id": 1,
+            "name": "enforcement",
+            "title": "Enforcement Trend",
+            "enabled": True,
+            "chartType": "line",
+            "attributeName": "decision",
+            "maxSize": 10,
+        }
+    )
     assert widget.chart_type == "line"
     assert widget.attribute_name == "decision"
     assert widget.max_size == 10
@@ -255,39 +273,56 @@ def test_report_request_serialization() -> None:
 # --- DeleteReportsRequest ---
 
 
-def test_delete_request_with_ids() -> None:
-    req = DeleteReportsRequest(report_ids=[5, 10, 15])
-    payload = req.model_dump(by_alias=True, exclude_none=True)
-    assert payload["reportIds"] == [5, 10, 15]
-    assert "title" not in payload
+@pytest.mark.parametrize(
+    "kwargs,present,absent",
+    [
+        pytest.param(
+            {"report_ids": [5, 10, 15]},
+            {"reportIds": [5, 10, 15]},
+            ("title",),
+            id="with-ids",
+        ),
+        pytest.param(
+            {"title": "Deny", "policy_decision": "AD"},
+            {"title": "Deny", "policyDecision": "AD"},
+            ("reportIds",),
+            id="with-query",
+        ),
+    ],
+)
+def test_delete_request(
+    kwargs: dict[str, Any],
+    present: dict[str, Any],
+    absent: tuple[str, ...],
+) -> None:
+    payload = DeleteReportsRequest(**kwargs).model_dump(
+        by_alias=True, exclude_none=True
+    )
+    for key, value in present.items():
+        assert payload[key] == value
+    for key in absent:
+        assert key not in payload
 
 
-def test_delete_request_with_query() -> None:
-    req = DeleteReportsRequest(title="Deny", policy_decision="AD")
-    payload = req.model_dump(by_alias=True, exclude_none=True)
-    assert payload["title"] == "Deny"
-    assert payload["policyDecision"] == "AD"
-    assert "reportIds" not in payload
-
-
-# --- PolicyActivityReport (response) ---
+# --- PolicyActivityReport ---
 
 
 def test_policy_activity_report_from_api_payload() -> None:
-    raw = {
-        "id": 8,
-        "title": "Allow Enforcement in Last 7 Days",
-        "description": "Allow Enforcement in Last 7 Days v1.0",
-        "sharedMode": "public",
-        "decision": "A",
-        "dateMode": "Relative",
-        "windowMode": "last_7_days",
-        "startDate": "2024-08-14T03:05:16.148+00:00",
-        "endDate": "2024-08-21T03:05:16.148+00:00",
-        "lastUpdatedDate": "2024-08-18T02:17:23.484+00:00",
-        "type": "report",
-    }
-    report = PolicyActivityReport.model_validate(raw)
+    report = PolicyActivityReport.model_validate(
+        {
+            "id": 8,
+            "title": "Allow Enforcement in Last 7 Days",
+            "description": "Allow Enforcement in Last 7 Days v1.0",
+            "sharedMode": "public",
+            "decision": "A",
+            "dateMode": "Relative",
+            "windowMode": "last_7_days",
+            "startDate": "2024-08-14T03:05:16.148+00:00",
+            "endDate": "2024-08-21T03:05:16.148+00:00",
+            "lastUpdatedDate": "2024-08-18T02:17:23.484+00:00",
+            "type": "report",
+        }
+    )
     assert report.id == 8
     assert report.title == "Allow Enforcement in Last 7 Days"
     assert report.shared_mode == "public"
@@ -296,19 +331,20 @@ def test_policy_activity_report_from_api_payload() -> None:
 
 
 def test_policy_activity_report_is_frozen() -> None:
-    raw = {
-        "id": 1,
-        "title": "T",
-        "sharedMode": "public",
-        "decision": "A",
-        "dateMode": "fixed",
-        "windowMode": "",
-        "startDate": "2024-01-01",
-        "endDate": "2024-01-31",
-        "lastUpdatedDate": "2024-01-15",
-        "type": "custom",
-    }
-    report = PolicyActivityReport.model_validate(raw)
+    report = PolicyActivityReport.model_validate(
+        {
+            "id": 1,
+            "title": "T",
+            "sharedMode": "public",
+            "decision": "A",
+            "dateMode": "fixed",
+            "windowMode": "",
+            "startDate": "2024-01-01",
+            "endDate": "2024-01-31",
+            "lastUpdatedDate": "2024-01-15",
+            "type": "custom",
+        }
+    )
     with pytest.raises(ValidationError):
         report.title = "changed"  # type: ignore[misc]
 
@@ -317,27 +353,26 @@ def test_policy_activity_report_is_frozen() -> None:
 
 
 def test_report_detail_from_api_payload() -> None:
-    raw = {
-        "criteria": {
-            "filters": {
-                "general": {"type": "custom", "date_mode": "fixed"},
+    detail = PolicyActivityReportDetail.model_validate(
+        {
+            "criteria": {
+                "filters": {"general": {"type": "custom", "date_mode": "fixed"}},
+                "header": ["USER_NAME"],
+                "pagesize": 20,
             },
-            "header": ["USER_NAME"],
-            "pagesize": 20,
-        },
-        "widgets": [
-            {
-                "id": 1,
-                "name": "enforcement",
-                "title": "Trend",
-                "enabled": True,
-                "chartType": "line",
-                "attributeName": "decision",
-                "maxSize": 10,
-            },
-        ],
-    }
-    detail = PolicyActivityReportDetail.model_validate(raw)
+            "widgets": [
+                {
+                    "id": 1,
+                    "name": "enforcement",
+                    "title": "Trend",
+                    "enabled": True,
+                    "chartType": "line",
+                    "attributeName": "decision",
+                    "maxSize": 10,
+                },
+            ],
+        }
+    )
     assert detail.criteria.filters is not None
     assert detail.criteria.filters.general is not None
     assert detail.criteria.filters.general.type == "custom"
@@ -349,17 +384,18 @@ def test_report_detail_from_api_payload() -> None:
 
 
 def test_enforcement_entry_from_api_payload() -> None:
-    raw = {
-        "POLICY_NAME": "Encryption Policy",
-        "ACTION": "SELECT",
-        "FROM_RESOURCE_NAME": "file1.txt",
-        "TIME": "2024-10-07T07:26:14.556+00:00",
-        "USER_NAME": "user@example.com",
-        "ACTION_SHORT_CODE": "e3",
-        "ROW_ID": 2,
-        "POLICY_DECISION": "A",
-    }
-    entry = EnforcementEntry.model_validate(raw)
+    entry = EnforcementEntry.model_validate(
+        {
+            "POLICY_NAME": "Encryption Policy",
+            "ACTION": "SELECT",
+            "FROM_RESOURCE_NAME": "file1.txt",
+            "TIME": "2024-10-07T07:26:14.556+00:00",
+            "USER_NAME": "user@example.com",
+            "ACTION_SHORT_CODE": "e3",
+            "ROW_ID": 2,
+            "POLICY_DECISION": "A",
+        }
+    )
     assert entry.row_id == 2
     assert entry.policy_name == "Encryption Policy"
     assert entry.user_name == "user@example.com"
@@ -367,13 +403,14 @@ def test_enforcement_entry_from_api_payload() -> None:
 
 
 def test_enforcement_entry_allows_extra_fields() -> None:
-    raw = {
-        "ROW_ID": 1,
-        "TIME": "2024-01-01",
-        "CUSTOM_COLUMN": "custom_value",
-        "ANOTHER_DYNAMIC": 42,
-    }
-    entry = EnforcementEntry.model_validate(raw)
+    entry = EnforcementEntry.model_validate(
+        {
+            "ROW_ID": 1,
+            "TIME": "2024-01-01",
+            "CUSTOM_COLUMN": "custom_value",
+            "ANOTHER_DYNAMIC": 42,
+        }
+    )
     assert entry.row_id == 1
     extra = entry.model_extra
     assert extra is not None
@@ -382,16 +419,14 @@ def test_enforcement_entry_allows_extra_fields() -> None:
 
 
 def test_enforcement_entry_optional_fields() -> None:
-    raw = {"ROW_ID": 1, "TIME": "2024-01-01"}
-    entry = EnforcementEntry.model_validate(raw)
+    entry = EnforcementEntry.model_validate({"ROW_ID": 1, "TIME": "2024-01-01"})
     assert entry.row_id == 1
     assert entry.policy_name is None
     assert entry.action is None
 
 
 def test_enforcement_entry_is_frozen() -> None:
-    raw = {"ROW_ID": 1, "TIME": "2024-01-01"}
-    entry = EnforcementEntry.model_validate(raw)
+    entry = EnforcementEntry.model_validate({"ROW_ID": 1, "TIME": "2024-01-01"})
     with pytest.raises(ValidationError):
         entry.row_id = 99  # type: ignore[misc]
 
@@ -400,23 +435,24 @@ def test_enforcement_entry_is_frozen() -> None:
 
 
 def test_widget_data_from_api_payload() -> None:
-    raw = {
-        "enforcements": [
-            {
-                "hour": 1708070400000,
-                "allowCount": 5,
-                "denyCount": 2,
-                "decisionCount": 7,
-            },
-            {
-                "hour": 1708117200000,
-                "allowCount": 0,
-                "denyCount": 0,
-                "decisionCount": 0,
-            },
-        ],
-    }
-    data = WidgetData.model_validate(raw)
+    data = WidgetData.model_validate(
+        {
+            "enforcements": [
+                {
+                    "hour": 1708070400000,
+                    "allowCount": 5,
+                    "denyCount": 2,
+                    "decisionCount": 7,
+                },
+                {
+                    "hour": 1708117200000,
+                    "allowCount": 0,
+                    "denyCount": 0,
+                    "decisionCount": 0,
+                },
+            ],
+        }
+    )
     assert len(data.enforcements) == 2
     assert data.enforcements[0].hour == 1708070400000
     assert data.enforcements[0].allow_count == 5
@@ -425,62 +461,22 @@ def test_widget_data_from_api_payload() -> None:
 
 
 def test_widget_data_empty_enforcements_default() -> None:
-    data = WidgetData.model_validate({})
-    assert data.enforcements == []
+    assert WidgetData.model_validate({}).enforcements == []
 
 
 def test_enforcement_time_bucket_is_frozen() -> None:
     bucket = EnforcementTimeBucket.model_validate(
-        {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1}
+        {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1},
     )
     with pytest.raises(ValidationError):
         bucket.hour = 200  # type: ignore[misc]
 
 
-# --- Cached Data ---
+# --- Simple model-validate pairs ---
 
 
-def test_cached_user_from_api_payload() -> None:
-    raw = {
-        "displayName": "LocalSystem@localhost",
-        "firstName": "User",
-        "lastName": "System",
-    }
-    user = CachedUser.model_validate(raw)
-    assert user.display_name == "LocalSystem@localhost"
-    assert user.first_name == "User"
-
-
-def test_cached_policy_from_api_payload() -> None:
-    raw = {"name": "Test", "fullName": "/ROOT_187/Testing Policy"}
-    policy = CachedPolicy.model_validate(raw)
-    assert policy.name == "Test"
-    assert policy.full_name == "/ROOT_187/Testing Policy"
-
-
-def test_policy_model_action_from_api_payload() -> None:
-    raw = {"policyModelId": 43, "label": "action1", "shortCode": "dw"}
-    action = PolicyModelAction.model_validate(raw)
-    assert action.policy_model_id == 43
-    assert action.label == "action1"
-    assert action.short_code == "dw"
-
-
-def test_resource_actions_from_api_payload() -> None:
-    raw = {
-        "policyModelActions": {
-            "testing resource type": [
-                {"policyModelId": 43, "label": "action1", "shortCode": "dw"},
-            ],
-        },
-    }
-    result = ResourceActions.model_validate(raw)
-    assert "testing resource type" in result.policy_model_actions
-    assert result.policy_model_actions["testing resource type"][0].label == "action1"
-
-
-def test_attribute_mapping_from_api_payload() -> None:
-    raw = {
+def _attr_mapping_raw() -> dict[str, Any]:
+    return {
         "id": 11,
         "name": "FROM_RESOURCE_NAME",
         "mappedColumn": "FROM_RESOURCE_NAME",
@@ -488,63 +484,111 @@ def test_attribute_mapping_from_api_payload() -> None:
         "attrType": "RESOURCE",
         "isDynamic": False,
     }
-    mapping = AttributeMapping.model_validate(raw)
-    assert mapping.mapped_column == "FROM_RESOURCE_NAME"
-    assert mapping.data_type == "STRING"
-    assert mapping.is_dynamic is False
+
+
+def _user_mapping_raw() -> dict[str, Any]:
+    return {
+        "id": 2,
+        "name": "USER_NAME",
+        "mappedColumn": "USER_NAME",
+        "dataType": "STRING",
+        "attrType": "USER",
+        "isDynamic": False,
+    }
+
+
+def _others_mapping_raw() -> dict[str, Any]:
+    return {
+        "id": 1,
+        "name": "DATE",
+        "mappedColumn": "TIME",
+        "dataType": "TIMESTAMP",
+        "attrType": "OTHERS",
+        "isDynamic": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "model,raw,expected",
+    [
+        pytest.param(
+            CachedUser,
+            {
+                "displayName": "LocalSystem@localhost",
+                "firstName": "User",
+                "lastName": "System",
+            },
+            {"display_name": "LocalSystem@localhost", "first_name": "User"},
+            id="cached-user",
+        ),
+        pytest.param(
+            CachedPolicy,
+            {"name": "Test", "fullName": "/ROOT_187/Testing Policy"},
+            {"name": "Test", "full_name": "/ROOT_187/Testing Policy"},
+            id="cached-policy",
+        ),
+        pytest.param(
+            PolicyModelAction,
+            {"policyModelId": 43, "label": "action1", "shortCode": "dw"},
+            {"policy_model_id": 43, "label": "action1", "short_code": "dw"},
+            id="policy-model-action",
+        ),
+        pytest.param(
+            AttributeMapping,
+            _attr_mapping_raw(),
+            {
+                "mapped_column": "FROM_RESOURCE_NAME",
+                "data_type": "STRING",
+                "is_dynamic": False,
+            },
+            id="attribute-mapping",
+        ),
+        pytest.param(
+            UserGroup,
+            {"title": "All Policy Server Users", "id": 1},
+            {"id": 1, "title": "All Policy Server Users"},
+            id="user-group",
+        ),
+        pytest.param(
+            ApplicationUser,
+            {"firstName": "Test", "lastName": "User", "username": "testuser"},
+            {"first_name": "Test", "username": "testuser"},
+            id="application-user",
+        ),
+    ],
+)
+def test_simple_model_validate(
+    model: type[BaseModel],
+    raw: dict[str, Any],
+    expected: dict[str, Any],
+) -> None:
+    obj = model.model_validate(raw)
+    for attr, value in expected.items():
+        assert getattr(obj, attr) == value
+
+
+def test_resource_actions_from_api_payload() -> None:
+    result = ResourceActions.model_validate(
+        {
+            "policyModelActions": {
+                "testing resource type": [
+                    {"policyModelId": 43, "label": "action1", "shortCode": "dw"},
+                ],
+            },
+        }
+    )
+    assert "testing resource type" in result.policy_model_actions
+    assert result.policy_model_actions["testing resource type"][0].label == "action1"
 
 
 def test_attribute_mappings_from_api_payload() -> None:
-    raw = {
-        "resource": [
-            {
-                "id": 11,
-                "name": "FROM_RESOURCE_NAME",
-                "mappedColumn": "FROM_RESOURCE_NAME",
-                "dataType": "STRING",
-                "attrType": "RESOURCE",
-                "isDynamic": False,
-            },
-        ],
-        "user": [
-            {
-                "id": 2,
-                "name": "USER_NAME",
-                "mappedColumn": "USER_NAME",
-                "dataType": "STRING",
-                "attrType": "USER",
-                "isDynamic": False,
-            },
-        ],
-        "others": [
-            {
-                "id": 1,
-                "name": "DATE",
-                "mappedColumn": "TIME",
-                "dataType": "TIMESTAMP",
-                "attrType": "OTHERS",
-                "isDynamic": False,
-            },
-        ],
-    }
-    mappings = AttributeMappings.model_validate(raw)
+    mappings = AttributeMappings.model_validate(
+        {
+            "resource": [_attr_mapping_raw()],
+            "user": [_user_mapping_raw()],
+            "others": [_others_mapping_raw()],
+        }
+    )
     assert len(mappings.resource) == 1
     assert len(mappings.user) == 1
     assert len(mappings.others) == 1
-
-
-# --- Sharing ---
-
-
-def test_user_group_from_api_payload() -> None:
-    raw = {"title": "All Policy Server Users", "id": 1}
-    group = UserGroup.model_validate(raw)
-    assert group.id == 1
-    assert group.title == "All Policy Server Users"
-
-
-def test_application_user_from_api_payload() -> None:
-    raw = {"firstName": "Test", "lastName": "User", "username": "testuser"}
-    user = ApplicationUser.model_validate(raw)
-    assert user.first_name == "Test"
-    assert user.username == "testuser"

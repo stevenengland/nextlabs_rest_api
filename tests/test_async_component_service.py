@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Awaitable, Callable, TypeVar, cast
 
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._component_models import (
@@ -14,15 +16,18 @@ from nextlabs_sdk._cloudaz._components import AsyncComponentService
 
 BASE_URL = "https://cloudaz.example.com"
 
+T = TypeVar("T")
+
+
+def _run(coro: Awaitable[T]) -> T:
+    return asyncio.run(coro)  # type: ignore[arg-type]
+
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_envelope(
-    data: object,
-    status_code: int = 200,
-) -> httpx.Response:
+def _envelope(data: object, status_code: int = 200) -> httpx.Response:
     return httpx.Response(
         status_code,
         json={
@@ -39,7 +44,7 @@ def _make_envelope(
     )
 
 
-def _make_component_data() -> dict[str, object]:
+def _component_data() -> dict[str, object]:
     return {
         "id": 101,
         "name": "Security Vulnerabilities",
@@ -62,99 +67,99 @@ def _make_component_data() -> dict[str, object]:
     }
 
 
-def test_async_get_returns_component() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    response = _make_envelope(data=_make_component_data())
-    when(client).get("/console/api/v1/component/mgmt/101").thenReturn(response)
+@pytest.fixture
+def ctx() -> tuple[httpx.AsyncClient, AsyncComponentService]:
+    client = cast(httpx.AsyncClient, mock(httpx.AsyncClient))
+    return client, AsyncComponentService(client)
 
-    async def run() -> Component:
-        return await service.get(101)
 
-    comp = asyncio.run(run())
+@pytest.mark.parametrize(
+    "url,method_call",
+    [
+        pytest.param(
+            "/console/api/v1/component/mgmt/101",
+            lambda svc: svc.get(101),
+            id="get",
+        ),
+        pytest.param(
+            "/console/api/v1/component/mgmt/active/101",
+            lambda svc: svc.get_active(101),
+            id="get-active",
+        ),
+    ],
+)
+def test_async_get_returns_component(
+    ctx,
+    url: str,
+    method_call: Callable[[AsyncComponentService], Awaitable[Component]],
+):
+    client, service = ctx
+    when(client).get(url).thenReturn(_envelope(data=_component_data()))
+
+    comp = _run(method_call(service))
     assert comp.id == 101
     assert comp.name == "Security Vulnerabilities"
 
 
-def test_async_get_active_returns_component() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    response = _make_envelope(data=_make_component_data())
-    when(client).get("/console/api/v1/component/mgmt/active/101").thenReturn(response)
+@pytest.mark.parametrize(
+    "url,payload,response_id,method_name",
+    [
+        pytest.param(
+            "/console/api/v1/component/mgmt/add",
+            {"name": "New", "type": "RESOURCE", "status": "DRAFT"},
+            101,
+            "create",
+            id="create",
+        ),
+        pytest.param(
+            "/console/api/v1/component/mgmt/addSubComponent",
+            {"name": "Sub", "type": "RESOURCE", "parentId": 101},
+            102,
+            "create_sub_component",
+            id="create-sub-component",
+        ),
+    ],
+)
+def test_async_create_returns_id(ctx, url, payload, response_id, method_name):
+    client, service = ctx
+    when(client).post(url, json=payload).thenReturn(_envelope(data=response_id))
 
-    async def run() -> Component:
-        return await service.get_active(101)
-
-    comp = asyncio.run(run())
-    assert comp.id == 101
-
-
-def test_async_create_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    payload: dict[str, object] = {"name": "New", "type": "RESOURCE", "status": "DRAFT"}
-    response = _make_envelope(data=101)
-    when(client).post(
-        "/console/api/v1/component/mgmt/add",
-        json=payload,
-    ).thenReturn(response)
-
-    assert asyncio.run(service.create(payload)) == 101
-
-
-def test_async_create_sub_component_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    payload: dict[str, object] = {"name": "Sub", "type": "RESOURCE", "parentId": 101}
-    response = _make_envelope(data=102)
-    when(client).post(
-        "/console/api/v1/component/mgmt/addSubComponent",
-        json=payload,
-    ).thenReturn(response)
-
-    assert asyncio.run(service.create_sub_component(payload)) == 102
+    assert _run(getattr(service, method_name)(payload)) == response_id
 
 
-def test_async_modify_returns_id() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
+def test_async_modify_returns_id(ctx):
+    client, service = ctx
     payload: dict[str, object] = {"id": 101, "name": "Updated", "type": "RESOURCE"}
-    response = _make_envelope(data=101)
     when(client).put(
         "/console/api/v1/component/mgmt/modify",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=101))
 
-    assert asyncio.run(service.modify(payload)) == 101
+    assert _run(service.modify(payload)) == 101
 
 
-def test_async_delete_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_delete_succeeds(ctx):
+    client, service = ctx
     when(client).delete(
         "/console/api/v1/component/mgmt/remove/101",
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.delete(101))
+    _run(service.delete(101))
 
 
-def test_async_bulk_delete_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_bulk_delete_succeeds(ctx):
+    client, service = ctx
     when(client).request(
         "DELETE",
         "/console/api/v1/component/mgmt/bulkDelete",
         json=[101, 102],
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.bulk_delete([101, 102]))
+    _run(service.bulk_delete([101, 102]))
 
 
-def test_async_deploy_returns_results() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
+def test_async_deploy_returns_results(ctx):
+    client, service = ctx
     deploy_requests: list[dict[str, object]] = [
         {"id": 101, "type": "COMPONENT", "push": True, "deploymentTime": -1},
     ]
@@ -170,35 +175,28 @@ def test_async_deploy_returns_results() -> None:
             ],
         },
     ]
-    response = _make_envelope(data=response_data)
     when(client).post(
         "/console/api/v1/component/mgmt/deploy",
         json=deploy_requests,
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=response_data))
 
-    async def run() -> list[DeploymentResult]:
-        return await service.deploy(deploy_requests)
-
-    results = asyncio.run(run())
+    results: list[DeploymentResult] = _run(service.deploy(deploy_requests))
     assert len(results) == 1
     assert results[0].push_results[0].success is True
 
 
-def test_async_undeploy_succeeds() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_async_undeploy_succeeds(ctx):
+    client, service = ctx
     when(client).post(
         "/console/api/v1/component/mgmt/unDeploy",
         json=[101],
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
-    asyncio.run(service.undeploy([101]))
+    _run(service.undeploy([101]))
 
 
-def test_async_find_dependencies_returns_list() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncComponentService(client)
+def test_async_find_dependencies_returns_list(ctx):
+    client, service = ctx
     dep_data = [
         {
             "id": 50,
@@ -207,15 +205,11 @@ def test_async_find_dependencies_returns_list() -> None:
             "name": "Security Vulnerabilities",
         },
     ]
-    response = _make_envelope(data=dep_data)
     when(client).post(
         "/console/api/v1/component/mgmt/findDependencies",
         json=[101],
-    ).thenReturn(response)
+    ).thenReturn(_envelope(data=dep_data))
 
-    async def run() -> list[Dependency]:
-        return await service.find_dependencies([101])
-
-    deps = asyncio.run(run())
+    deps: list[Dependency] = _run(service.find_dependencies([101]))
     assert len(deps) == 1
     assert deps[0].name == "Security Vulnerabilities"

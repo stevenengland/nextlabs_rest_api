@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from mockito import mock, when
+import pytest
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -63,92 +64,78 @@ def _make_paginator(tags: list[Tag]) -> SyncPaginator[Tag]:
     return SyncPaginator(fetch_page=fetch_page)
 
 
-def test_tags_list_table_output() -> None:
-    _, mock_tags = _stub_client()
-    tag = _make_tag()
-    paginator = _make_paginator([tag])
-    when(mock_tags).list(TagType.COMPONENT).thenReturn(paginator)
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "tags", "list", "COMPONENT_TAG"],
-    )
-
-    assert result.exit_code == 0
-    assert "dept" in result.output
-    assert "Department" in result.output
-
-
-def test_tags_list_json_output() -> None:
-    _, mock_tags = _stub_client()
-    tag = _make_tag()
-    paginator = _make_paginator([tag])
-    when(mock_tags).list(TagType.COMPONENT).thenReturn(paginator)
-
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "--json", "tags", "list", "COMPONENT_TAG"],
-    )
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert isinstance(parsed, list)
-    assert parsed[0]["key"] == "dept"
-
-
-def test_tags_list_case_insensitive() -> None:
+@pytest.mark.parametrize(
+    "extra_opts,assertions",
+    [
+        pytest.param(
+            (),
+            lambda out: ("dept" in out) and ("Department" in out),
+            id="table-output",
+        ),
+        pytest.param(
+            ("--json",),
+            lambda out: json.loads(out)[0]["key"] == "dept",
+            id="json-output",
+        ),
+    ],
+)
+def test_tags_list_output(extra_opts, assertions):
     _, mock_tags = _stub_client()
     paginator = _make_paginator([_make_tag()])
     when(mock_tags).list(TagType.COMPONENT).thenReturn(paginator)
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "tags", "list", "component_tag"],
+        [*_GLOBAL_OPTS, *extra_opts, "tags", "list", "COMPONENT_TAG"],
     )
+
+    assert result.exit_code == 0
+    assert assertions(result.output)
+
+
+def test_tags_list_case_insensitive():
+    _, mock_tags = _stub_client()
+    paginator = _make_paginator([_make_tag()])
+    when(mock_tags).list(TagType.COMPONENT).thenReturn(paginator)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "tags", "list", "component_tag"])
 
     assert result.exit_code == 0
 
 
-def test_tags_list_invalid_type() -> None:
+def test_tags_list_invalid_type():
     _stub_client()
 
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, "tags", "list", "INVALID_TAG"],
-    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "tags", "list", "INVALID_TAG"])
 
     assert result.exit_code == 1
     assert "Invalid tag type" in result.output
 
 
-def test_tags_get_table_output() -> None:
+@pytest.mark.parametrize(
+    "extra_opts,assertion",
+    [
+        pytest.param((), lambda out: "dept" in out, id="table-output"),
+        pytest.param(
+            ("--json",),
+            lambda out: json.loads(out)["id"] == 10,
+            id="json-output",
+        ),
+    ],
+)
+def test_tags_get_output(extra_opts, assertion):
     _, mock_tags = _stub_client()
-    tag = _make_tag()
-    when(mock_tags).get(10).thenReturn(tag)
+    when(mock_tags).get(10).thenReturn(_make_tag())
 
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "tags", "get", "10"])
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *extra_opts, "tags", "get", "10"])
 
     assert result.exit_code == 0
-    assert "dept" in result.output
+    assert assertion(result.output)
 
 
-def test_tags_get_json_output() -> None:
+def test_tags_get_not_found():
     _, mock_tags = _stub_client()
-    tag = _make_tag()
-    when(mock_tags).get(10).thenReturn(tag)
-
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", "tags", "get", "10"])
-
-    assert result.exit_code == 0
-    parsed = json.loads(result.output)
-    assert parsed["id"] == 10
-
-
-def test_tags_get_not_found() -> None:
-    _, mock_tags = _stub_client()
-    when(mock_tags).get(999).thenRaise(
-        NotFoundError(message="HTTP 404"),
-    )
+    when(mock_tags).get(999).thenRaise(NotFoundError(message="HTTP 404"))
 
     result = runner.invoke(app, [*_GLOBAL_OPTS, "tags", "get", "999"])
 
@@ -156,7 +143,7 @@ def test_tags_get_not_found() -> None:
     assert "Not found" in result.output
 
 
-def test_tags_create_success() -> None:
+def test_tags_create_success():
     _, mock_tags = _stub_client()
     when(mock_tags).create(
         TagType.POLICY,
@@ -182,7 +169,7 @@ def test_tags_create_success() -> None:
     assert "42" in result.output
 
 
-def test_tags_delete_success() -> None:
+def test_tags_delete_success():
     _, mock_tags = _stub_client()
     when(mock_tags).delete(10).thenReturn(None)
 

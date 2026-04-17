@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+from typing import cast
+
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._models import Operator
 from nextlabs_sdk._cloudaz._operators import OperatorService
 
 BASE_URL = "https://cloudaz.example.com"
-
-
-def _make_request(path: str) -> httpx.Request:
-    return httpx.Request("GET", f"{BASE_URL}{path}")
+_LIST_ALL = "/console/api/v1/config/dataType/list"
+_LIST_BY_TYPE = "/console/api/v1/config/dataType/list/NUMBER"
+_LIST_TYPES = "/console/api/v1/config/dataType/types"
 
 
 def _make_envelope(data: object) -> httpx.Response:
@@ -26,22 +28,30 @@ def _make_envelope(data: object) -> httpx.Response:
             "totalNoOfRecords": 1,
             "additionalAttributes": None,
         },
-        request=_make_request("/console/api/v1/config/dataType/list"),
+        request=httpx.Request("GET", f"{BASE_URL}{_LIST_ALL}"),
     )
 
 
-def test_list_all_returns_operators() -> None:
-    client = mock(httpx.Client)
-    service = OperatorService(client)
-    response = _make_envelope(
-        [
-            {"id": 1, "key": "eq", "label": "Equal", "dataType": "STRING"},
-            {"id": 2, "key": "neq", "label": "Not Equal", "dataType": "STRING"},
-        ]
-    )
-    when(client).get("/console/api/v1/config/dataType/list").thenReturn(response)
+@pytest.fixture
+def service() -> tuple[OperatorService, httpx.Client]:
+    client = cast(httpx.Client, mock(httpx.Client))
+    return OperatorService(client), client
 
-    result = service.list_all()
+
+def test_list_all_returns_operators(
+    service: tuple[OperatorService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(_LIST_ALL).thenReturn(
+        _make_envelope(
+            [
+                {"id": 1, "key": "eq", "label": "Equal", "dataType": "STRING"},
+                {"id": 2, "key": "neq", "label": "Not Equal", "dataType": "STRING"},
+            ]
+        )
+    )
+
+    result = svc.list_all()
 
     assert len(result) == 2
     assert isinstance(result[0], Operator)
@@ -49,39 +59,35 @@ def test_list_all_returns_operators() -> None:
     assert result[1].key == "neq"
 
 
-def test_list_by_type_returns_filtered_operators() -> None:
-    client = mock(httpx.Client)
-    service = OperatorService(client)
-    response = _make_envelope(
-        [
-            {"id": 3, "key": "gt", "label": "Greater Than", "dataType": "NUMBER"},
-        ]
+def test_list_by_type_returns_filtered_operators(
+    service: tuple[OperatorService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(_LIST_BY_TYPE).thenReturn(
+        _make_envelope(
+            [{"id": 3, "key": "gt", "label": "Greater Than", "dataType": "NUMBER"}]
+        )
     )
-    when(client).get("/console/api/v1/config/dataType/list/NUMBER").thenReturn(response)
 
-    result = service.list_by_type("NUMBER")
+    result = svc.list_by_type("NUMBER")
 
     assert len(result) == 1
     assert result[0].data_type == "NUMBER"
 
 
-def test_list_types_returns_strings() -> None:
-    client = mock(httpx.Client)
-    service = OperatorService(client)
-    response = _make_envelope(["STRING", "NUMBER", "DATE"])
-    when(client).get("/console/api/v1/config/dataType/types").thenReturn(response)
+def test_list_types_returns_strings(
+    service: tuple[OperatorService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(_LIST_TYPES).thenReturn(
+        _make_envelope(["STRING", "NUMBER", "DATE"])
+    )
 
-    result = service.list_types()
-
-    assert result == ["STRING", "NUMBER", "DATE"]
+    assert svc.list_types() == ["STRING", "NUMBER", "DATE"]
 
 
-def test_list_all_empty() -> None:
-    client = mock(httpx.Client)
-    service = OperatorService(client)
-    response = _make_envelope([])
-    when(client).get("/console/api/v1/config/dataType/list").thenReturn(response)
+def test_list_all_empty(service: tuple[OperatorService, httpx.Client]) -> None:
+    svc, client = service
+    when(client).get(_LIST_ALL).thenReturn(_make_envelope([]))
 
-    result = service.list_all()
-
-    assert result == []
+    assert svc.list_all() == []

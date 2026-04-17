@@ -34,7 +34,7 @@ def _mock_cloudaz_client() -> CloudAzClient:
     return cast(CloudAzClient, mock_client)
 
 
-def test_auth_test_success() -> None:
+def test_auth_test_success():
     when(_client_factory).make_cloudaz_client(...).thenReturn(_mock_cloudaz_client())
 
     result = runner.invoke(app, [*_GLOBAL_OPTS, "auth", "test"])
@@ -43,7 +43,7 @@ def test_auth_test_success() -> None:
     assert "successful" in result.output.lower()
 
 
-def test_auth_test_failure() -> None:
+def test_auth_test_failure():
     when(_client_factory).make_cloudaz_client(...).thenRaise(
         AuthenticationError(message="bad creds"),
     )
@@ -54,27 +54,19 @@ def test_auth_test_failure() -> None:
     assert "Authentication failed" in result.output
 
 
-def test_auth_test_missing_credentials() -> None:
+def test_auth_test_missing_credentials():
     result = runner.invoke(app, ["--base-url", "https://x.com", "auth", "test"])
 
     assert result.exit_code == 1
     assert "username" in result.output.lower()
 
 
-# ─────────────────────────── login prompting ─────────────────────────────
-
-
-def _isolate_cache(
-    tmp_path: object,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _isolate_cache(tmp_path: object, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("NEXTLABS_CACHE_DIR", str(tmp_path))
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
 
 
-def _capture_factory(
-    monkeypatch: pytest.MonkeyPatch,
-) -> list[CliContext]:
+def _capture_factory(monkeypatch: pytest.MonkeyPatch) -> list[CliContext]:
     captured: list[CliContext] = []
 
     def _fake(ctx: CliContext) -> CloudAzClient:
@@ -85,54 +77,16 @@ def _capture_factory(
     return captured
 
 
-def test_login_prompts_for_password_when_missing(
+@pytest.fixture
+def login_ctx(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> list[CliContext]:
     _isolate_cache(tmp_path, monkeypatch)
-    captured = _capture_factory(monkeypatch)
-
-    result = runner.invoke(
-        app,
-        [
-            "--base-url",
-            "https://example.com",
-            "--username",
-            "admin",
-            "auth",
-            "login",
-        ],
-        input="s3cret\n",
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "Login successful" in result.output
-    assert "s3cret" not in result.output  # hidden
-    assert captured and captured[0].password == "s3cret"
-    assert captured[0].base_url == "https://example.com"
-    assert captured[0].username == "admin"
+    return _capture_factory(monkeypatch)
 
 
-def test_login_prompts_for_everything_when_no_cache_and_no_flags(
-    tmp_path: object,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _isolate_cache(tmp_path, monkeypatch)
-    captured = _capture_factory(monkeypatch)
-
-    result = runner.invoke(
-        app,
-        ["auth", "login"],
-        input="https://example.com\nadmin\ns3cret\n",
-    )
-
-    assert result.exit_code == 0, result.output
-    assert captured[0].base_url == "https://example.com"
-    assert captured[0].username == "admin"
-    assert captured[0].password == "s3cret"
-
-
-def _seed_cache(tmp_path: object, *keys: str) -> None:
+def _seed_cache(tmp_path: object, *keys: str):
     from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
     from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 
@@ -148,19 +102,55 @@ def _seed_cache(tmp_path: object, *keys: str) -> None:
         cache.save(key, tok)
 
 
+_ALPHA_KEY = (
+    "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient"
+)
+_BETA_KEY = "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient"
+
+
+def test_login_prompts_for_password_when_missing(login_ctx):
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "auth",
+            "login",
+        ],
+        input="s3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Login successful" in result.output
+    assert "s3cret" not in result.output
+    assert login_ctx and login_ctx[0].password == "s3cret"
+    assert login_ctx[0].base_url == "https://example.com"
+    assert login_ctx[0].username == "admin"
+
+
+def test_login_prompts_for_everything_when_no_cache_and_no_flags(login_ctx):
+    result = runner.invoke(
+        app,
+        ["auth", "login"],
+        input="https://example.com\nadmin\ns3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert login_ctx[0].base_url == "https://example.com"
+    assert login_ctx[0].username == "admin"
+    assert login_ctx[0].password == "s3cret"
+
+
 def test_login_shows_menu_when_cache_has_entries_and_flags_missing(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+):
     _isolate_cache(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient",
-        "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient",
-    )
+    _seed_cache(tmp_path, _ALPHA_KEY, _BETA_KEY)
     captured = _capture_factory(monkeypatch)
 
-    # Pick entry 2 (bob @ beta), then enter password.
     result = runner.invoke(app, ["auth", "login"], input="2\ns3cret\n")
 
     assert result.exit_code == 0, result.output
@@ -174,15 +164,11 @@ def test_login_shows_menu_when_cache_has_entries_and_flags_missing(
 def test_login_menu_add_new_prompts_for_url_and_username(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+):
     _isolate_cache(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient",
-    )
+    _seed_cache(tmp_path, _ALPHA_KEY)
     captured = _capture_factory(monkeypatch)
 
-    # Pick "Add new" (option 2), then enter url, username, password.
     result = runner.invoke(
         app,
         ["auth", "login"],
@@ -198,12 +184,9 @@ def test_login_menu_add_new_prompts_for_url_and_username(
 def test_login_skips_menu_when_base_and_username_supplied(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+):
     _isolate_cache(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient",
-    )
+    _seed_cache(tmp_path, _ALPHA_KEY)
     captured = _capture_factory(monkeypatch)
 
     result = runner.invoke(
@@ -220,7 +203,7 @@ def test_login_skips_menu_when_base_and_username_supplied(
     )
 
     assert result.exit_code == 0, result.output
-    assert "alice" not in result.output  # menu not shown
+    assert "alice" not in result.output
     assert captured[0].base_url == "https://beta.example.com"
     assert captured[0].username == "bob"
 
@@ -228,15 +211,11 @@ def test_login_skips_menu_when_base_and_username_supplied(
 def test_login_menu_selection_does_not_override_explicit_username(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+):
     _isolate_cache(tmp_path, monkeypatch)
-    _seed_cache(
-        tmp_path,
-        "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient",
-    )
+    _seed_cache(tmp_path, _ALPHA_KEY)
     captured = _capture_factory(monkeypatch)
 
-    # Username is explicit ("carol"), base_url missing — menu is shown to fill URL.
     result = runner.invoke(
         app,
         ["--username", "carol", "auth", "login"],
@@ -245,21 +224,17 @@ def test_login_menu_selection_does_not_override_explicit_username(
 
     assert result.exit_code == 0, result.output
     assert captured[0].base_url == "https://alpha.example.com"
-    assert captured[0].username == "carol"  # explicit flag wins
+    assert captured[0].username == "carol"
 
 
-def test_status_shows_refresh_expires_when_known(
-    tmp_path: object,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
     from nextlabs_sdk._auth._active_account._active_account_store import (
         ActiveAccountStore,
     )
-    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 
-    _isolate_cache(tmp_path, monkeypatch)
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     cache.save(
         "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
@@ -269,7 +244,7 @@ def test_status_shows_refresh_expires_when_known(
             expires_at=9_999_999_999.0,
             token_type="bearer",
             scope=None,
-            refresh_expires_at=8_888_888_888.0,
+            refresh_expires_at=refresh_expires_at,
         ),
     )
     ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
@@ -279,6 +254,14 @@ def test_status_shows_refresh_expires_when_known(
             client_id="ControlCenterOIDCClient",
         ),
     )
+
+
+def test_status_shows_refresh_expires_when_known(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
 
     result = runner.invoke(app, ["auth", "status"])
 
@@ -289,34 +272,9 @@ def test_status_shows_refresh_expires_when_known(
 def test_status_omits_refresh_expires_when_unknown(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
-    from nextlabs_sdk._auth._active_account._active_account_store import (
-        ActiveAccountStore,
-    )
-    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
-
+):
     _isolate_cache(tmp_path, monkeypatch)
-    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
-    cache.save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
-        CachedToken(
-            access_token="t",
-            refresh_token="rt",
-            expires_at=9_999_999_999.0,
-            token_type="bearer",
-            scope=None,
-            refresh_expires_at=None,
-        ),
-    )
-    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
-        ActiveAccount(
-            base_url="https://example.com",
-            username="admin",
-            client_id="ControlCenterOIDCClient",
-        ),
-    )
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
 
     result = runner.invoke(app, ["auth", "status"])
 

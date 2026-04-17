@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._dashboard import DashboardService
@@ -13,29 +16,28 @@ from nextlabs_sdk._cloudaz._dashboard_models import (
 
 BASE_URL = "https://cloudaz.example.com"
 _BASE_PATH = "/nextlabs-reporter/api/v1/dashboard"
-
-
-def _make_request(path: str = "/api") -> httpx.Request:
-    return httpx.Request("GET", f"{BASE_URL}{path}")
+_START = 1708560000000
+_END = 1708646400000
+_SOURCE = "AD"
 
 
 def _make_data_envelope(data: object) -> httpx.Response:
     return httpx.Response(
         200,
-        json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": data,
-        },
-        request=_make_request(),
+        json={"statusCode": "1003", "message": "Data found successfully", "data": data},
+        request=httpx.Request("GET", f"{BASE_URL}/api"),
     )
 
 
-def test_latest_alerts() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
+@pytest.fixture
+def service() -> tuple[DashboardService, httpx.Client]:
+    client = cast(httpx.Client, mock(httpx.Client))
+    return DashboardService(client), client
 
-    raw_alerts = [
+
+def test_latest_alerts(service: tuple[DashboardService, httpx.Client]) -> None:
+    svc, client = service
+    raw = [
         {
             "level": "L3",
             "alertMessage": "",
@@ -49,92 +51,76 @@ def test_latest_alerts() -> None:
             "triggeredAt": "2024-02-21T22:20:24.077+00:00",
         },
     ]
-    response = _make_data_envelope(raw_alerts)
-    when(client).get(
-        f"{_BASE_PATH}/latestAlerts/1708560000000/1708646400000"
-    ).thenReturn(response)
+    when(client).get(f"{_BASE_PATH}/latestAlerts/{_START}/{_END}").thenReturn(
+        _make_data_envelope(raw)
+    )
 
-    alerts = service.latest_alerts(1708560000000, 1708646400000)
+    alerts = svc.latest_alerts(_START, _END)
     assert len(alerts) == 2
     assert isinstance(alerts[0], Alert)
     assert alerts[0].monitor_name == "Deny Policy"
     assert alerts[1].monitor_name == "Allow Policy"
 
 
-def test_alerts_by_monitor_tags() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
-
+def test_alerts_by_monitor_tags(service: tuple[DashboardService, httpx.Client]) -> None:
+    svc, client = service
     raw = [
-        {
-            "tagValue": "Weekly Monitoring",
-            "monitorName": "Deny Policy",
-            "alertCount": 1,
-        },
+        {"tagValue": "Weekly Monitoring", "monitorName": "Deny Policy", "alertCount": 1}
     ]
-    response = _make_data_envelope(raw)
-    when(client).get(
-        f"{_BASE_PATH}/alertByMonitorTags/1708560000000/1708646400000"
-    ).thenReturn(response)
+    when(client).get(f"{_BASE_PATH}/alertByMonitorTags/{_START}/{_END}").thenReturn(
+        _make_data_envelope(raw)
+    )
 
-    tag_alerts = service.alerts_by_monitor_tags(1708560000000, 1708646400000)
+    tag_alerts = svc.alerts_by_monitor_tags(_START, _END)
     assert len(tag_alerts) == 1
     assert isinstance(tag_alerts[0], MonitorTagAlert)
     assert tag_alerts[0].tag_value == "Weekly Monitoring"
     assert tag_alerts[0].alert_count == 1
 
 
-def test_top_users() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
-
+def test_top_users(service: tuple[DashboardService, httpx.Client]) -> None:
+    svc, client = service
     raw = [
         {
             "name": "John Mason",
             "allowCount": 360,
             "denyCount": 428,
             "decisionCount": 788,
-        },
+        }
     ]
-    response = _make_data_envelope(raw)
     when(client).get(
-        f"{_BASE_PATH}/activityByUsers/1708560000000/1708646400000/AD"
-    ).thenReturn(response)
+        f"{_BASE_PATH}/activityByUsers/{_START}/{_END}/{_SOURCE}"
+    ).thenReturn(_make_data_envelope(raw))
 
-    users = service.top_users(1708560000000, 1708646400000, "AD")
+    users = svc.top_users(_START, _END, _SOURCE)
     assert len(users) == 1
     assert isinstance(users[0], ActivityByEntity)
     assert users[0].name == "John Mason"
     assert users[0].allow_count == 360
 
 
-def test_top_resources() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
-
+def test_top_resources(service: tuple[DashboardService, httpx.Client]) -> None:
+    svc, client = service
     raw = [
         {
             "name": "sap://ed6/ed6/100/ecc/cv02n/0000000000000010000001317",
             "allowCount": 480,
             "denyCount": 488,
             "decisionCount": 968,
-        },
+        }
     ]
-    response = _make_data_envelope(raw)
     when(client).get(
-        f"{_BASE_PATH}/activityByResources/1708560000000/1708646400000/AD"
-    ).thenReturn(response)
+        f"{_BASE_PATH}/activityByResources/{_START}/{_END}/{_SOURCE}"
+    ).thenReturn(_make_data_envelope(raw))
 
-    resources = service.top_resources(1708560000000, 1708646400000, "AD")
+    resources = svc.top_resources(_START, _END, _SOURCE)
     assert len(resources) == 1
     assert isinstance(resources[0], ActivityByEntity)
     assert resources[0].decision_count == 968
 
 
-def test_top_policies() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
-
+def test_top_policies(service: tuple[DashboardService, httpx.Client]) -> None:
+    svc, client = service
     raw = [
         {
             "policy_decisions": [
@@ -142,26 +128,25 @@ def test_top_policies() -> None:
                 {"day_nb": 1680591600000, "allow_count": 13, "deny_count": 10},
             ],
             "policy_name": "Deny access to Security Vulnerabilities",
-        },
+        }
     ]
-    response = _make_data_envelope(raw)
     when(client).get(
-        f"{_BASE_PATH}/activityByPolicies/1708560000000/1708646400000/AD"
-    ).thenReturn(response)
+        f"{_BASE_PATH}/activityByPolicies/{_START}/{_END}/{_SOURCE}"
+    ).thenReturn(_make_data_envelope(raw))
 
-    policies = service.top_policies(1708560000000, 1708646400000, "AD")
+    policies = svc.top_policies(_START, _END, _SOURCE)
     assert len(policies) == 1
     assert isinstance(policies[0], PolicyActivity)
     assert policies[0].policy_name == "Deny access to Security Vulnerabilities"
     assert len(policies[0].policy_decisions) == 2
 
 
-def test_latest_alerts_empty_list() -> None:
-    client = mock(httpx.Client)
-    service = DashboardService(client)
+def test_latest_alerts_empty_list(
+    service: tuple[DashboardService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(f"{_BASE_PATH}/latestAlerts/1000/2000").thenReturn(
+        _make_data_envelope([])
+    )
 
-    response = _make_data_envelope([])
-    when(client).get(f"{_BASE_PATH}/latestAlerts/1000/2000").thenReturn(response)
-
-    alerts = service.latest_alerts(1000, 2000)
-    assert alerts == []
+    assert svc.latest_alerts(1000, 2000) == []

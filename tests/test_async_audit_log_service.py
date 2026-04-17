@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import httpx
 import pytest
@@ -17,6 +18,9 @@ from nextlabs_sdk._pagination import AsyncPaginator
 from nextlabs_sdk.exceptions import ServerError
 
 BASE_URL = "https://cloudaz.example.com"
+SEARCH_URL = "/nextlabs-reporter/api/v1/auditLogs/search"
+EXPORT_URL = "/nextlabs-reporter/api/v1/auditLogs/export"
+USERS_URL = "/nextlabs-reporter/api/v1/auditLogs/users"
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
@@ -69,19 +73,39 @@ def _make_audit_entry_data() -> dict[str, object]:
     }
 
 
-def test_async_search_returns_paginator() -> None:
+@pytest.fixture
+def client_service() -> tuple[Any, AsyncEntityAuditLogService]:
     client = mock(httpx.AsyncClient)
-    service = AsyncEntityAuditLogService(client)
+    return client, AsyncEntityAuditLogService(client)
+
+
+@pytest.mark.parametrize(
+    "page_ids,total_pages",
+    [
+        pytest.param([12], 1, id="single-page"),
+        pytest.param([1, 2], 2, id="multi-page"),
+    ],
+)
+def test_async_search_returns_paginator(
+    client_service: tuple[Any, AsyncEntityAuditLogService],
+    page_ids: list[int],
+    total_pages: int,
+):
+    client, service = client_service
     query = AuditLogQuery(start_date=100, end_date=200)
-    response = _make_reporter_envelope(
-        content=[_make_audit_entry_data()],
-        total_pages=1,
-        total_elements=1,
-    )
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
-        json={"startDate": 100, "endDate": 200, "pageNumber": 0},
-    ).thenReturn(response)
+
+    for page_no, entry_id in enumerate(page_ids):
+        entry = _make_audit_entry_data()
+        entry["id"] = entry_id
+        response = _make_reporter_envelope(
+            content=[entry],
+            total_pages=total_pages,
+            total_elements=len(page_ids),
+        )
+        when(client).post(
+            SEARCH_URL,
+            json={"startDate": 100, "endDate": 200, "pageNumber": page_no},
+        ).thenReturn(response)
 
     paginator = service.search(query)
     assert isinstance(paginator, AsyncPaginator)
@@ -90,71 +114,38 @@ def test_async_search_returns_paginator() -> None:
         return [entry async for entry in paginator]
 
     entries = asyncio.run(collect())
-    assert len(entries) == 1
-    assert entries[0].action == "LOGOUT"
+    assert len(entries) == len(page_ids)
+    assert [entry.id for entry in entries] == page_ids
 
 
-def test_async_search_paginates_multiple_pages() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncEntityAuditLogService(client)
-    query = AuditLogQuery(start_date=100, end_date=200)
-    entry1 = _make_audit_entry_data()
-    entry1["id"] = 1
-    entry2 = _make_audit_entry_data()
-    entry2["id"] = 2
-
-    page0 = _make_reporter_envelope(content=[entry1], total_pages=2, total_elements=2)
-    page1 = _make_reporter_envelope(content=[entry2], total_pages=2, total_elements=2)
-
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
-        json={"startDate": 100, "endDate": 200, "pageNumber": 0},
-    ).thenReturn(page0)
-    when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/search",
-        json={"startDate": 100, "endDate": 200, "pageNumber": 1},
-    ).thenReturn(page1)
-
-    async def collect() -> list[AuditLogEntry]:
-        return [entry async for entry in service.search(query)]
-
-    entries = asyncio.run(collect())
-    assert len(entries) == 2
-    assert entries[0].id == 1
-    assert entries[1].id == 2
-
-
-def test_async_export_returns_bytes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncEntityAuditLogService(client)
+def test_async_export_returns_bytes(
+    client_service: tuple[Any, AsyncEntityAuditLogService],
+):
+    client, service = client_service
     request_body = ExportAuditLogsRequest(ids=[5, 10])
     csv_content = b"id,timestamp,action\n5,100,LOGIN\n"
-    response = httpx.Response(200, content=csv_content, request=_make_request())
     when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/export",
+        EXPORT_URL,
         json={"ids": [5, 10]},
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, content=csv_content, request=_make_request()))
 
     async def run() -> bytes:
         return await service.export(request_body)
 
-    result = asyncio.run(run())
-    assert result == csv_content
+    assert asyncio.run(run()) == csv_content
 
 
-def test_async_export_raises_on_error() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncEntityAuditLogService(client)
+def test_async_export_raises_on_error(
+    client_service: tuple[Any, AsyncEntityAuditLogService],
+):
+    client, service = client_service
     request_body = ExportAuditLogsRequest(ids=[999])
-    response = httpx.Response(
-        500,
-        json={"message": "Export error"},
-        request=_make_request(),
-    )
     when(client).post(
-        "/nextlabs-reporter/api/v1/auditLogs/export",
+        EXPORT_URL,
         json={"ids": [999]},
-    ).thenReturn(response)
+    ).thenReturn(
+        httpx.Response(500, json={"message": "Export error"}, request=_make_request()),
+    )
 
     async def run() -> bytes:
         return await service.export(request_body)
@@ -163,18 +154,17 @@ def test_async_export_raises_on_error() -> None:
         asyncio.run(run())
 
 
-def test_async_list_users_returns_user_list() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncEntityAuditLogService(client)
+def test_async_list_users_returns_user_list(
+    client_service: tuple[Any, AsyncEntityAuditLogService],
+):
+    client, service = client_service
     response = _make_data_envelope(
         data=[
             {"firstName": "Test", "lastName": "User", "username": "testuser"},
             {"firstName": "Admin", "lastName": "User", "username": "admin"},
-        ]
+        ],
     )
-    when(client).get(
-        "/nextlabs-reporter/api/v1/auditLogs/users",
-    ).thenReturn(response)
+    when(client).get(USERS_URL).thenReturn(response)
 
     async def run() -> list[AuditLogUser]:
         return await service.list_users()

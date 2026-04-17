@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import httpx
-from mockito import mock, when, any as any_value, verify
+import pytest
+from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
+from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._component_search import ComponentSearchService
 from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchService
@@ -12,238 +14,97 @@ from nextlabs_sdk._cloudaz._components import ComponentService
 from nextlabs_sdk._cloudaz._operators import OperatorService
 from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
+from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
 from nextlabs_sdk._cloudaz._tags import TagService
-from nextlabs_sdk._config import HttpConfig, RetryConfig
+
+BASE_URL = "https://cloudaz.example.com"
 
 
-def test_client_exposes_operator_service() -> None:
+def _stub_transport(http_config: object = None) -> object:
     mock_client = mock(httpx.Client)
     when(transport_mod).create_http_client(
         base_url=any_value(),
         auth=any_value(),
-        http_config=any_value(),
+        http_config=any_value() if http_config is None else http_config,
     ).thenReturn(mock_client)
+    return mock_client
 
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
+
+def _make_client(http_config: HttpConfig | None = None) -> CloudAzClient:
+    if http_config is None:
+        return CloudAzClient(base_url=BASE_URL, username="admin", password="secret")
+    return CloudAzClient(
+        base_url=BASE_URL,
         username="admin",
         password="secret",
+        http_config=http_config,
     )
 
-    assert isinstance(client.operators, OperatorService)
+
+@pytest.mark.parametrize(
+    "attr,service_cls",
+    [
+        pytest.param("operators", OperatorService, id="operators"),
+        pytest.param("tags", TagService, id="tags"),
+        pytest.param("component_types", ComponentTypeService, id="component-types"),
+        pytest.param(
+            "component_type_search",
+            ComponentTypeSearchService,
+            id="component-type-search",
+        ),
+        pytest.param("components", ComponentService, id="components"),
+        pytest.param("component_search", ComponentSearchService, id="component-search"),
+        pytest.param("policies", PolicyService, id="policies"),
+        pytest.param("policy_search", PolicySearchService, id="policy-search"),
+        pytest.param(
+            "reporter_audit_logs", ReporterAuditLogService, id="reporter-audit-logs"
+        ),
+    ],
+)
+def test_client_exposes_service(attr, service_cls):
+    _stub_transport()
+    client = _make_client()
+    assert isinstance(getattr(client, attr), service_cls)
 
 
-def test_client_exposes_tag_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
+def test_client_uses_custom_http_config():
+    from nextlabs_sdk._config import RetryConfig
 
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.tags, TagService)
-
-
-def test_client_uses_custom_http_config() -> None:
-    mock_client = mock(httpx.Client)
     custom_retry = RetryConfig(max_retries=5)
     custom_config = HttpConfig(timeout=60.0, verify_ssl=False, retry=custom_retry)
-
+    mock_client = mock(httpx.Client)
     when(transport_mod).create_http_client(
-        base_url="https://cloudaz.example.com",
+        base_url=BASE_URL,
         auth=any_value(),
         http_config=custom_config,
     ).thenReturn(mock_client)
 
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-        http_config=custom_config,
-    )
-
+    client = _make_client(http_config=custom_config)
     assert client.operators is not None
 
 
-def test_client_context_manager_closes() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
+def test_client_context_manager_closes():
+    mock_client = _stub_transport()
     when(mock_client).close().thenReturn(None)
 
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
+    client = _make_client()
     client.__enter__()
     client.__exit__(None, None, None)
 
     verify(mock_client).close()
 
 
-def test_client_default_client_id() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
+def test_client_default_client_id():
+    _stub_transport()
+    client = _make_client()
     assert client.operators is not None
 
 
-def test_client_exposes_component_type_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.component_types, ComponentTypeService)
-
-
-def test_client_exposes_component_type_search_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.component_type_search, ComponentTypeSearchService)
-
-
-def test_client_exposes_component_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.components, ComponentService)
-
-
-def test_client_exposes_component_search_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.component_search, ComponentSearchService)
-
-
-def test_client_exposes_policy_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.policies, PolicyService)
-
-
-def test_client_exposes_policy_search_service() -> None:
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.policy_search, PolicySearchService)
-
-
-def test_client_exposes_reporter_audit_log_service() -> None:
-    from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
-
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
-
-    assert isinstance(client.reporter_audit_logs, ReporterAuditLogService)
-
-
-def test_authenticate_invokes_auth_ensure_token() -> None:
+def test_authenticate_invokes_auth_ensure_token():
     from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
 
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        username="admin",
-        password="secret",
-    )
+    _stub_transport()
+    client = _make_client()
 
     assert isinstance(client._auth, CloudAzAuth)
     when(client._auth).ensure_token(any_value()).thenReturn(None)
@@ -253,21 +114,12 @@ def test_authenticate_invokes_auth_ensure_token() -> None:
     verify(client._auth).ensure_token(any_value())
 
 
-def test_authenticate_raises_when_custom_auth_override() -> None:
+def test_authenticate_raises_when_custom_auth_override():
     from nextlabs_sdk.exceptions import AuthenticationError
 
-    mock_client = mock(httpx.Client)
-    when(transport_mod).create_http_client(
-        base_url=any_value(),
-        auth=any_value(),
-        http_config=any_value(),
-    ).thenReturn(mock_client)
-
+    _stub_transport()
     custom = mock(httpx.Auth)
-    client = CloudAzClient(
-        base_url="https://cloudaz.example.com",
-        auth=custom,
-    )
+    client = CloudAzClient(base_url=BASE_URL, auth=custom)
 
     try:
         client.authenticate()

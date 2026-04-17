@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
@@ -8,6 +9,7 @@ from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"
+SEARCH_URL = "/nextlabs-reporter/api/activity-logs/search"
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
@@ -50,16 +52,23 @@ def _make_entry_data() -> dict[str, object]:
     }
 
 
-def test_search_returns_paginator() -> None:
+@pytest.mark.parametrize(
+    "page_size,kwargs",
+    [
+        pytest.param(20, {}, id="default"),
+        pytest.param(50, {"page_size": 50}, id="custom-page-size"),
+    ],
+)
+def test_search_honors_page_size(page_size, kwargs):
     client = mock(httpx.Client)
     service = ReporterAuditLogService(client)
     response = _make_reporter_envelope(content=[_make_entry_data()])
     when(client).get(
-        "/nextlabs-reporter/api/activity-logs/search",
-        params={"page": 0, "size": 20},
+        SEARCH_URL,
+        params={"page": 0, "size": page_size},
     ).thenReturn(response)
 
-    paginator = service.search()
+    paginator = service.search(**kwargs)
 
     assert isinstance(paginator, SyncPaginator)
     results = list(paginator)
@@ -69,21 +78,7 @@ def test_search_returns_paginator() -> None:
     assert results[0].msg_code == "audit.export.generated.report"
 
 
-def test_search_respects_page_size() -> None:
-    client = mock(httpx.Client)
-    service = ReporterAuditLogService(client)
-    response = _make_reporter_envelope(content=[_make_entry_data()])
-    when(client).get(
-        "/nextlabs-reporter/api/activity-logs/search",
-        params={"page": 0, "size": 50},
-    ).thenReturn(response)
-
-    results = list(service.search(page_size=50))
-
-    assert len(results) == 1
-
-
-def test_search_paginates_multiple_pages() -> None:
+def test_search_paginates_multiple_pages():
     client = mock(httpx.Client)
     service = ReporterAuditLogService(client)
     page0 = _make_reporter_envelope(
@@ -97,14 +92,8 @@ def test_search_paginates_multiple_pages() -> None:
         total_pages=2,
         total_elements=2,
     )
-    when(client).get(
-        "/nextlabs-reporter/api/activity-logs/search",
-        params={"page": 0, "size": 20},
-    ).thenReturn(page0)
-    when(client).get(
-        "/nextlabs-reporter/api/activity-logs/search",
-        params={"page": 1, "size": 20},
-    ).thenReturn(page1)
+    when(client).get(SEARCH_URL, params={"page": 0, "size": 20}).thenReturn(page0)
+    when(client).get(SEARCH_URL, params={"page": 1, "size": 20}).thenReturn(page1)
 
     results = list(service.search())
 

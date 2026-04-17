@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 from mockito import mock, when
+import pytest
 
 from nextlabs_sdk._cloudaz._component_type_models import (
     AttributeConfig,
@@ -80,57 +80,57 @@ def _make_component_type_data() -> dict[str, object]:
     }
 
 
-def test_get_returns_component_type() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = _make_envelope(data=_make_component_type_data())
-    when(client).get("/console/api/v1/policyModel/mgmt/42").thenReturn(response)
+@pytest.fixture
+def client():
+    return mock(httpx.Client)
 
-    ct = service.get(42)
+
+@pytest.fixture
+def service(client):
+    return ComponentTypeService(client)
+
+
+@pytest.mark.parametrize(
+    "method,url",
+    [
+        pytest.param("get", "/console/api/v1/policyModel/mgmt/42", id="get"),
+        pytest.param(
+            "get_active",
+            "/console/api/v1/policyModel/mgmt/active/42",
+            id="get-active",
+        ),
+    ],
+)
+def test_get_variants_return_component_type(client, service, method, url):
+    when(client).get(url).thenReturn(_make_envelope(data=_make_component_type_data()))
+
+    ct = getattr(service, method)(42)
 
     assert isinstance(ct, ComponentType)
     assert ct.id == 42
-    assert ct.name == "Support Tickets"
-    assert ct.type == ComponentTypeType.RESOURCE
-    assert len(ct.attributes) == 1
-    assert ct.attributes[0].name == "Priority"
+    if method == "get":
+        assert ct.name == "Support Tickets"
+        assert ct.type == ComponentTypeType.RESOURCE
+        assert len(ct.attributes) == 1
+        assert ct.attributes[0].name == "Priority"
 
 
-def test_get_active_returns_component_type() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = _make_envelope(data=_make_component_type_data())
-    when(client).get("/console/api/v1/policyModel/mgmt/active/42").thenReturn(response)
-
-    ct = service.get_active(42)
-
-    assert isinstance(ct, ComponentType)
-    assert ct.id == 42
-
-
-def test_create_returns_id() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
+def test_create_returns_id(client, service):
     payload: dict[str, object] = {
         "name": "Support Tickets",
         "shortName": "support_tickets",
         "type": "RESOURCE",
         "status": "ACTIVE",
     }
-    response = _make_envelope(data=99)
     when(client).post(
         "/console/api/v1/policyModel/mgmt/add",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=99))
 
-    result = service.create(payload)
-
-    assert result == 99
+    assert service.create(payload) == 99
 
 
-def test_modify_returns_id() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
+def test_modify_returns_id(client, service):
     payload: dict[str, object] = {
         "id": 42,
         "name": "Support Tickets Updated",
@@ -139,58 +139,42 @@ def test_modify_returns_id() -> None:
         "status": "ACTIVE",
         "version": 1,
     }
-    response = _make_envelope(data=42)
     when(client).put(
         "/console/api/v1/policyModel/mgmt/modify",
         json=payload,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=42))
 
-    result = service.modify(payload)
-
-    assert result == 42
+    assert service.modify(payload) == 42
 
 
-def test_delete_succeeds() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_delete_succeeds(client, service):
     when(client).delete(
         "/console/api/v1/policyModel/mgmt/remove/42",
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
     service.delete(42)
 
 
-def test_bulk_delete_succeeds() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = httpx.Response(200, request=_make_request())
+def test_bulk_delete_succeeds(client, service):
     when(client).request(
         "DELETE",
         "/console/api/v1/policyModel/mgmt/bulkDelete",
         json=[1, 2, 3],
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, request=_make_request()))
 
     service.bulk_delete([1, 2, 3])
 
 
-def test_clone_returns_id() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = _make_envelope(data=100)
+def test_clone_returns_id(client, service):
     when(client).post(
         "/console/api/v1/policyModel/mgmt/clone",
         json=42,
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=100))
 
-    result = service.clone(42)
-
-    assert result == 100
+    assert service.clone(42) == 100
 
 
-def test_list_extra_subject_attributes_returns_list() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
+def test_list_extra_subject_attributes_returns_list(client, service):
     attr_data = [
         {
             "name": "Windows User SID",
@@ -202,10 +186,9 @@ def test_list_extra_subject_attributes_returns_list() -> None:
             "sortOrder": 0,
         },
     ]
-    response = _make_envelope(data=attr_data)
     when(client).get(
         "/console/api/v1/policyModel/mgmt/extraSubjectAttribs/USER",
-    ).thenReturn(response)
+    ).thenReturn(_make_envelope(data=attr_data))
 
     attrs = service.list_extra_subject_attributes("USER")
 
@@ -215,15 +198,10 @@ def test_list_extra_subject_attributes_returns_list() -> None:
     assert attrs[0].data_type == AttributeDataType.STRING
 
 
-def test_get_raises_not_found() -> None:
-    client = mock(httpx.Client)
-    service = ComponentTypeService(client)
-    response = httpx.Response(
-        404,
-        json={"message": "Not found"},
-        request=_make_request(),
+def test_get_raises_not_found(client, service):
+    when(client).get("/console/api/v1/policyModel/mgmt/999").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
     )
-    when(client).get("/console/api/v1/policyModel/mgmt/999").thenReturn(response)
 
     with pytest.raises(NotFoundError):
         service.get(999)

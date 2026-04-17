@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Callable
+
 import httpx
 import pytest
 
@@ -9,7 +11,7 @@ from nextlabs_sdk._cloudaz._response import (
     parse_raw,
     parse_reporter_paginated,
 )
-from nextlabs_sdk.exceptions import NotFoundError, ServerError
+from nextlabs_sdk.exceptions import ApiError, NotFoundError, ServerError
 
 
 def _make_request() -> httpx.Request:
@@ -40,51 +42,38 @@ def _make_envelope(
     )
 
 
-def test_parse_data_extracts_data_field() -> None:
-    response = _make_envelope(data={"id": 1, "name": "test"})
-    result = parse_data(response)
-    assert result == {"id": 1, "name": "test"}
-
-
-def test_parse_data_extracts_list_data() -> None:
-    response = _make_envelope(data=[{"id": 1}, {"id": 2}])
-    result = parse_data(response)
-    assert result == [{"id": 1}, {"id": 2}]
-
-
-def test_parse_data_raises_on_http_error() -> None:
-    response = httpx.Response(
-        404,
-        json={"message": "Not found"},
+def _err_response(status_code: int, message: str) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        json={"message": message},
         request=_make_request(),
     )
-    with pytest.raises(NotFoundError):
-        parse_data(response)
 
 
-def test_parse_paginated_extracts_all_fields() -> None:
-    response = _make_envelope(
-        data=[{"id": 1}],
-        total_pages=5,
-        total_records=42,
-    )
+def _non_json_response(status_code: int = 200, content: bytes = b"x") -> httpx.Response:
+    return httpx.Response(status_code, content=content, request=_make_request())
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        pytest.param({"id": 1, "name": "test"}, {"id": 1, "name": "test"}, id="dict"),
+        pytest.param([{"id": 1}, {"id": 2}], [{"id": 1}, {"id": 2}], id="list"),
+    ],
+)
+def test_parse_data_extracts_data_field(data, expected):
+    assert parse_data(_make_envelope(data=data)) == expected
+
+
+def test_parse_paginated_extracts_all_fields():
+    response = _make_envelope(data=[{"id": 1}], total_pages=5, total_records=42)
     data, total_pages, total_records = parse_paginated(response)
     assert data == [{"id": 1}]
     assert total_pages == 5
     assert total_records == 42
 
 
-def test_parse_paginated_raises_on_http_error() -> None:
-    response = httpx.Response(
-        500,
-        json={"message": "Server error"},
-        request=_make_request(),
-    )
-    with pytest.raises(ServerError):
-        parse_paginated(response)
-
-
-def test_parse_reporter_paginated_extracts_content() -> None:
+def test_parse_reporter_paginated_extracts_content():
     response = httpx.Response(
         200,
         json={
@@ -104,15 +93,13 @@ def test_parse_reporter_paginated_extracts_content() -> None:
     assert total_records == 25
 
 
-def test_parse_reporter_paginated_defaults_missing_totals() -> None:
+def test_parse_reporter_paginated_defaults_missing_totals():
     response = httpx.Response(
         200,
         json={
             "statusCode": "1003",
             "message": "Data found successfully",
-            "data": {
-                "content": [{"id": 1}],
-            },
+            "data": {"content": [{"id": 1}]},
         },
         request=_make_request(),
     )
@@ -122,86 +109,71 @@ def test_parse_reporter_paginated_defaults_missing_totals() -> None:
     assert total_records == 1
 
 
-def test_parse_reporter_paginated_raises_on_http_error() -> None:
-    response = httpx.Response(
-        500,
-        json={"message": "Server error"},
-        request=_make_request(),
-    )
-    with pytest.raises(ServerError):
-        parse_reporter_paginated(response)
-
-
-def test_parse_raw_returns_json_body() -> None:
+def test_parse_raw_returns_json_body():
     response = httpx.Response(
         200,
         json={"key1": "value1", "key2": "value2"},
         request=_make_request(),
     )
-    result = parse_raw(response)
-    assert result == {"key1": "value1", "key2": "value2"}
+    assert parse_raw(response) == {"key1": "value1", "key2": "value2"}
 
 
-def test_parse_raw_raises_on_http_error() -> None:
-    response = httpx.Response(
-        404,
-        json={"message": "Not found"},
-        request=_make_request(),
-    )
-    with pytest.raises(NotFoundError):
-        parse_raw(response)
+@pytest.mark.parametrize(
+    "parser,status_code,exc",
+    [
+        pytest.param(parse_data, 404, NotFoundError, id="parse_data-404"),
+        pytest.param(parse_paginated, 500, ServerError, id="parse_paginated-500"),
+        pytest.param(
+            parse_reporter_paginated,
+            500,
+            ServerError,
+            id="parse_reporter_paginated-500",
+        ),
+        pytest.param(parse_raw, 404, NotFoundError, id="parse_raw-404"),
+    ],
+)
+def test_parsers_raise_on_http_error(
+    parser: Callable[[httpx.Response], object],
+    status_code: int,
+    exc: type[Exception],
+):
+    with pytest.raises(exc):
+        parser(_err_response(status_code, "err"))
 
 
-def test_parse_data_raises_api_error_on_non_json() -> None:
-    from nextlabs_sdk.exceptions import ApiError
+@pytest.mark.parametrize(
+    "parser",
+    [
+        pytest.param(parse_data, id="parse_data"),
+        pytest.param(parse_paginated, id="parse_paginated"),
+        pytest.param(parse_reporter_paginated, id="parse_reporter_paginated"),
+        pytest.param(parse_raw, id="parse_raw"),
+    ],
+)
+def test_parsers_raise_api_error_on_non_json(
+    parser: Callable[[httpx.Response], object],
+):
+    with pytest.raises(ApiError):
+        parser(_non_json_response())
 
+
+def test_parse_data_api_error_on_non_json_has_message():
     response = httpx.Response(
         200,
         content=b"<html>oops</html>",
         request=_make_request(),
     )
-
     with pytest.raises(ApiError) as exc_info:
         parse_data(response)
     assert "Invalid JSON response" in exc_info.value.message
 
 
-def test_parse_data_raises_api_error_on_missing_data_key() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
+def test_parse_data_raises_api_error_on_missing_data_key():
     response = httpx.Response(
         200,
         json={"statusCode": "1003"},
         request=_make_request(),
     )
-
     with pytest.raises(ApiError) as exc_info:
         parse_data(response)
     assert "missing 'data'" in exc_info.value.message
-
-
-def test_parse_paginated_raises_api_error_on_non_json() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    response = httpx.Response(200, content=b"x", request=_make_request())
-
-    with pytest.raises(ApiError):
-        parse_paginated(response)
-
-
-def test_parse_reporter_paginated_raises_api_error_on_non_json() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    response = httpx.Response(200, content=b"x", request=_make_request())
-
-    with pytest.raises(ApiError):
-        parse_reporter_paginated(response)
-
-
-def test_parse_raw_raises_api_error_on_non_json() -> None:
-    from nextlabs_sdk.exceptions import ApiError
-
-    response = httpx.Response(200, content=b"x", request=_make_request())
-
-    with pytest.raises(ApiError):
-        parse_raw(response)

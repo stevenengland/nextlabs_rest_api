@@ -6,36 +6,40 @@ import pytest
 from nextlabs_sdk._cli._parsing import parse_json_payload, parse_key_value_attrs
 
 
-def test_parse_json_payload_valid() -> None:
-    result = parse_json_payload('{"key": "value"}')
-    assert result == {"key": "value"}
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param('{"key": "value"}', {"key": "value"}, id="object"),
+    ],
+)
+def test_parse_json_payload_valid(raw, expected):
+    assert parse_json_payload(raw) == expected
 
 
-def test_parse_json_payload_invalid_json() -> None:
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("not-json", id="invalid-json"),
+        pytest.param("[1, 2]", id="array-rejected"),
+    ],
+)
+def test_parse_json_payload_rejects(raw):
     with pytest.raises(ClickExit):
-        parse_json_payload("not-json")
+        parse_json_payload(raw)
 
 
-def test_parse_json_payload_array_rejected() -> None:
-    with pytest.raises(ClickExit):
-        parse_json_payload("[1, 2]")
+@pytest.mark.parametrize(
+    "items,expected",
+    [
+        pytest.param(["k1=v1", "k2=v2"], {"k1": "v1", "k2": "v2"}, id="two-pairs"),
+        pytest.param([], {}, id="empty"),
+        pytest.param(["k1=v=2"], {"k1": "v=2"}, id="value-contains-equals"),
+    ],
+)
+def test_parse_key_value_attrs_valid(items, expected):
+    assert parse_key_value_attrs(items) == expected
 
 
-def test_parse_key_value_attrs_valid() -> None:
-    result = parse_key_value_attrs(["k1=v1", "k2=v2"])
-    assert result == {"k1": "v1", "k2": "v2"}
-
-
-def test_parse_key_value_attrs_empty() -> None:
-    result = parse_key_value_attrs([])
-    assert result == {}
-
-
-def test_parse_key_value_attrs_invalid() -> None:
+def test_parse_key_value_attrs_invalid():
     with pytest.raises(ClickExit):
         parse_key_value_attrs(["no-equals"])
-
-
-def test_parse_key_value_attrs_value_with_equals() -> None:
-    result = parse_key_value_attrs(["k1=v=2"])
-    assert result == {"k1": "v=2"}

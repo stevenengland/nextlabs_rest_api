@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
@@ -30,6 +31,30 @@ _GLOBAL_OPTS = (
     "my-secret",
 )
 
+_EVAL_ARGS = (
+    "pdp",
+    "eval",
+    "--subject",
+    "user1",
+    "--resource",
+    "doc1",
+    "--resource-type",
+    "file",
+    "--action",
+    "VIEW",
+)
+
+_PERMS_ARGS = (
+    "pdp",
+    "permissions",
+    "--subject",
+    "user1",
+    "--resource",
+    "doc1",
+    "--resource-type",
+    "file",
+)
+
 
 def _stub_client() -> Any:
     mock_client = mock(PdpClient)
@@ -37,7 +62,7 @@ def _stub_client() -> Any:
     return mock_client
 
 
-def _make_eval_response(
+def _eval_response(
     decision: Decision = Decision.PERMIT,
     obligations: list[Obligation] | None = None,
     policy_refs: list[PolicyRef] | None = None,
@@ -54,39 +79,43 @@ def _make_eval_response(
     )
 
 
-_EVAL_ARGS = (
-    "pdp",
-    "eval",
-    "--subject",
-    "user1",
-    "--resource",
-    "doc1",
-    "--resource-type",
-    "file",
-    "--action",
-    "VIEW",
+def _perm_response(
+    allowed: list[ActionPermission] | None = None,
+    denied: list[ActionPermission] | None = None,
+    dont_care: list[ActionPermission] | None = None,
+) -> PermissionsResponse:
+    return PermissionsResponse(
+        allowed=allowed or [],
+        denied=denied or [],
+        dont_care=dont_care or [],
+    )
+
+
+# --- eval output variants ---
+
+
+@pytest.mark.parametrize(
+    "decision,extra_flags,expected_text",
+    [
+        pytest.param(Decision.PERMIT, (), "Permit", id="permit"),
+        pytest.param(Decision.DENY, (), "Deny", id="deny"),
+    ],
 )
-
-
-def test_pdp_eval_permit() -> None:
+def test_pdp_eval_decision(
+    decision: Decision,
+    extra_flags: tuple[str, ...],
+    expected_text: str,
+) -> None:
     mock_client = _stub_client()
-    when(mock_client).evaluate(...).thenReturn(_make_eval_response(Decision.PERMIT))
-    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
+    when(mock_client).evaluate(...).thenReturn(_eval_response(decision))
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS, *extra_flags])
     assert result.exit_code == 0
-    assert "Permit" in result.output
-
-
-def test_pdp_eval_deny() -> None:
-    mock_client = _stub_client()
-    when(mock_client).evaluate(...).thenReturn(_make_eval_response(Decision.DENY))
-    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
-    assert result.exit_code == 0
-    assert "Deny" in result.output
+    assert expected_text in result.output
 
 
 def test_pdp_eval_json() -> None:
     mock_client = _stub_client()
-    when(mock_client).evaluate(...).thenReturn(_make_eval_response(Decision.PERMIT))
+    when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
     result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", *_EVAL_ARGS])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -101,9 +130,7 @@ def test_pdp_eval_with_obligations() -> None:
             attributes=[ObligationAttribute(id="log-level", attr_value="info")],
         ),
     ]
-    when(mock_client).evaluate(...).thenReturn(
-        _make_eval_response(obligations=obligations),
-    )
+    when(mock_client).evaluate(...).thenReturn(_eval_response(obligations=obligations))
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
     assert result.exit_code == 0
     assert "log-obligation" in result.output
@@ -113,9 +140,7 @@ def test_pdp_eval_with_obligations() -> None:
 def test_pdp_eval_with_policy_refs() -> None:
     mock_client = _stub_client()
     refs = [PolicyRef(id="AllowITAccess", version="1.0")]
-    when(mock_client).evaluate(...).thenReturn(
-        _make_eval_response(policy_refs=refs),
-    )
+    when(mock_client).evaluate(...).thenReturn(_eval_response(policy_refs=refs))
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, *_EVAL_ARGS, "--return-policy-ids"],
@@ -124,31 +149,25 @@ def test_pdp_eval_with_policy_refs() -> None:
     assert "AllowITAccess" in result.output
 
 
-def test_pdp_eval_with_attributes() -> None:
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        pytest.param(
+            (
+                "--subject-attr",
+                "dept=IT",
+                "--resource-attr",
+                "classification=public",
+            ),
+            id="with-attributes",
+        ),
+        pytest.param(("--content-type", "xml"), id="xml-content-type"),
+    ],
+)
+def test_pdp_eval_extra_flags(extra_args: tuple[str, ...]) -> None:
     mock_client = _stub_client()
-    when(mock_client).evaluate(...).thenReturn(_make_eval_response())
-    result = runner.invoke(
-        app,
-        [
-            *_GLOBAL_OPTS,
-            *_EVAL_ARGS,
-            "--subject-attr",
-            "dept=IT",
-            "--resource-attr",
-            "classification=public",
-        ],
-    )
-    assert result.exit_code == 0
-    assert "Permit" in result.output
-
-
-def test_pdp_eval_xml_content_type() -> None:
-    mock_client = _stub_client()
-    when(mock_client).evaluate(...).thenReturn(_make_eval_response())
-    result = runner.invoke(
-        app,
-        [*_GLOBAL_OPTS, *_EVAL_ARGS, "--content-type", "xml"],
-    )
+    when(mock_client).evaluate(...).thenReturn(_eval_response())
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS, *extra_args])
     assert result.exit_code == 0
     assert "Permit" in result.output
 
@@ -185,39 +204,16 @@ def test_pdp_eval_missing_credentials() -> None:
     assert "client-secret" in result.output.lower() or "CLIENT_SECRET" in result.output
 
 
-_PERMS_ARGS = (
-    "pdp",
-    "permissions",
-    "--subject",
-    "user1",
-    "--resource",
-    "doc1",
-    "--resource-type",
-    "file",
-)
-
-
-def _make_permissions_response(
-    allowed: list[ActionPermission] | None = None,
-    denied: list[ActionPermission] | None = None,
-    dont_care: list[ActionPermission] | None = None,
-) -> PermissionsResponse:
-    return PermissionsResponse(
-        allowed=allowed or [],
-        denied=denied or [],
-        dont_care=dont_care or [],
-    )
+# --- permissions output variants ---
 
 
 def test_pdp_permissions_allowed() -> None:
     mock_client = _stub_client()
-    response = _make_permissions_response(
-        allowed=[
-            ActionPermission(name="VIEW"),
-            ActionPermission(name="EDIT"),
-        ],
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[ActionPermission(name="VIEW"), ActionPermission(name="EDIT")],
+        )
     )
-    when(mock_client).permissions(...).thenReturn(response)
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
     assert result.exit_code == 0
     assert "VIEW" in result.output
@@ -227,10 +223,11 @@ def test_pdp_permissions_allowed() -> None:
 
 def test_pdp_permissions_denied() -> None:
     mock_client = _stub_client()
-    response = _make_permissions_response(
-        denied=[ActionPermission(name="DELETE")],
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            denied=[ActionPermission(name="DELETE")],
+        )
     )
-    when(mock_client).permissions(...).thenReturn(response)
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
     assert result.exit_code == 0
     assert "DELETE" in result.output
@@ -239,10 +236,11 @@ def test_pdp_permissions_denied() -> None:
 
 def test_pdp_permissions_json() -> None:
     mock_client = _stub_client()
-    response = _make_permissions_response(
-        allowed=[ActionPermission(name="VIEW")],
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[ActionPermission(name="VIEW")],
+        )
     )
-    when(mock_client).permissions(...).thenReturn(response)
     result = runner.invoke(app, [*_GLOBAL_OPTS, "--json", *_PERMS_ARGS])
     assert result.exit_code == 0
     parsed = json.loads(result.output)
@@ -251,15 +249,16 @@ def test_pdp_permissions_json() -> None:
 
 def test_pdp_permissions_with_matching_policies() -> None:
     mock_client = _stub_client()
-    response = _make_permissions_response(
-        allowed=[
-            ActionPermission(
-                name="VIEW",
-                policy_refs=[PolicyRef(id="AllowAll", version="1.0")],
-            ),
-        ],
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[
+                ActionPermission(
+                    name="VIEW",
+                    policy_refs=[PolicyRef(id="AllowAll", version="1.0")],
+                ),
+            ],
+        )
     )
-    when(mock_client).permissions(...).thenReturn(response)
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, *_PERMS_ARGS, "--record-matching-policies"],
@@ -270,7 +269,6 @@ def test_pdp_permissions_with_matching_policies() -> None:
 
 def test_pdp_permissions_empty() -> None:
     mock_client = _stub_client()
-    response = _make_permissions_response()
-    when(mock_client).permissions(...).thenReturn(response)
+    when(mock_client).permissions(...).thenReturn(_perm_response())
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
     assert result.exit_code == 0

@@ -15,14 +15,31 @@ BASE_URL = "https://cloudaz.example.com"
 _BASE_PATH = "/nextlabs-reporter/api/v1/report-activity-logs"
 
 
+def _raw_attrs() -> list[dict[str, object]]:
+    return [
+        {
+            "isDynamic": False,
+            "dataType": "TIMESTAMP",
+            "attrType": "Others",
+            "name": "DATE",
+            "value": "2024-02-22 06:15:23.177",
+        },
+        {
+            "isDynamic": False,
+            "dataType": "STRING",
+            "attrType": "User",
+            "name": "USER_NAME",
+            "value": "John",
+        },
+    ]
+
+
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("POST", f"{BASE_URL}{path}")
 
 
-def _make_reporter_envelope(
-    content: list[object],
-    total_pages: int = 1,
-    total_elements: int = 1,
+def _reporter_envelope(
+    content, total_pages: int = 1, total_elements: int = 1
 ) -> httpx.Response:
     return httpx.Response(
         200,
@@ -39,21 +56,17 @@ def _make_reporter_envelope(
     )
 
 
-def _make_data_envelope(data: object) -> httpx.Response:
+def _data_envelope(data) -> httpx.Response:
     return httpx.Response(
         200,
-        json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": data,
-        },
+        json={"statusCode": "1003", "message": "Data found successfully", "data": data},
         request=_make_request(),
     )
 
 
-def _make_enforcement_row() -> dict[str, object]:
+def _make_enforcement_row(row_id: int = 2) -> dict[str, object]:
     return {
-        "ROW_ID": 2,
+        "ROW_ID": row_id,
         "TIME": "2024-10-07T07:26:14.556+00:00",
         "USER_NAME": "automation_test@nextlabs.com",
         "FROM_RESOURCE_NAME": "file1.txt",
@@ -74,23 +87,26 @@ def _make_query() -> ActivityLogQuery:
     )
 
 
-# --- search ---
-
-
-def test_search_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = ReportActivityLogService(client)
-    query = _make_query()
-
-    response = _make_reporter_envelope(
-        content=[_make_enforcement_row()],
-        total_pages=1,
-        total_elements=1,
-    )
+def _paged_payload(
+    query: ActivityLogQuery, page: int = 0, size: int = 20
+) -> dict[str, object]:
     payload = query.model_dump(by_alias=True, exclude_none=True)
-    payload["page"] = 0
-    payload["size"] = 20
-    when(client).post(_BASE_PATH, json=payload).thenReturn(response)
+    payload["page"] = page
+    payload["size"] = size
+    return payload
+
+
+def _make_service() -> tuple[object, ReportActivityLogService]:
+    client = mock(httpx.Client)
+    return client, ReportActivityLogService(client)
+
+
+def test_search_returns_paginator():
+    client, service = _make_service()
+    query = _make_query()
+    when(client).post(_BASE_PATH, json=_paged_payload(query)).thenReturn(
+        _reporter_envelope(content=[_make_enforcement_row()]),
+    )
 
     paginator = service.search(query)
     assert isinstance(paginator, SyncPaginator)
@@ -100,28 +116,19 @@ def test_search_returns_paginator() -> None:
     assert entries[0].row_id == 2
 
 
-def test_search_paginates_multiple_pages() -> None:
-    client = mock(httpx.Client)
-    service = ReportActivityLogService(client)
+def test_search_paginates_multiple_pages():
+    client, service = _make_service()
     query = _make_query()
-
-    row1 = _make_enforcement_row()
-    row1["ROW_ID"] = 1
-    row2 = _make_enforcement_row()
-    row2["ROW_ID"] = 2
-
-    page0 = _make_reporter_envelope(content=[row1], total_pages=2, total_elements=2)
-    page1 = _make_reporter_envelope(content=[row2], total_pages=2, total_elements=2)
-
-    payload0 = query.model_dump(by_alias=True, exclude_none=True)
-    payload0["page"] = 0
-    payload0["size"] = 20
-    payload1 = query.model_dump(by_alias=True, exclude_none=True)
-    payload1["page"] = 1
-    payload1["size"] = 20
-
-    when(client).post(_BASE_PATH, json=payload0).thenReturn(page0)
-    when(client).post(_BASE_PATH, json=payload1).thenReturn(page1)
+    when(client).post(_BASE_PATH, json=_paged_payload(query, page=0)).thenReturn(
+        _reporter_envelope(
+            content=[_make_enforcement_row(row_id=1)], total_pages=2, total_elements=2
+        ),
+    )
+    when(client).post(_BASE_PATH, json=_paged_payload(query, page=1)).thenReturn(
+        _reporter_envelope(
+            content=[_make_enforcement_row(row_id=2)], total_pages=2, total_elements=2
+        ),
+    )
 
     entries = list(service.search(query))
     assert len(entries) == 2
@@ -129,31 +136,9 @@ def test_search_paginates_multiple_pages() -> None:
     assert entries[1].row_id == 2
 
 
-# --- get_by_row_id ---
-
-
-def test_get_by_row_id_returns_attributes() -> None:
-    client = mock(httpx.Client)
-    service = ReportActivityLogService(client)
-
-    raw_attrs = [
-        {
-            "isDynamic": False,
-            "dataType": "TIMESTAMP",
-            "attrType": "Others",
-            "name": "DATE",
-            "value": "2024-02-22 06:15:23.177",
-        },
-        {
-            "isDynamic": False,
-            "dataType": "STRING",
-            "attrType": "User",
-            "name": "USER_NAME",
-            "value": "John",
-        },
-    ]
-    response = _make_data_envelope(raw_attrs)
-    when(client).get(f"{_BASE_PATH}/42").thenReturn(response)
+def test_get_by_row_id_returns_attributes():
+    client, service = _make_service()
+    when(client).get(f"{_BASE_PATH}/42").thenReturn(_data_envelope(_raw_attrs()))
 
     attrs = service.get_by_row_id(42)
     assert len(attrs) == 2
@@ -164,33 +149,23 @@ def test_get_by_row_id_returns_attributes() -> None:
     assert attrs[1].value == "John"
 
 
-# --- export ---
-
-
-def test_export_returns_bytes() -> None:
-    client = mock(httpx.Client)
-    service = ReportActivityLogService(client)
+def test_export_returns_bytes():
+    client, service = _make_service()
     query = _make_query()
-
     csv_content = b"ROW_ID,TIME,USER_NAME\n1,2024-01-01,John\n"
     payload = query.model_dump(by_alias=True, exclude_none=True)
-    response = httpx.Response(200, content=csv_content, request=_make_request())
-    when(client).post(f"{_BASE_PATH}/export", json=payload).thenReturn(response)
+    when(client).post(f"{_BASE_PATH}/export", json=payload).thenReturn(
+        httpx.Response(200, content=csv_content, request=_make_request()),
+    )
 
-    result = service.export(query)
-    assert result == csv_content
-
-
-# --- export_by_row_id ---
+    assert service.export(query) == csv_content
 
 
-def test_export_by_row_id_returns_bytes() -> None:
-    client = mock(httpx.Client)
-    service = ReportActivityLogService(client)
-
+def test_export_by_row_id_returns_bytes():
+    client, service = _make_service()
     csv_content = b"DATE,USER_NAME,ACTION\n2024-01-01,John,View\n"
-    response = httpx.Response(200, content=csv_content, request=_make_request())
-    when(client).post(f"{_BASE_PATH}/99/export").thenReturn(response)
+    when(client).post(f"{_BASE_PATH}/99/export").thenReturn(
+        httpx.Response(200, content=csv_content, request=_make_request()),
+    )
 
-    result = service.export_by_row_id(99)
-    assert result == csv_content
+    assert service.export_by_row_id(99) == csv_content

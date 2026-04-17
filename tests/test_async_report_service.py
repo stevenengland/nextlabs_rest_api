@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, Coroutine, TypeVar
 
 import httpx
 import pytest
@@ -15,8 +16,6 @@ from nextlabs_sdk._cloudaz._report_models import (
     EnforcementEntry,
     PolicyActivityReport,
     PolicyActivityReportDetail,
-)
-from nextlabs_sdk._cloudaz._report_models import (
     PolicyActivityReportRequest,
     ReportCriteria,
     ReportFilterGeneral,
@@ -30,22 +29,55 @@ from nextlabs_sdk._cloudaz._reports import AsyncPolicyActivityReportService
 from nextlabs_sdk._pagination import AsyncPaginator
 from nextlabs_sdk.exceptions import ServerError
 
+T = TypeVar("T")
+
 BASE_URL = "https://cloudaz.example.com"
 _BASE_PATH = "/nextlabs-reporter/api/v1/policy-activity-reports"
+
+
+def _list_params(page: int = 0) -> dict[str, Any]:
+    return {
+        "title": "",
+        "isShared": True,
+        "policyDecision": "AD",
+        "sortBy": "title",
+        "sortOrder": "ascending",
+        "size": 20,
+        "page": page,
+    }
+
+
+def _enforcement_params() -> dict[str, Any]:
+    return {"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"}
+
+
+def _export_params() -> dict[str, str]:
+    return {"sortBy": "rowId", "sortOrder": "ascending"}
+
+
+def _run_async(coro: Coroutine[Any, Any, T]) -> T:
+    return asyncio.run(coro)
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("POST", f"{BASE_URL}{path}")
 
 
-def _make_reporter_envelope(
-    content: list[object],
+def _make_envelope(
+    data: Any = None,
+    *,
+    content=None,
     total_pages: int = 1,
     total_elements: int = 1,
 ) -> httpx.Response:
-    return httpx.Response(
-        200,
-        json={
+    if content is None:
+        body = {
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": data,
+        }
+    else:
+        body = {
             "statusCode": "1003",
             "message": "Data found successfully",
             "data": {
@@ -53,26 +85,13 @@ def _make_reporter_envelope(
                 "totalPages": total_pages,
                 "totalElements": total_elements,
             },
-        },
-        request=_make_request(),
-    )
+        }
+    return httpx.Response(200, json=body, request=_make_request())
 
 
-def _make_data_envelope(data: object) -> httpx.Response:
-    return httpx.Response(
-        200,
-        json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": data,
-        },
-        request=_make_request(),
-    )
-
-
-def _make_report_summary() -> dict[str, object]:
+def _make_report_summary(report_id: int = 8) -> dict[str, Any]:
     return {
-        "id": 8,
+        "id": report_id,
         "title": "Allow Enforcement in Last 7 Days",
         "description": "desc",
         "sharedMode": "public",
@@ -104,7 +123,7 @@ def _make_simple_request() -> PolicyActivityReportRequest:
     )
 
 
-def _make_enforcement_data() -> dict[str, object]:
+def _make_enforcement_data() -> dict[str, Any]:
     return {
         "POLICY_NAME": "Encryption Policy",
         "ACTION": "SELECT",
@@ -117,25 +136,17 @@ def _make_enforcement_data() -> dict[str, object]:
     }
 
 
-# --- list ---
-
-
-def test_async_list_returns_paginator() -> None:
+@pytest.fixture
+def service_client():
     client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_reporter_envelope(content=[_make_report_summary()])
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 0,
-        },
-    ).thenReturn(response)
+    return AsyncPolicyActivityReportService(client), client
+
+
+def test_async_list_returns_paginator(service_client):
+    service, client = service_client
+    when(client).get(_BASE_PATH, params=_list_params()).thenReturn(
+        _make_envelope(content=[_make_report_summary()]),
+    )
 
     paginator = service.list()
     assert isinstance(paginator, AsyncPaginator)
@@ -143,417 +154,286 @@ def test_async_list_returns_paginator() -> None:
     async def collect() -> list[PolicyActivityReport]:
         return [r async for r in paginator]
 
-    reports = asyncio.run(collect())
+    reports = _run_async(collect())
     assert len(reports) == 1
     assert reports[0].id == 8
 
 
-def test_async_list_multi_page() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    r1 = _make_report_summary()
-    r1["id"] = 1
-    r2 = _make_report_summary()
-    r2["id"] = 2
-
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 0,
-        },
-    ).thenReturn(_make_reporter_envelope(content=[r1], total_pages=2, total_elements=2))
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 1,
-        },
-    ).thenReturn(_make_reporter_envelope(content=[r2], total_pages=2, total_elements=2))
+def test_async_list_multi_page(service_client):
+    service, client = service_client
+    when(client).get(_BASE_PATH, params=_list_params()).thenReturn(
+        _make_envelope(
+            content=[_make_report_summary(1)],
+            total_pages=2,
+            total_elements=2,
+        ),
+    )
+    when(client).get(_BASE_PATH, params=_list_params(page=1)).thenReturn(
+        _make_envelope(
+            content=[_make_report_summary(2)],
+            total_pages=2,
+            total_elements=2,
+        ),
+    )
 
     async def collect() -> list[PolicyActivityReport]:
         return [r async for r in service.list()]
 
-    reports = asyncio.run(collect())
-    assert len(reports) == 2
-    assert reports[0].id == 1
-    assert reports[1].id == 2
+    reports = _run_async(collect())
+    assert [r.id for r in reports] == [1, 2]
 
 
-# --- get ---
-
-
-def test_async_get_returns_detail() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "criteria": {"filters": {"general": {"type": "custom"}}, "pagesize": 20},
-            "widgets": [
-                {
-                    "id": 1,
-                    "name": "e",
-                    "title": "T",
-                    "chartType": "line",
-                    "attributeName": "d",
-                    "maxSize": 10,
-                }
-            ],
-        },
+def test_async_get_returns_detail(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/42").thenReturn(
+        _make_envelope(
+            data={
+                "criteria": {
+                    "filters": {"general": {"type": "custom"}},
+                    "pagesize": 20,
+                },
+                "widgets": [
+                    {
+                        "id": 1,
+                        "name": "e",
+                        "title": "T",
+                        "chartType": "line",
+                        "attributeName": "d",
+                        "maxSize": 10,
+                    },
+                ],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/42").thenReturn(response)
 
-    async def run() -> PolicyActivityReportDetail:
-        return await service.get(42)
-
-    detail = asyncio.run(run())
+    detail: PolicyActivityReportDetail = _run_async(service.get(42))
     assert detail.criteria.filters is not None
     assert detail.criteria.filters.general is not None
     assert detail.criteria.filters.general.type == "custom"
 
 
-# --- create ---
-
-
-def test_async_create_returns_summary() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+@pytest.mark.parametrize(
+    "method_name,http_verb,path",
+    [
+        pytest.param("create", "post", _BASE_PATH, id="create"),
+        pytest.param("modify", "put", f"{_BASE_PATH}/42", id="modify"),
+    ],
+)
+def test_async_create_or_modify_returns_summary(
+    service_client, method_name, http_verb, path
+):
+    service, client = service_client
     request = _make_simple_request()
-    response = _make_data_envelope(data=_make_report_summary())
-    when(client).post(
-        _BASE_PATH,
-        json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
+    payload = request.model_dump(by_alias=True, exclude_none=True)
+    getattr(when(client), http_verb)(path, json=payload).thenReturn(
+        _make_envelope(data=_make_report_summary()),
+    )
 
-    async def run() -> PolicyActivityReport:
-        return await service.create(request)
-
-    report = asyncio.run(run())
+    if method_name == "create":
+        report: PolicyActivityReport = _run_async(service.create(request))
+    else:
+        report = _run_async(service.modify(42, request))
     assert report.id == 8
 
 
-# --- modify ---
-
-
-def test_async_modify_returns_summary() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    request = _make_simple_request()
-    response = _make_data_envelope(data=_make_report_summary())
-    when(client).put(
-        f"{_BASE_PATH}/42",
-        json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
-
-    async def run() -> PolicyActivityReport:
-        return await service.modify(42, request)
-
-    report = asyncio.run(run())
-    assert report.id == 8
-
-
-# --- delete ---
-
-
-def test_async_delete_by_ids() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_delete_by_ids(service_client):
+    service, client = service_client
     request = DeleteReportsRequest(report_ids=[5, 10])
-    response = httpx.Response(
-        200, json={"statusCode": "1002", "message": "ok"}, request=_make_request()
-    )
     when(client).post(f"{_BASE_PATH}/delete", json={"reportIds": [5, 10]}).thenReturn(
-        response
+        httpx.Response(
+            200,
+            json={"statusCode": "1002", "message": "ok"},
+            request=_make_request(),
+        ),
     )
 
-    async def run() -> None:
-        await service.delete(request)
-
-    asyncio.run(run())
+    _run_async(service.delete(request))
 
 
-def test_async_delete_raises_on_error() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_delete_raises_on_error(service_client):
+    service, client = service_client
     request = DeleteReportsRequest(report_ids=[999])
-    response = httpx.Response(500, json={"message": "error"}, request=_make_request())
     when(client).post(f"{_BASE_PATH}/delete", json={"reportIds": [999]}).thenReturn(
-        response
+        httpx.Response(500, json={"message": "error"}, request=_make_request()),
     )
-
-    async def run() -> None:
-        await service.delete(request)
 
     with pytest.raises(ServerError):
-        asyncio.run(run())
+        _run_async(service.delete(request))
 
 
-# --- get_widgets ---
-
-
-def test_async_get_widgets() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "enforcements": [
-                {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1}
-            ]
-        },
+def test_async_get_widgets(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/42/widgets").thenReturn(
+        _make_envelope(
+            data={
+                "enforcements": [
+                    {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1},
+                ],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/42/widgets").thenReturn(response)
 
-    async def run() -> WidgetData:
-        return await service.get_widgets(42)
-
-    data = asyncio.run(run())
+    data: WidgetData = _run_async(service.get_widgets(42))
     assert len(data.enforcements) == 1
 
 
-# --- get_enforcements ---
-
-
-def test_async_get_enforcements() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_reporter_envelope(content=[_make_enforcement_data()])
+def test_async_get_enforcements(service_client):
+    service, client = service_client
     when(client).get(
         f"{_BASE_PATH}/42/enforcements",
-        params={"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_enforcement_params(),
+    ).thenReturn(_make_envelope(content=[_make_enforcement_data()]))
 
     async def collect() -> list[EnforcementEntry]:
         return [e async for e in service.get_enforcements(42)]
 
-    entries = asyncio.run(collect())
+    entries = _run_async(collect())
     assert len(entries) == 1
     assert entries[0].row_id == 2
 
 
-# --- export ---
-
-
-def test_async_export_returns_bytes() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_export_returns_bytes(service_client):
+    service, client = service_client
     csv = b"data"
-    response = httpx.Response(200, content=csv, request=_make_request())
     when(client).post(
         f"{_BASE_PATH}/42/export",
-        params={"sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_export_params(),
+    ).thenReturn(httpx.Response(200, content=csv, request=_make_request()))
 
-    async def run() -> bytes:
-        return await service.export(42)
-
-    assert asyncio.run(run()) == csv
+    assert _run_async(service.export(42)) == csv
 
 
-# --- generate_widgets ---
-
-
-def test_async_generate_widgets() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_generate_widgets(service_client):
+    service, client = service_client
     request = _make_simple_request()
-    response = _make_data_envelope(
-        data={
-            "enforcements": [
-                {"hour": 100, "allowCount": 0, "denyCount": 0, "decisionCount": 0}
-            ]
-        },
-    )
     when(client).post(
         f"{_BASE_PATH}/generate/widgets",
         json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
+    ).thenReturn(
+        _make_envelope(
+            data={
+                "enforcements": [
+                    {"hour": 100, "allowCount": 0, "denyCount": 0, "decisionCount": 0},
+                ],
+            },
+        ),
+    )
 
-    async def run() -> WidgetData:
-        return await service.generate_widgets(request)
-
-    data = asyncio.run(run())
+    data: WidgetData = _run_async(service.generate_widgets(request))
     assert len(data.enforcements) == 1
 
 
-# --- generate_enforcements ---
-
-
-def test_async_generate_enforcements() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_generate_enforcements(service_client):
+    service, client = service_client
     request = _make_simple_request()
     payload = request.model_dump(by_alias=True, exclude_none=True)
-    response = _make_reporter_envelope(content=[_make_enforcement_data()])
     when(client).post(
         f"{_BASE_PATH}/generate/enforcements",
         json=payload,
-        params={"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_enforcement_params(),
+    ).thenReturn(_make_envelope(content=[_make_enforcement_data()]))
 
     async def collect() -> list[EnforcementEntry]:
         return [e async for e in service.generate_enforcements(request)]
 
-    entries = asyncio.run(collect())
-    assert len(entries) == 1
+    assert len(_run_async(collect())) == 1
 
 
-# --- generate_export ---
-
-
-def test_async_generate_export() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
+def test_async_generate_export(service_client):
+    service, client = service_client
     request = _make_simple_request()
     payload = request.model_dump(by_alias=True, exclude_none=True)
     csv = b"exported"
-    response = httpx.Response(200, content=csv, request=_make_request())
     when(client).post(
         f"{_BASE_PATH}/generate/export",
         json=payload,
-        params={"sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_export_params(),
+    ).thenReturn(httpx.Response(200, content=csv, request=_make_request()))
 
-    async def run() -> bytes:
-        return await service.generate_export(request)
-
-    assert asyncio.run(run()) == csv
+    assert _run_async(service.generate_export(request)) == csv
 
 
-# --- Cached data ---
-
-
-def test_async_list_cached_users() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"displayName": "test@localhost", "firstName": "T", "lastName": "U"}],
+def test_async_list_cached_users(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/users").thenReturn(
+        _make_envelope(
+            data=[{"displayName": "test@localhost", "firstName": "T", "lastName": "U"}],
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/users").thenReturn(response)
 
-    async def run() -> list[CachedUser]:
-        return await service.list_cached_users()
-
-    users = asyncio.run(run())
+    users: list[CachedUser] = _run_async(service.list_cached_users())
     assert len(users) == 1
 
 
-def test_async_list_cached_policies() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"name": "P", "fullName": "/ROOT/P"}],
+def test_async_list_cached_policies(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/policies").thenReturn(
+        _make_envelope(data=[{"name": "P", "fullName": "/ROOT/P"}]),
     )
-    when(client).get(f"{_BASE_PATH}/policies").thenReturn(response)
 
-    async def run() -> list[CachedPolicy]:
-        return await service.list_cached_policies()
-
-    policies = asyncio.run(run())
+    policies: list[CachedPolicy] = _run_async(service.list_cached_policies())
     assert len(policies) == 1
 
 
-def test_async_get_resource_actions() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "policyModelActions": {
-                "t": [{"policyModelId": 1, "label": "a", "shortCode": "x"}]
-            }
-        },
+def test_async_get_resource_actions(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/resource-actions").thenReturn(
+        _make_envelope(
+            data={
+                "policyModelActions": {
+                    "t": [{"policyModelId": 1, "label": "a", "shortCode": "x"}],
+                },
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/resource-actions").thenReturn(response)
 
-    async def run() -> ResourceActions:
-        return await service.get_resource_actions()
-
-    result = asyncio.run(run())
+    result: ResourceActions = _run_async(service.get_resource_actions())
     assert "t" in result.policy_model_actions
 
 
-def test_async_get_mappings() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "resource": [
-                {
-                    "id": 1,
-                    "name": "N",
-                    "mappedColumn": "N",
-                    "dataType": "STRING",
-                    "attrType": "RESOURCE",
-                    "isDynamic": False,
-                }
-            ],
-            "user": [
-                {
-                    "id": 2,
-                    "name": "U",
-                    "mappedColumn": "U",
-                    "dataType": "STRING",
-                    "attrType": "USER",
-                    "isDynamic": False,
-                }
-            ],
-            "others": [
-                {
-                    "id": 3,
-                    "name": "O",
-                    "mappedColumn": "O",
-                    "dataType": "STRING",
-                    "attrType": "OTHERS",
-                    "isDynamic": False,
-                }
-            ],
-        },
+def test_async_get_mappings(service_client):
+    service, client = service_client
+
+    def _mapping(id_: int, name: str, attr_type: str) -> dict[str, Any]:
+        return {
+            "id": id_,
+            "name": name,
+            "mappedColumn": name,
+            "dataType": "STRING",
+            "attrType": attr_type,
+            "isDynamic": False,
+        }
+
+    when(client).get(f"{_BASE_PATH}/mappings").thenReturn(
+        _make_envelope(
+            data={
+                "resource": [_mapping(1, "N", "RESOURCE")],
+                "user": [_mapping(2, "U", "USER")],
+                "others": [_mapping(3, "O", "OTHERS")],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/mappings").thenReturn(response)
 
-    async def run() -> AttributeMappings:
-        return await service.get_mappings()
-
-    result = asyncio.run(run())
+    result: AttributeMappings = _run_async(service.get_mappings())
     assert len(result.resource) == 1
 
 
-# --- Sharing ---
+def test_async_list_user_groups(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/share/user-groups").thenReturn(
+        _make_envelope(data=[{"title": "Group", "id": 1}]),
+    )
 
-
-def test_async_list_user_groups() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(data=[{"title": "Group", "id": 1}])
-    when(client).get(f"{_BASE_PATH}/share/user-groups").thenReturn(response)
-
-    async def run() -> list[UserGroup]:
-        return await service.list_user_groups()
-
-    groups = asyncio.run(run())
+    groups: list[UserGroup] = _run_async(service.list_user_groups())
     assert len(groups) == 1
 
 
-def test_async_list_application_users() -> None:
-    client = mock(httpx.AsyncClient)
-    service = AsyncPolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"firstName": "T", "lastName": "U", "username": "tu"}],
+def test_async_list_application_users(service_client):
+    service, client = service_client
+    when(client).get(f"{_BASE_PATH}/share/application-users").thenReturn(
+        _make_envelope(data=[{"firstName": "T", "lastName": "U", "username": "tu"}]),
     )
-    when(client).get(f"{_BASE_PATH}/share/application-users").thenReturn(response)
 
-    async def run() -> list[ApplicationUser]:
-        return await service.list_application_users()
-
-    users = asyncio.run(run())
+    users: list[ApplicationUser] = _run_async(service.list_application_users())
     assert len(users) == 1
     assert users[0].username == "tu"

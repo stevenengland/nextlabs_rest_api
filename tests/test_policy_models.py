@@ -18,7 +18,183 @@ from nextlabs_sdk._cloudaz._policy_models import (
 )
 
 
-def test_policy_component_ref_minimal() -> None:
+def _make_full_policy_data() -> dict[str, Any]:
+    return {
+        "id": 82,
+        "folderId": 3,
+        "name": "Allow IT Ticket Access",
+        "fullName": "Allow IT Ticket Access",
+        "description": "Allows IT department to access support tickets",
+        "status": "DRAFT",
+        "category": "Policy",
+        "effectType": "allow",
+        "tags": [
+            {
+                "id": 30,
+                "key": "helpdesk_policy",
+                "label": "Helpdesk_Policy",
+                "type": "POLICY_TAG",
+                "status": "ACTIVE",
+            },
+        ],
+        "parentId": None,
+        "parentName": None,
+        "hasParent": False,
+        "hasSubPolicies": False,
+        "subjectComponents": [{"operator": "IN", "components": [{"id": 50}]}],
+        "hasToSubjectComponents": False,
+        "toSubjectComponents": [],
+        "actionComponents": [{"operator": "IN", "components": [{"id": 60}]}],
+        "fromResourceComponents": [{"operator": "IN", "components": [{"id": 101}]}],
+        "hasToResourceComponents": False,
+        "toResourceComponents": [],
+        "environmentConfig": {"remoteAccess": -1, "timeSinceLastHBSecs": -1},
+        "scheduleConfig": None,
+        "expression": "",
+        "allowObligations": [
+            {
+                "id": 10,
+                "policyModelId": 42,
+                "name": "log_obligation",
+                "params": {"level": "INFO", "message": "Access granted"},
+            },
+        ],
+        "denyObligations": [],
+        "subPolicy": False,
+        "subPolicyRefs": [],
+        "attributes": [],
+        "deploymentTime": 0,
+        "deployed": False,
+        "actionType": None,
+        "revisionCount": 0,
+        "ownerId": 0,
+        "ownerDisplayName": "Administrator",
+        "createdDate": 1713171640267,
+        "modifiedById": 0,
+        "modifiedBy": "Administrator",
+        "lastUpdatedDate": 1713171640252,
+        "skipValidate": False,
+        "reIndexNow": True,
+        "skipAddingTrueAllowAttribute": False,
+        "version": 1,
+        "authorities": [{"authority": "VIEW_POLICY"}],
+        "manualDeploy": False,
+        "deploymentTargets": [],
+        "deploymentRequest": None,
+        "folderPath": "/policies/helpdesk",
+        "activeWorkflowRequest": None,
+        "componentIds": [50, 60, 101],
+        "hidden": False,
+        "deploymentPending": False,
+        "type": None,
+    }
+
+
+def _make_policy_lite_data() -> dict[str, Any]:
+    return {
+        "id": 82,
+        "folderId": 3,
+        "folderName": "helpdesk",
+        "folderPath": "/policies/helpdesk",
+        "name": "Allow IT Ticket Access",
+        "lowercase_name": "allow it ticket access",
+        "rootFolder": None,
+        "policyFullName": "Allow IT Ticket Access",
+        "description": "Allows IT department to access support tickets",
+        "status": "APPROVED",
+        "effectType": "allow",
+        "lastUpdatedDate": 1713173211329,
+        "createdDate": 1713171640267,
+        "hasParent": False,
+        "hasSubPolicies": False,
+        "ownerId": 0,
+        "ownerDisplayName": "Administrator",
+        "modifiedById": 0,
+        "modifiedBy": "Administrator",
+        "tags": [
+            {
+                "id": 30,
+                "key": "helpdesk_policy",
+                "label": "Helpdesk_Policy",
+                "type": "POLICY_TAG",
+                "status": "ACTIVE",
+            },
+        ],
+        "noOfTags": 1,
+        "parentPolicy": None,
+        "subPolicies": [],
+        "childNodes": [],
+        "authorities": [{"authority": "VIEW_POLICY"}],
+        "manualDeploy": False,
+        "deploymentTime": 1713173211332,
+        "deployed": True,
+        "actionType": "DE",
+        "activeWorkflowId": None,
+        "activeEntityWorkflowRequestStatus": None,
+        "activeWorkflowRequestLevelStatus": None,
+        "revisionCount": 1,
+        "version": 2,
+        "componentIds": [50, 60, 101],
+        "obligationModelIds": [42],
+        "hideMoreDetails": False,
+        "deploymentPending": False,
+    }
+
+
+def _import_result_data() -> dict[str, Any]:
+    return {
+        "total_components": 1,
+        "total_policies": 1,
+        "total_policy_models": 1,
+        "non_blocking_error": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "model,data,field,new_value",
+    [
+        pytest.param(
+            PolicyComponentRef, {"id": 42}, "id", 99, id="policy-component-ref"
+        ),
+        pytest.param(
+            ComponentGroup,
+            {"operator": "IN"},
+            "operator",
+            "NOT_IN",
+            id="component-group",
+        ),
+        pytest.param(
+            PolicyObligation, {"name": "log"}, "name", "changed", id="policy-obligation"
+        ),
+        pytest.param(
+            EnvironmentConfig, {}, "remote_access", 5, id="environment-config"
+        ),
+        pytest.param(
+            ExportOptions,
+            {"sandeEnabled": False, "plainTextEnabled": True},
+            "sande_enabled",
+            True,
+            id="export-options",
+        ),
+        pytest.param(ImportResult, None, "total_policies", 99, id="import-result"),
+        pytest.param(Policy, None, "name", "changed", id="policy"),
+        pytest.param(PolicyLite, None, "name", "changed", id="policy-lite"),
+    ],
+)
+def test_model_is_frozen(model, data, field, new_value):
+    if data is None:
+        if model is Policy:
+            data = _make_full_policy_data()
+        elif model is PolicyLite:
+            data = _make_policy_lite_data()
+        else:
+            data = _import_result_data()
+    instance = model.model_validate(data)
+    with pytest.raises(ValidationError):
+        setattr(instance, field, new_value)
+
+
+def test_policy_component_ref_minimal():
     raw: dict[str, Any] = {"id": 42}
     ref = PolicyComponentRef.model_validate(raw)
     assert ref.id == 42
@@ -32,7 +208,7 @@ def test_policy_component_ref_minimal() -> None:
     assert ref.version is None
 
 
-def test_policy_component_ref_full() -> None:
+def test_policy_component_ref_full():
     raw: dict[str, Any] = {
         "id": 101,
         "folderId": 5,
@@ -108,17 +284,8 @@ def test_policy_component_ref_full() -> None:
     assert ref.has_inactive_sub_components is False
 
 
-def test_policy_component_ref_is_frozen() -> None:
-    ref = PolicyComponentRef.model_validate({"id": 42})
-    with pytest.raises(ValidationError):
-        ref.id = 99  # type: ignore[misc]
-
-
-def test_component_group_from_api_payload() -> None:
-    raw: dict[str, Any] = {
-        "operator": "IN",
-        "components": [{"id": 42}, {"id": 43}],
-    }
+def test_component_group_from_api_payload():
+    raw: dict[str, Any] = {"operator": "IN", "components": [{"id": 42}, {"id": 43}]}
     group = ComponentGroup.model_validate(raw)
     assert group.operator == "IN"
     assert len(group.components) == 2
@@ -126,19 +293,12 @@ def test_component_group_from_api_payload() -> None:
     assert group.components[1].id == 43
 
 
-def test_component_group_empty_components() -> None:
-    raw: dict[str, Any] = {"operator": "IN"}
-    group = ComponentGroup.model_validate(raw)
+def test_component_group_empty_components():
+    group = ComponentGroup.model_validate({"operator": "IN"})
     assert group.components == []
 
 
-def test_component_group_is_frozen() -> None:
-    group = ComponentGroup.model_validate({"operator": "IN"})
-    with pytest.raises(ValidationError):
-        group.operator = "NOT_IN"  # type: ignore[misc]
-
-
-def test_policy_obligation_from_api_payload() -> None:
+def test_policy_obligation_from_api_payload():
     raw: dict[str, Any] = {
         "id": 10,
         "policyModelId": 42,
@@ -152,57 +312,37 @@ def test_policy_obligation_from_api_payload() -> None:
     assert obl.params == {"level": "INFO", "message": "Access granted"}
 
 
-def test_policy_obligation_minimal() -> None:
-    raw: dict[str, Any] = {"name": "notify"}
-    obl = PolicyObligation.model_validate(raw)
+def test_policy_obligation_minimal():
+    obl = PolicyObligation.model_validate({"name": "notify"})
     assert obl.id is None
     assert obl.policy_model_id == 0
     assert obl.name == "notify"
     assert obl.params == {}
 
 
-def test_policy_obligation_is_frozen() -> None:
-    obl = PolicyObligation.model_validate({"name": "log"})
-    with pytest.raises(ValidationError):
-        obl.name = "changed"  # type: ignore[misc]
-
-
-def test_environment_config_from_api_payload() -> None:
-    raw: dict[str, Any] = {"remoteAccess": 1, "timeSinceLastHBSecs": 300}
-    env = EnvironmentConfig.model_validate(raw)
+def test_environment_config_from_api_payload():
+    env = EnvironmentConfig.model_validate(
+        {"remoteAccess": 1, "timeSinceLastHBSecs": 300}
+    )
     assert env.remote_access == 1
     assert env.time_since_last_hb_secs == 300
 
 
-def test_environment_config_defaults() -> None:
-    raw: dict[str, Any] = {}
-    env = EnvironmentConfig.model_validate(raw)
+def test_environment_config_defaults():
+    env = EnvironmentConfig.model_validate({})
     assert env.remote_access == -1
     assert env.time_since_last_hb_secs == -1
 
 
-def test_environment_config_is_frozen() -> None:
-    env = EnvironmentConfig.model_validate({})
-    with pytest.raises(ValidationError):
-        env.remote_access = 5  # type: ignore[misc]
-
-
-def test_export_options_from_api_payload() -> None:
-    raw: dict[str, Any] = {"sandeEnabled": True, "plainTextEnabled": False}
-    opts = ExportOptions.model_validate(raw)
+def test_export_options_from_api_payload():
+    opts = ExportOptions.model_validate(
+        {"sandeEnabled": True, "plainTextEnabled": False}
+    )
     assert opts.sande_enabled is True
     assert opts.plain_text_enabled is False
 
 
-def test_export_options_is_frozen() -> None:
-    opts = ExportOptions.model_validate(
-        {"sandeEnabled": False, "plainTextEnabled": True},
-    )
-    with pytest.raises(ValidationError):
-        opts.sande_enabled = True  # type: ignore[misc]
-
-
-def test_import_result_from_api_payload() -> None:
+def test_import_result_from_api_payload():
     raw: dict[str, Any] = {
         "total_components": 5,
         "total_policies": 3,
@@ -216,112 +356,8 @@ def test_import_result_from_api_payload() -> None:
     assert ir.non_blocking_error is False
 
 
-def test_import_result_is_frozen() -> None:
-    ir = ImportResult.model_validate(
-        {
-            "total_components": 1,
-            "total_policies": 1,
-            "total_policy_models": 1,
-            "non_blocking_error": False,
-        },
-    )
-    with pytest.raises(ValidationError):
-        ir.total_policies = 99  # type: ignore[misc]
-
-
-def _make_full_policy_data() -> dict[str, Any]:
-    return {
-        "id": 82,
-        "folderId": 3,
-        "name": "Allow IT Ticket Access",
-        "fullName": "Allow IT Ticket Access",
-        "description": "Allows IT department to access support tickets",
-        "status": "DRAFT",
-        "category": "Policy",
-        "effectType": "allow",
-        "tags": [
-            {
-                "id": 30,
-                "key": "helpdesk_policy",
-                "label": "Helpdesk_Policy",
-                "type": "POLICY_TAG",
-                "status": "ACTIVE",
-            },
-        ],
-        "parentId": None,
-        "parentName": None,
-        "hasParent": False,
-        "hasSubPolicies": False,
-        "subjectComponents": [
-            {
-                "operator": "IN",
-                "components": [{"id": 50}],
-            },
-        ],
-        "hasToSubjectComponents": False,
-        "toSubjectComponents": [],
-        "actionComponents": [
-            {
-                "operator": "IN",
-                "components": [{"id": 60}],
-            },
-        ],
-        "fromResourceComponents": [
-            {
-                "operator": "IN",
-                "components": [{"id": 101}],
-            },
-        ],
-        "hasToResourceComponents": False,
-        "toResourceComponents": [],
-        "environmentConfig": {
-            "remoteAccess": -1,
-            "timeSinceLastHBSecs": -1,
-        },
-        "scheduleConfig": None,
-        "expression": "",
-        "allowObligations": [
-            {
-                "id": 10,
-                "policyModelId": 42,
-                "name": "log_obligation",
-                "params": {"level": "INFO", "message": "Access granted"},
-            },
-        ],
-        "denyObligations": [],
-        "subPolicy": False,
-        "subPolicyRefs": [],
-        "attributes": [],
-        "deploymentTime": 0,
-        "deployed": False,
-        "actionType": None,
-        "revisionCount": 0,
-        "ownerId": 0,
-        "ownerDisplayName": "Administrator",
-        "createdDate": 1713171640267,
-        "modifiedById": 0,
-        "modifiedBy": "Administrator",
-        "lastUpdatedDate": 1713171640252,
-        "skipValidate": False,
-        "reIndexNow": True,
-        "skipAddingTrueAllowAttribute": False,
-        "version": 1,
-        "authorities": [{"authority": "VIEW_POLICY"}],
-        "manualDeploy": False,
-        "deploymentTargets": [],
-        "deploymentRequest": None,
-        "folderPath": "/policies/helpdesk",
-        "activeWorkflowRequest": None,
-        "componentIds": [50, 60, 101],
-        "hidden": False,
-        "deploymentPending": False,
-        "type": None,
-    }
-
-
-def test_policy_from_api_payload() -> None:
-    raw = _make_full_policy_data()
-    policy = Policy.model_validate(raw)
+def test_policy_from_api_payload():
+    policy = Policy.model_validate(_make_full_policy_data())
     assert policy.id == 82
     assert policy.name == "Allow IT Ticket Access"
     assert policy.full_name == "Allow IT Ticket Access"
@@ -353,7 +389,7 @@ def test_policy_from_api_payload() -> None:
     assert policy.type is None
 
 
-def test_policy_minimal() -> None:
+def test_policy_minimal():
     raw: dict[str, Any] = {
         "id": 1,
         "name": "Minimal Policy",
@@ -378,66 +414,8 @@ def test_policy_minimal() -> None:
     assert policy.component_ids is None
 
 
-def test_policy_is_frozen() -> None:
-    policy = Policy.model_validate(_make_full_policy_data())
-    with pytest.raises(ValidationError):
-        policy.name = "changed"  # type: ignore[misc]
-
-
-def _make_policy_lite_data() -> dict[str, Any]:
-    return {
-        "id": 82,
-        "folderId": 3,
-        "folderName": "helpdesk",
-        "folderPath": "/policies/helpdesk",
-        "name": "Allow IT Ticket Access",
-        "lowercase_name": "allow it ticket access",
-        "rootFolder": None,
-        "policyFullName": "Allow IT Ticket Access",
-        "description": "Allows IT department to access support tickets",
-        "status": "APPROVED",
-        "effectType": "allow",
-        "lastUpdatedDate": 1713173211329,
-        "createdDate": 1713171640267,
-        "hasParent": False,
-        "hasSubPolicies": False,
-        "ownerId": 0,
-        "ownerDisplayName": "Administrator",
-        "modifiedById": 0,
-        "modifiedBy": "Administrator",
-        "tags": [
-            {
-                "id": 30,
-                "key": "helpdesk_policy",
-                "label": "Helpdesk_Policy",
-                "type": "POLICY_TAG",
-                "status": "ACTIVE",
-            },
-        ],
-        "noOfTags": 1,
-        "parentPolicy": None,
-        "subPolicies": [],
-        "childNodes": [],
-        "authorities": [{"authority": "VIEW_POLICY"}],
-        "manualDeploy": False,
-        "deploymentTime": 1713173211332,
-        "deployed": True,
-        "actionType": "DE",
-        "activeWorkflowId": None,
-        "activeEntityWorkflowRequestStatus": None,
-        "activeWorkflowRequestLevelStatus": None,
-        "revisionCount": 1,
-        "version": 2,
-        "componentIds": [50, 60, 101],
-        "obligationModelIds": [42],
-        "hideMoreDetails": False,
-        "deploymentPending": False,
-    }
-
-
-def test_policy_lite_from_api_payload() -> None:
-    raw = _make_policy_lite_data()
-    pl = PolicyLite.model_validate(raw)
+def test_policy_lite_from_api_payload():
+    pl = PolicyLite.model_validate(_make_policy_lite_data())
     assert pl.id == 82
     assert pl.name == "Allow IT Ticket Access"
     assert pl.policy_full_name == "Allow IT Ticket Access"
@@ -457,7 +435,7 @@ def test_policy_lite_from_api_payload() -> None:
     assert pl.deployment_pending is False
 
 
-def test_policy_lite_minimal() -> None:
+def test_policy_lite_minimal():
     raw: dict[str, Any] = {
         "id": 1,
         "name": "Minimal",
@@ -476,9 +454,3 @@ def test_policy_lite_minimal() -> None:
     assert pl.parent_policy is None
     assert pl.component_ids is None
     assert pl.obligation_model_ids is None
-
-
-def test_policy_lite_is_frozen() -> None:
-    pl = PolicyLite.model_validate(_make_policy_lite_data())
-    with pytest.raises(ValidationError):
-        pl.name = "changed"  # type: ignore[misc]

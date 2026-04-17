@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import io
 import json
+from typing import Any, Callable
 
+import pytest
 from _pytest.capture import CaptureFixture
 from rich.console import Console
 
@@ -52,69 +54,61 @@ TAG_COLUMNS = (
 def test_render_table_shows_headers_and_data() -> None:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, width=120)
-    tag = _make_tag()
 
-    render_table([tag], TAG_COLUMNS, console=console)
+    render_table([_make_tag()], TAG_COLUMNS, console=console)
 
     output = buf.getvalue()
-    assert "ID" in output
-    assert "Key" in output
-    assert "10" in output
-    assert "dept" in output
-    assert "Department" in output
+    for expected in ("ID", "Key", "10", "dept", "Department"):
+        assert expected in output
 
 
 def test_render_table_with_title() -> None:
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, width=120)
-    tag = _make_tag()
 
-    render_table([tag], TAG_COLUMNS, title="Tags", console=console)
+    render_table([_make_tag()], TAG_COLUMNS, title="Tags", console=console)
 
-    output = buf.getvalue()
-    assert "Tags" in output
+    assert "Tags" in buf.getvalue()
 
 
-def test_render_json_single_model(capsys: CaptureFixture[str]) -> None:
-    tag = _make_tag()
+@pytest.mark.parametrize(
+    "payload_factory,extractor",
+    [
+        pytest.param(
+            _make_tag,
+            lambda parsed: parsed,
+            id="single-model",
+        ),
+        pytest.param(
+            lambda: [_make_tag()],
+            lambda parsed: parsed[0],
+            id="list-of-models",
+        ),
+    ],
+)
+def test_render_json(
+    capsys: CaptureFixture[str],
+    payload_factory: Callable[[], Any],
+    extractor: Callable[[Any], Any],
+) -> None:
+    render_json(payload_factory())
 
-    render_json(tag)
-
-    captured = capsys.readouterr()
-    parsed = json.loads(captured.out)
-    assert parsed["id"] == 10
-    assert parsed["key"] == "dept"
-
-
-def test_render_json_list_of_models(capsys: CaptureFixture[str]) -> None:
-    tags = [_make_tag()]
-
-    render_json(tags)
-
-    captured = capsys.readouterr()
-    parsed = json.loads(captured.out)
-    assert isinstance(parsed, list)
-    assert parsed[0]["id"] == 10
+    parsed = json.loads(capsys.readouterr().out)
+    item = extractor(parsed)
+    assert item["id"] == 10
+    assert item["key"] == "dept"
 
 
 def test_render_dispatches_to_json_when_flag_set(capsys: CaptureFixture[str]) -> None:
-    ctx = _make_ctx(json_output=True)
-    tag = _make_tag()
+    render(_make_ctx(json_output=True), _make_tag(), TAG_COLUMNS)
 
-    render(ctx, tag, TAG_COLUMNS)
-
-    captured = capsys.readouterr()
-    parsed = json.loads(captured.out)
+    parsed = json.loads(capsys.readouterr().out)
     assert parsed["id"] == 10
 
 
 def test_render_dispatches_to_table_when_flag_unset(
     capsys: CaptureFixture[str],
 ) -> None:
-    ctx = _make_ctx(json_output=False)
-    tag = _make_tag()
+    render(_make_ctx(json_output=False), _make_tag(), TAG_COLUMNS)
 
-    render(ctx, tag, TAG_COLUMNS)
-
-    captured = capsys.readouterr()
-    assert "dept" in captured.out
+    assert "dept" in capsys.readouterr().out

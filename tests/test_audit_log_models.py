@@ -11,7 +11,19 @@ from nextlabs_sdk._cloudaz._audit_log_models import (
 )
 
 
-def test_audit_log_entry_from_api_payload() -> None:
+def _basic_entry() -> dict[str, object]:
+    return {
+        "id": 1,
+        "timestamp": 100,
+        "action": "LOGIN",
+        "actorId": 0,
+        "actor": "Admin",
+        "entityType": "AU",
+        "entityId": 0,
+    }
+
+
+def test_audit_log_entry_from_api_payload():
     raw = {
         "id": 12,
         "timestamp": 1718782853766,
@@ -35,38 +47,37 @@ def test_audit_log_entry_from_api_payload() -> None:
     assert entry.new_value is not None
 
 
-def test_audit_log_entry_is_frozen() -> None:
-    entry = AuditLogEntry.model_validate(
-        {
-            "id": 1,
-            "timestamp": 100,
-            "action": "LOGIN",
-            "actorId": 0,
-            "actor": "Admin",
-            "entityType": "AU",
-            "entityId": 0,
-        }
-    )
-    with pytest.raises(ValidationError):
-        entry.action = "LOGOUT"  # type: ignore[misc]
-
-
-def test_audit_log_entry_optional_fields_default_to_none() -> None:
-    raw = {
-        "id": 1,
-        "timestamp": 100,
-        "action": "LOGIN",
-        "actorId": 0,
-        "actor": "Admin",
-        "entityType": "AU",
-        "entityId": 0,
-    }
-    entry = AuditLogEntry.model_validate(raw)
+def test_audit_log_entry_optional_fields_default_to_none():
+    entry = AuditLogEntry.model_validate(_basic_entry())
     assert entry.old_value is None
     assert entry.new_value is None
 
 
-def test_audit_log_query_serializes_to_api_format() -> None:
+@pytest.mark.parametrize(
+    "model_cls,raw,mutation",
+    [
+        pytest.param(
+            AuditLogEntry,
+            _basic_entry(),
+            ("action", "LOGOUT"),
+            id="audit-log-entry",
+        ),
+        pytest.param(
+            AuditLogUser,
+            {"firstName": "A", "lastName": "B", "username": "ab"},
+            ("username", "changed"),
+            id="audit-log-user",
+        ),
+    ],
+)
+def test_frozen_model_rejects_mutation(model_cls, raw, mutation):
+    instance = model_cls.model_validate(raw)
+    attr, value = mutation
+    with pytest.raises(ValidationError):
+        setattr(instance, attr, value)
+
+
+def test_audit_log_query_serializes_to_api_format():
     query = AuditLogQuery(
         start_date=1716825600000,
         end_date=1717516799999,
@@ -84,11 +95,8 @@ def test_audit_log_query_serializes_to_api_format() -> None:
     assert payload["pageSize"] == 10
 
 
-def test_audit_log_query_excludes_none_fields() -> None:
-    query = AuditLogQuery(
-        start_date=1716825600000,
-        end_date=1717516799999,
-    )
+def test_audit_log_query_excludes_none_fields():
+    query = AuditLogQuery(start_date=1716825600000, end_date=1717516799999)
     payload = query.model_dump(by_alias=True, exclude_none=True)
     assert "action" not in payload
     assert "entityType" not in payload
@@ -97,24 +105,20 @@ def test_audit_log_query_excludes_none_fields() -> None:
     assert "endDate" in payload
 
 
-def test_audit_log_query_with_usernames() -> None:
-    query = AuditLogQuery(
-        start_date=100,
-        end_date=200,
-        usernames=["admin", "testuser"],
-    )
+def test_audit_log_query_with_usernames():
+    query = AuditLogQuery(start_date=100, end_date=200, usernames=["admin", "testuser"])
     payload = query.model_dump(by_alias=True, exclude_none=True)
     assert payload["usernames"] == ["admin", "testuser"]
 
 
-def test_export_request_with_ids() -> None:
+def test_export_request_with_ids():
     req = ExportAuditLogsRequest(ids=[5, 10, 15])
     payload = req.model_dump(by_alias=True, exclude_none=True)
     assert payload["ids"] == [5, 10, 15]
     assert "query" not in payload
 
 
-def test_export_request_with_query() -> None:
+def test_export_request_with_query():
     query = AuditLogQuery(start_date=100, end_date=200, action="LOGIN")
     req = ExportAuditLogsRequest(query=query)
     payload = req.model_dump(by_alias=True, exclude_none=True)
@@ -123,17 +127,9 @@ def test_export_request_with_query() -> None:
     assert payload["query"]["action"] == "LOGIN"
 
 
-def test_audit_log_user_from_api_payload() -> None:
+def test_audit_log_user_from_api_payload():
     raw = {"firstName": "Test", "lastName": "User", "username": "testuser"}
     user = AuditLogUser.model_validate(raw)
     assert user.first_name == "Test"
     assert user.last_name == "User"
     assert user.username == "testuser"
-
-
-def test_audit_log_user_is_frozen() -> None:
-    user = AuditLogUser.model_validate(
-        {"firstName": "A", "lastName": "B", "username": "ab"}
-    )
-    with pytest.raises(ValidationError):
-        user.username = "changed"  # type: ignore[misc]

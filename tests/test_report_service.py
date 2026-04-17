@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 from mockito import mock, when
+import pytest
 
 from nextlabs_sdk._cloudaz._report_models import (
     ApplicationUser,
@@ -13,8 +13,6 @@ from nextlabs_sdk._cloudaz._report_models import (
     EnforcementEntry,
     PolicyActivityReport,
     PolicyActivityReportDetail,
-)
-from nextlabs_sdk._cloudaz._report_models import (
     PolicyActivityReportRequest,
     ReportCriteria,
     ReportFilterGeneral,
@@ -30,6 +28,15 @@ from nextlabs_sdk.exceptions import ServerError
 
 BASE_URL = "https://cloudaz.example.com"
 _BASE_PATH = "/nextlabs-reporter/api/v1/policy-activity-reports"
+
+
+def _enforce_params(page: int = 0) -> dict[str, object]:
+    return {
+        "page": page,
+        "size": 20,
+        "sortBy": "rowId",
+        "sortOrder": "ascending",
+    }
 
 
 def _make_request(path: str = "/api") -> httpx.Request:
@@ -68,6 +75,26 @@ def _make_data_envelope(data: object) -> httpx.Response:
     )
 
 
+def _list_params(
+    *,
+    title: str = "",
+    is_shared: bool = True,
+    policy_decision: str = "AD",
+    sort_order: str = "ascending",
+    size: int = 20,
+    page: int = 0,
+) -> dict[str, object]:
+    return {
+        "title": title,
+        "isShared": is_shared,
+        "policyDecision": policy_decision,
+        "sortBy": "title",
+        "sortOrder": sort_order,
+        "size": size,
+        "page": page,
+    }
+
+
 def _make_report_summary() -> dict[str, object]:
     return {
         "id": 8,
@@ -81,6 +108,19 @@ def _make_report_summary() -> dict[str, object]:
         "endDate": "2024-08-21T03:05:16.148+00:00",
         "lastUpdatedDate": "2024-08-18T02:17:23.484+00:00",
         "type": "report",
+    }
+
+
+def _make_enforcement_data() -> dict[str, object]:
+    return {
+        "POLICY_NAME": "Encryption Policy",
+        "ACTION": "SELECT",
+        "FROM_RESOURCE_NAME": "file1.txt",
+        "TIME": "2024-10-07T07:26:14.556+00:00",
+        "USER_NAME": "user@example.com",
+        "ACTION_SHORT_CODE": "e3",
+        "ROW_ID": 2,
+        "POLICY_DECISION": "A",
     }
 
 
@@ -102,29 +142,23 @@ def _make_simple_request() -> PolicyActivityReportRequest:
     )
 
 
+@pytest.fixture
+def client():
+    return mock(httpx.Client)
+
+
+@pytest.fixture
+def service(client):
+    return PolicyActivityReportService(client)
+
+
 # --- list ---
 
 
-def test_list_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_reporter_envelope(
-        content=[_make_report_summary()],
-        total_pages=1,
-        total_elements=1,
+def test_list_returns_paginator(client, service):
+    when(client).get(_BASE_PATH, params=_list_params()).thenReturn(
+        _make_reporter_envelope(content=[_make_report_summary()]),
     )
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 0,
-        },
-    ).thenReturn(response)
 
     paginator = service.list()
 
@@ -135,41 +169,16 @@ def test_list_returns_paginator() -> None:
     assert reports[0].id == 8
 
 
-def test_list_paginates_multiple_pages() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+def test_list_paginates_multiple_pages(client, service):
     r1 = _make_report_summary()
     r1["id"] = 1
     r2 = _make_report_summary()
     r2["id"] = 2
-
     page0 = _make_reporter_envelope(content=[r1], total_pages=2, total_elements=2)
     page1 = _make_reporter_envelope(content=[r2], total_pages=2, total_elements=2)
 
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 0,
-        },
-    ).thenReturn(page0)
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "",
-            "isShared": True,
-            "policyDecision": "AD",
-            "sortBy": "title",
-            "sortOrder": "ascending",
-            "size": 20,
-            "page": 1,
-        },
-    ).thenReturn(page1)
+    when(client).get(_BASE_PATH, params=_list_params(page=0)).thenReturn(page0)
+    when(client).get(_BASE_PATH, params=_list_params(page=1)).thenReturn(page1)
 
     reports = list(service.list())
     assert len(reports) == 2
@@ -177,22 +186,17 @@ def test_list_paginates_multiple_pages() -> None:
     assert reports[1].id == 2
 
 
-def test_list_with_filters() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_reporter_envelope(content=[], total_elements=0)
-    when(client).get(
-        _BASE_PATH,
-        params={
-            "title": "Deny",
-            "isShared": False,
-            "policyDecision": "D",
-            "sortBy": "title",
-            "sortOrder": "descending",
-            "size": 10,
-            "page": 0,
-        },
-    ).thenReturn(response)
+def test_list_with_filters(client, service):
+    params = _list_params(
+        title="Deny",
+        is_shared=False,
+        policy_decision="D",
+        sort_order="descending",
+        size=10,
+    )
+    when(client).get(_BASE_PATH, params=params).thenReturn(
+        _make_reporter_envelope(content=[], total_elements=0),
+    )
 
     reports = list(
         service.list(
@@ -209,29 +213,28 @@ def test_list_with_filters() -> None:
 # --- get ---
 
 
-def test_get_returns_detail() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "criteria": {
-                "filters": {"general": {"type": "custom"}},
-                "header": ["USER_NAME"],
-                "pagesize": 20,
-            },
-            "widgets": [
-                {
-                    "id": 1,
-                    "name": "enforcement",
-                    "title": "Trend",
-                    "chartType": "line",
-                    "attributeName": "decision",
-                    "maxSize": 10,
+def test_get_returns_detail(client, service):
+    when(client).get(f"{_BASE_PATH}/42").thenReturn(
+        _make_data_envelope(
+            data={
+                "criteria": {
+                    "filters": {"general": {"type": "custom"}},
+                    "header": ["USER_NAME"],
+                    "pagesize": 20,
                 },
-            ],
-        },
+                "widgets": [
+                    {
+                        "id": 1,
+                        "name": "enforcement",
+                        "title": "Trend",
+                        "chartType": "line",
+                        "attributeName": "decision",
+                        "maxSize": 10,
+                    },
+                ],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/42").thenReturn(response)
 
     detail = service.get(42)
 
@@ -242,39 +245,41 @@ def test_get_returns_detail() -> None:
     assert len(detail.widgets) == 1
 
 
-# --- create ---
+# --- create / modify (same-shape, HTTP verb differs) ---
 
 
-def test_create_returns_summary() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    request = _make_simple_request()
+def _stub_report_call(client, verb: str, url: str, payload: dict[str, object]):
     response = _make_data_envelope(data=_make_report_summary())
-    when(client).post(
-        _BASE_PATH,
-        json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
-
-    report = service.create(request)
-
-    assert isinstance(report, PolicyActivityReport)
-    assert report.id == 8
+    stub = when(client)
+    if verb == "post":
+        stub.post(url, json=payload).thenReturn(response)
+    else:
+        stub.put(url, json=payload).thenReturn(response)
 
 
-# --- modify ---
-
-
-def test_modify_returns_summary() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+@pytest.mark.parametrize(
+    "verb,url,invoke",
+    [
+        pytest.param(
+            "post",
+            _BASE_PATH,
+            lambda s, r: s.create(r),
+            id="create",
+        ),
+        pytest.param(
+            "put",
+            f"{_BASE_PATH}/42",
+            lambda s, r: s.modify(42, r),
+            id="modify",
+        ),
+    ],
+)
+def test_create_and_modify_return_summary(client, service, verb, url, invoke):
     request = _make_simple_request()
-    response = _make_data_envelope(data=_make_report_summary())
-    when(client).put(
-        f"{_BASE_PATH}/42",
-        json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
+    payload = request.model_dump(by_alias=True, exclude_none=True)
+    _stub_report_call(client, verb, url, payload)
 
-    report = service.modify(42, request)
+    report = invoke(service, request)
 
     assert isinstance(report, PolicyActivityReport)
     assert report.id == 8
@@ -283,73 +288,50 @@ def test_modify_returns_summary() -> None:
 # --- delete ---
 
 
-def test_delete_by_ids() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    request = DeleteReportsRequest(report_ids=[5, 10])
-    response = httpx.Response(
-        200,
-        json={"statusCode": "1002", "message": "Data deleted successfully"},
-        request=_make_request(),
-    )
+@pytest.mark.parametrize(
+    "status,json_body,expectation",
+    [
+        pytest.param(
+            200,
+            {"statusCode": "1002", "message": "Data deleted successfully"},
+            None,
+            id="success",
+        ),
+        pytest.param(500, {"message": "Server error"}, ServerError, id="server-error"),
+    ],
+)
+def test_delete_dispatches_to_api(client, service, status, json_body, expectation):
+    request = DeleteReportsRequest(report_ids=[5, 10] if expectation is None else [999])
     when(client).post(
         f"{_BASE_PATH}/delete",
-        json={"reportIds": [5, 10]},
-    ).thenReturn(response)
+        json={"reportIds": request.report_ids},
+    ).thenReturn(httpx.Response(status, json=json_body, request=_make_request()))
 
-    service.delete(request)
-
-
-def test_delete_raises_on_error() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    request = DeleteReportsRequest(report_ids=[999])
-    response = httpx.Response(
-        500,
-        json={"message": "Server error"},
-        request=_make_request(),
-    )
-    when(client).post(
-        f"{_BASE_PATH}/delete",
-        json={"reportIds": [999]},
-    ).thenReturn(response)
-
-    with pytest.raises(ServerError):
+    if expectation is None:
         service.delete(request)
-
-
-def _make_enforcement_data() -> dict[str, object]:
-    return {
-        "POLICY_NAME": "Encryption Policy",
-        "ACTION": "SELECT",
-        "FROM_RESOURCE_NAME": "file1.txt",
-        "TIME": "2024-10-07T07:26:14.556+00:00",
-        "USER_NAME": "user@example.com",
-        "ACTION_SHORT_CODE": "e3",
-        "ROW_ID": 2,
-        "POLICY_DECISION": "A",
-    }
+    else:
+        with pytest.raises(expectation):
+            service.delete(request)
 
 
 # --- get_widgets ---
 
 
-def test_get_widgets_returns_widget_data() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "enforcements": [
-                {
-                    "hour": 1708070400000,
-                    "allowCount": 5,
-                    "denyCount": 2,
-                    "decisionCount": 7,
-                },
-            ],
-        },
+def test_get_widgets_returns_widget_data(client, service):
+    when(client).get(f"{_BASE_PATH}/42/widgets").thenReturn(
+        _make_data_envelope(
+            data={
+                "enforcements": [
+                    {
+                        "hour": 1708070400000,
+                        "allowCount": 5,
+                        "denyCount": 2,
+                        "decisionCount": 7,
+                    },
+                ],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/42/widgets").thenReturn(response)
 
     data = service.get_widgets(42)
 
@@ -361,18 +343,11 @@ def test_get_widgets_returns_widget_data() -> None:
 # --- get_enforcements ---
 
 
-def test_get_enforcements_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_reporter_envelope(
-        content=[_make_enforcement_data()],
-        total_pages=1,
-        total_elements=1,
-    )
+def test_get_enforcements_returns_paginator(client, service):
     when(client).get(
         f"{_BASE_PATH}/42/enforcements",
-        params={"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_enforce_params(),
+    ).thenReturn(_make_reporter_envelope(content=[_make_enforcement_data()]))
 
     paginator = service.get_enforcements(42)
 
@@ -383,24 +358,21 @@ def test_get_enforcements_returns_paginator() -> None:
     assert entries[0].row_id == 2
 
 
-def test_get_enforcements_multi_page() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+def test_get_enforcements_multi_page(client, service):
     e1 = _make_enforcement_data()
     e1["ROW_ID"] = 1
     e2 = _make_enforcement_data()
     e2["ROW_ID"] = 2
-
     page0 = _make_reporter_envelope(content=[e1], total_pages=2, total_elements=2)
     page1 = _make_reporter_envelope(content=[e2], total_pages=2, total_elements=2)
 
     when(client).get(
         f"{_BASE_PATH}/42/enforcements",
-        params={"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
+        params=_enforce_params(0),
     ).thenReturn(page0)
     when(client).get(
         f"{_BASE_PATH}/42/enforcements",
-        params={"page": 1, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
+        params=_enforce_params(1),
     ).thenReturn(page1)
 
     entries = list(service.get_enforcements(42))
@@ -412,52 +384,54 @@ def test_get_enforcements_multi_page() -> None:
 # --- export ---
 
 
-def test_export_returns_bytes() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    csv_content = b"ROW_ID,TIME,USER_NAME\n1,2024-01-01,user\n"
-    response = httpx.Response(200, content=csv_content, request=_make_request())
+@pytest.mark.parametrize(
+    "status,content,expectation,expected_result",
+    [
+        pytest.param(
+            200,
+            b"ROW_ID,TIME,USER_NAME\n1,2024-01-01,user\n",
+            None,
+            b"ROW_ID,TIME,USER_NAME\n1,2024-01-01,user\n",
+            id="success",
+        ),
+        pytest.param(500, None, ServerError, None, id="server-error"),
+    ],
+)
+def test_export(client, service, status, content, expectation, expected_result):
+    response = (
+        httpx.Response(500, json={"message": "error"}, request=_make_request())
+        if status == 500
+        else httpx.Response(200, content=content, request=_make_request())
+    )
     when(client).post(
         f"{_BASE_PATH}/42/export",
         params={"sortBy": "rowId", "sortOrder": "ascending"},
     ).thenReturn(response)
 
-    result = service.export(42)
-
-    assert result == csv_content
-
-
-def test_export_raises_on_error() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = httpx.Response(500, json={"message": "error"}, request=_make_request())
-    when(client).post(
-        f"{_BASE_PATH}/42/export",
-        params={"sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
-
-    with pytest.raises(ServerError):
-        service.export(42)
+    if expectation is None:
+        assert service.export(42) == expected_result
+    else:
+        with pytest.raises(expectation):
+            service.export(42)
 
 
 # --- generate_widgets ---
 
 
-def test_generate_widgets_returns_widget_data() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+def test_generate_widgets_returns_widget_data(client, service):
     request = _make_simple_request()
-    response = _make_data_envelope(
-        data={
-            "enforcements": [
-                {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1}
-            ]
-        },
-    )
     when(client).post(
         f"{_BASE_PATH}/generate/widgets",
         json=request.model_dump(by_alias=True, exclude_none=True),
-    ).thenReturn(response)
+    ).thenReturn(
+        _make_data_envelope(
+            data={
+                "enforcements": [
+                    {"hour": 100, "allowCount": 1, "denyCount": 0, "decisionCount": 1}
+                ]
+            },
+        ),
+    )
 
     data = service.generate_widgets(request)
 
@@ -468,21 +442,14 @@ def test_generate_widgets_returns_widget_data() -> None:
 # --- generate_enforcements ---
 
 
-def test_generate_enforcements_returns_paginator() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+def test_generate_enforcements_returns_paginator(client, service):
     request = _make_simple_request()
     payload = request.model_dump(by_alias=True, exclude_none=True)
-    response = _make_reporter_envelope(
-        content=[_make_enforcement_data()],
-        total_pages=1,
-        total_elements=1,
-    )
     when(client).post(
         f"{_BASE_PATH}/generate/enforcements",
         json=payload,
-        params={"page": 0, "size": 20, "sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+        params=_enforce_params(),
+    ).thenReturn(_make_reporter_envelope(content=[_make_enforcement_data()]))
 
     entries = list(service.generate_enforcements(request))
 
@@ -493,40 +460,33 @@ def test_generate_enforcements_returns_paginator() -> None:
 # --- generate_export ---
 
 
-def test_generate_export_returns_bytes() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
+def test_generate_export_returns_bytes(client, service):
     request = _make_simple_request()
     payload = request.model_dump(by_alias=True, exclude_none=True)
-    csv_content = b"data"
-    response = httpx.Response(200, content=csv_content, request=_make_request())
     when(client).post(
         f"{_BASE_PATH}/generate/export",
         json=payload,
         params={"sortBy": "rowId", "sortOrder": "ascending"},
-    ).thenReturn(response)
+    ).thenReturn(httpx.Response(200, content=b"data", request=_make_request()))
 
-    result = service.generate_export(request)
-
-    assert result == csv_content
+    assert service.generate_export(request) == b"data"
 
 
 # --- Cached data ---
 
 
-def test_list_cached_users() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[
-            {
-                "displayName": "LocalSystem@localhost",
-                "firstName": "User",
-                "lastName": "System",
-            }
-        ],
+def test_list_cached_users(client, service):
+    when(client).get(f"{_BASE_PATH}/users").thenReturn(
+        _make_data_envelope(
+            data=[
+                {
+                    "displayName": "LocalSystem@localhost",
+                    "firstName": "User",
+                    "lastName": "System",
+                }
+            ],
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/users").thenReturn(response)
 
     users = service.list_cached_users()
 
@@ -535,13 +495,12 @@ def test_list_cached_users() -> None:
     assert users[0].display_name == "LocalSystem@localhost"
 
 
-def test_list_cached_policies() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"name": "Test", "fullName": "/ROOT_187/Testing Policy"}],
+def test_list_cached_policies(client, service):
+    when(client).get(f"{_BASE_PATH}/policies").thenReturn(
+        _make_data_envelope(
+            data=[{"name": "Test", "fullName": "/ROOT_187/Testing Policy"}],
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/policies").thenReturn(response)
 
     policies = service.list_cached_policies()
 
@@ -550,19 +509,18 @@ def test_list_cached_policies() -> None:
     assert policies[0].full_name == "/ROOT_187/Testing Policy"
 
 
-def test_get_resource_actions() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "policyModelActions": {
-                "test type": [
-                    {"policyModelId": 43, "label": "action1", "shortCode": "dw"}
-                ],
+def test_get_resource_actions(client, service):
+    when(client).get(f"{_BASE_PATH}/resource-actions").thenReturn(
+        _make_data_envelope(
+            data={
+                "policyModelActions": {
+                    "test type": [
+                        {"policyModelId": 43, "label": "action1", "shortCode": "dw"}
+                    ],
+                },
             },
-        },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/resource-actions").thenReturn(response)
 
     result = service.get_resource_actions()
 
@@ -570,44 +528,43 @@ def test_get_resource_actions() -> None:
     assert "test type" in result.policy_model_actions
 
 
-def test_get_mappings() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data={
-            "resource": [
-                {
-                    "id": 11,
-                    "name": "FROM_RESOURCE_NAME",
-                    "mappedColumn": "FROM_RESOURCE_NAME",
-                    "dataType": "STRING",
-                    "attrType": "RESOURCE",
-                    "isDynamic": False,
-                }
-            ],
-            "user": [
-                {
-                    "id": 2,
-                    "name": "USER_NAME",
-                    "mappedColumn": "USER_NAME",
-                    "dataType": "STRING",
-                    "attrType": "USER",
-                    "isDynamic": False,
-                }
-            ],
-            "others": [
-                {
-                    "id": 1,
-                    "name": "DATE",
-                    "mappedColumn": "TIME",
-                    "dataType": "TIMESTAMP",
-                    "attrType": "OTHERS",
-                    "isDynamic": False,
-                }
-            ],
-        },
+def test_get_mappings(client, service):
+    when(client).get(f"{_BASE_PATH}/mappings").thenReturn(
+        _make_data_envelope(
+            data={
+                "resource": [
+                    {
+                        "id": 11,
+                        "name": "FROM_RESOURCE_NAME",
+                        "mappedColumn": "FROM_RESOURCE_NAME",
+                        "dataType": "STRING",
+                        "attrType": "RESOURCE",
+                        "isDynamic": False,
+                    }
+                ],
+                "user": [
+                    {
+                        "id": 2,
+                        "name": "USER_NAME",
+                        "mappedColumn": "USER_NAME",
+                        "dataType": "STRING",
+                        "attrType": "USER",
+                        "isDynamic": False,
+                    }
+                ],
+                "others": [
+                    {
+                        "id": 1,
+                        "name": "DATE",
+                        "mappedColumn": "TIME",
+                        "dataType": "TIMESTAMP",
+                        "attrType": "OTHERS",
+                        "isDynamic": False,
+                    }
+                ],
+            },
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/mappings").thenReturn(response)
 
     result = service.get_mappings()
 
@@ -619,13 +576,10 @@ def test_get_mappings() -> None:
 # --- Sharing ---
 
 
-def test_list_user_groups() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"title": "All Policy Server Users", "id": 1}],
+def test_list_user_groups(client, service):
+    when(client).get(f"{_BASE_PATH}/share/user-groups").thenReturn(
+        _make_data_envelope(data=[{"title": "All Policy Server Users", "id": 1}]),
     )
-    when(client).get(f"{_BASE_PATH}/share/user-groups").thenReturn(response)
 
     groups = service.list_user_groups()
 
@@ -634,13 +588,12 @@ def test_list_user_groups() -> None:
     assert groups[0].title == "All Policy Server Users"
 
 
-def test_list_application_users() -> None:
-    client = mock(httpx.Client)
-    service = PolicyActivityReportService(client)
-    response = _make_data_envelope(
-        data=[{"firstName": "Test", "lastName": "User", "username": "testuser"}],
+def test_list_application_users(client, service):
+    when(client).get(f"{_BASE_PATH}/share/application-users").thenReturn(
+        _make_data_envelope(
+            data=[{"firstName": "Test", "lastName": "User", "username": "testuser"}],
+        ),
     )
-    when(client).get(f"{_BASE_PATH}/share/application-users").thenReturn(response)
 
     users = service.list_application_users()
 

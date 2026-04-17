@@ -22,12 +22,12 @@ def _make_response(
     )
 
 
-def test_decode_json_returns_body_on_valid_json() -> None:
+def test_decode_json_returns_body_on_valid_json():
     response = _make_response(200, content=b'{"a": 1}')
     assert decode_json(response) == {"a": 1}
 
 
-def test_decode_json_raises_api_error_on_invalid_json() -> None:
+def test_decode_json_raises_api_error_on_invalid_json():
     response = _make_response(200, content=b"<html>oops</html>")
     with pytest.raises(ApiError) as exc_info:
         decode_json(response)
@@ -37,12 +37,8 @@ def test_decode_json_raises_api_error_on_invalid_json() -> None:
     assert exc_info.value.request_url == ("https://example.com/cas/oidc/accessToken")
 
 
-def test_decode_json_message_includes_status_and_content_type() -> None:
-    response = _make_response(
-        500,
-        content=b"boom",
-        content_type="text/plain",
-    )
+def test_decode_json_message_includes_status_and_content_type():
+    response = _make_response(500, content=b"boom", content_type="text/plain")
     with pytest.raises(ApiError) as exc_info:
         decode_json(response)
     msg = exc_info.value.message
@@ -50,7 +46,7 @@ def test_decode_json_message_includes_status_and_content_type() -> None:
     assert "Content-Type=text/plain" in msg
 
 
-def test_decode_json_message_reports_missing_content_type_as_unknown() -> None:
+def test_decode_json_message_reports_missing_content_type_as_unknown():
     request = httpx.Request("GET", "https://example.com/x")
     response = httpx.Response(200, content=b"nope", request=request)
     assert "content-type" not in response.headers
@@ -59,60 +55,49 @@ def test_decode_json_message_reports_missing_content_type_as_unknown() -> None:
     assert "Content-Type=unknown" in exc_info.value.message
 
 
-def test_decode_json_message_includes_redirect_chain() -> None:
-    original = httpx.Request("GET", "https://example.com/redirect")
-    final = httpx.Request("GET", "https://example.com/final")
-    history_response = httpx.Response(
-        302,
-        headers={"location": "https://example.com/final"},
-        request=original,
-    )
+@pytest.mark.parametrize(
+    "history_count,expected_phrase",
+    [
+        pytest.param(1, "after 1 redirect", id="single-redirect"),
+        pytest.param(2, "after 2 redirects", id="multiple-redirects-pluralise"),
+    ],
+)
+def test_decode_json_message_includes_redirect_chain(history_count, expected_phrase):
+    urls = [f"https://example.com/hop{i}" for i in range(history_count)]
+    final_url = "https://example.com/final"
+    history = [
+        httpx.Response(
+            302,
+            headers={"location": urls[i + 1] if i + 1 < len(urls) else final_url},
+            request=httpx.Request("GET", urls[i]),
+        )
+        for i in range(history_count)
+    ]
     response = httpx.Response(
         200,
         content=b"<html>login</html>",
         headers={"content-type": "text/html;charset=utf-8"},
-        request=final,
-        history=[history_response],
+        request=httpx.Request("GET", final_url),
+        history=history,
     )
     with pytest.raises(ApiError) as exc_info:
         decode_json(response)
     msg = exc_info.value.message
     assert "HTTP 200" in msg
     assert "Content-Type=text/html;charset=utf-8" in msg
-    assert "after 1 redirect" in msg
-    assert "https://example.com/redirect" in msg
-    assert "https://example.com/final" in msg
+    assert expected_phrase in msg
+    assert urls[0] in msg
+    assert final_url in msg
 
 
-def test_decode_json_message_pluralises_multiple_redirects() -> None:
-    first_req = httpx.Request("GET", "https://example.com/a")
-    second_req = httpx.Request("GET", "https://example.com/b")
-    final_req = httpx.Request("GET", "https://example.com/c")
-    history = [
-        httpx.Response(302, headers={"location": "/b"}, request=first_req),
-        httpx.Response(302, headers={"location": "/c"}, request=second_req),
-    ]
-    response = httpx.Response(
-        200,
-        content=b"not json",
-        headers={"content-type": "text/html"},
-        request=final_req,
-        history=history,
-    )
-    with pytest.raises(ApiError) as exc_info:
-        decode_json(response)
-    assert "after 2 redirects" in exc_info.value.message
-
-
-def test_decode_json_respects_custom_error_class() -> None:
+def test_decode_json_respects_custom_error_class():
     response = _make_response(200, content=b"nope")
     with pytest.raises(AuthenticationError):
         decode_json(response, error_cls=AuthenticationError)
 
 
-def test_decode_json_truncates_long_bodies() -> None:
-    big = b"x" * 2000
-    response = _make_response(200, content=big)
+def test_decode_json_truncates_long_bodies():
+    response = _make_response(200, content=b"x" * 2000)
     with pytest.raises(ApiError) as exc_info:
         decode_json(response)
     body = exc_info.value.response_body or ""
@@ -120,16 +105,16 @@ def test_decode_json_truncates_long_bodies() -> None:
     assert body.endswith("… (truncated)")
 
 
-def test_require_key_returns_value_when_present() -> None:
+def test_require_key_returns_value_when_present():
     assert require_key({"foo": 42}, "foo") == 42
 
 
-def test_require_key_raises_api_error_when_missing() -> None:
+def test_require_key_raises_api_error_when_missing():
     with pytest.raises(ApiError) as exc_info:
         require_key({"foo": 1}, "bar", context=" in envelope")
     assert "missing 'bar' in envelope" in exc_info.value.message
 
 
-def test_require_key_respects_custom_error_class() -> None:
+def test_require_key_respects_custom_error_class():
     with pytest.raises(AuthenticationError):
         require_key({}, "id_token", error_cls=AuthenticationError)
