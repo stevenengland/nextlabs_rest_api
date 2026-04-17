@@ -272,3 +272,76 @@ def test_pdp_permissions_empty() -> None:
     when(mock_client).permissions(...).thenReturn(_perm_response())
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
     assert result.exit_code == 0
+
+
+# --- output format dispatch ---
+
+
+@pytest.mark.parametrize(
+    "fmt",
+    ["table", "wide", "detail"],
+)
+def test_pdp_eval_non_json_formats_show_sections(fmt: str) -> None:
+    mock_client = _stub_client()
+    obligations = [
+        Obligation(
+            id="log-obligation",
+            attributes=[ObligationAttribute(id="log-level", attr_value="info")],
+        ),
+    ]
+    refs = [PolicyRef(id="AllowAll", version="1.0")]
+    when(mock_client).evaluate(...).thenReturn(
+        _eval_response(obligations=obligations, policy_refs=refs),
+    )
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", fmt, *_EVAL_ARGS, "--return-policy-ids"],
+    )
+    assert result.exit_code == 0
+    assert "Decision:" in result.output
+    assert "Permit" in result.output
+    assert "Obligations" in result.output
+    assert "Matched Policies" in result.output
+
+
+def test_pdp_eval_json_format_returns_parseable_json() -> None:
+    mock_client = _stub_client()
+    when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_EVAL_ARGS])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["eval_results"][0]["decision"] == "Permit"
+
+
+@pytest.mark.parametrize(
+    "fmt",
+    ["table", "wide", "detail"],
+)
+def test_pdp_permissions_non_json_formats_show_sections(fmt: str) -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[ActionPermission(name="VIEW")],
+            denied=[ActionPermission(name="DELETE")],
+        ),
+    )
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", fmt, *_PERMS_ARGS],
+    )
+    assert result.exit_code == 0
+    assert "Allowed" in result.output
+    assert "VIEW" in result.output
+    assert "Denied" in result.output
+    assert "DELETE" in result.output
+
+
+def test_pdp_permissions_json_format_returns_parseable_json() -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(allowed=[ActionPermission(name="VIEW")]),
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_PERMS_ARGS])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["allowed"][0]["name"] == "VIEW"

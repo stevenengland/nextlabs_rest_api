@@ -5,11 +5,13 @@ from types import MappingProxyType
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
 from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import render_json
 from nextlabs_sdk._cli._output_format import OutputFormat
@@ -61,8 +63,7 @@ def _print_policy_refs(console: Console, refs: Sequence[PolicyRef]) -> None:
     console.print(table)
 
 
-def _render_eval_response(response: EvalResponse) -> None:
-    console = Console()
+def _render_eval_response(response: EvalResponse, console: Console) -> None:
     evaluation = response.first_result
     color = _DECISION_COLORS.get(evaluation.decision, "")
     console.print(f"Decision: [{color}]{evaluation.decision.value}[/{color}]")
@@ -74,8 +75,14 @@ def _render_eval_response(response: EvalResponse) -> None:
         _print_policy_refs(console, evaluation.policy_refs)
 
 
-def _render_permissions_response(response: PermissionsResponse) -> None:
-    console = Console()
+def _render_eval_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, EvalResponse)
+    _render_eval_response(model, console)
+
+
+def _render_permissions_response(
+    response: PermissionsResponse, console: Console
+) -> None:
     sections = [
         ("Allowed", response.allowed),
         ("Denied", response.denied),
@@ -95,6 +102,11 @@ def _render_permissions_response(response: PermissionsResponse) -> None:
         console.print(table)
     if not any_shown:
         console.print("No action permissions returned.")
+
+
+def _render_permissions_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, PermissionsResponse)
+    _render_permissions_response(model, console)
 
 
 @pdp_app.command(name="eval")
@@ -183,7 +195,7 @@ def evaluate(
     if cli_ctx.output_format is OutputFormat.JSON:
         render_json(response)
     else:
-        _render_eval_response(response)
+        _render_eval_response(response, Console())
 
 
 @pdp_app.command()
@@ -275,4 +287,8 @@ def permissions(
     if cli_ctx.output_format is OutputFormat.JSON:
         render_json(response)
     else:
-        _render_permissions_response(response)
+        _render_permissions_response(response, Console())
+
+
+register_detail_renderer(EvalResponse, _render_eval_detail)
+register_detail_renderer(PermissionsResponse, _render_permissions_detail)
