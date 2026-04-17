@@ -14,3 +14,4 @@ __pycache__/
 docker/*.tar.gz
 *.egg-info/
 .worktrees/
+docs/*/
