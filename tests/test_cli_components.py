@@ -86,7 +86,7 @@ def _make_paginator(items: list[ComponentLite]) -> SyncPaginator[ComponentLite]:
 
 
 def _invoke(*extra: str) -> Any:
-    return runner.invoke(app, [*_GLOBAL_OPTS, *extra])
+    return runner.invoke(app, [*_GLOBAL_OPTS, *extra], env={"COLUMNS": "200"})
 
 
 @pytest.mark.parametrize(
@@ -241,6 +241,32 @@ def test_components_deploy_success(
 
     assert result.exit_code == 0
     assert "Deployed" in result.output
+
+
+def test_components_get_wide_includes_extra_columns(stub: tuple[Any, Any, Any]):
+    _, mock_comp, _ = stub
+    when(mock_comp).get(1).thenReturn(_make_component())
+
+    result = _invoke("--output", "wide", "components", "get", "1")
+
+    assert result.exit_code == 0
+    assert "Created" in result.output
+    assert "Updated" in result.output
+    assert "Owner" in result.output
+    assert "Version" in result.output
+
+
+def test_components_search_wide_includes_extra_columns(stub: tuple[Any, Any, Any]):
+    _, _, mock_search = stub
+    when(mock_search).search(...).thenReturn(_make_paginator([_make_component_lite()]))
+
+    result = _invoke("--output", "wide", "components", "search")
+
+    assert result.exit_code == 0
+    assert "Created" in result.output
+    assert "Updated" in result.output
+    assert "Owner" in result.output
+    assert "Version" in result.output
 
 
 def test_components_undeploy_success(stub: tuple[Any, Any, Any]):
