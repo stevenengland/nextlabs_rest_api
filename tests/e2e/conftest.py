@@ -8,16 +8,27 @@ the ``e2e`` marker.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import os
+import subprocess
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import suppress
+from pathlib import Path
 
 import httpx
 import pytest
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.waiting_utils import wait_for_logs
 
+from nextlabs_sdk.cloudaz import AsyncCloudAzClient, CloudAzClient
+from nextlabs_sdk.pdp import AsyncPdpClient, PdpClient
+from tests.e2e._support import StaticBearer, register_pdp_token_stub
+from tests.e2e._stubs import load_all_mappings
+
 WIREMOCK_IMAGE = "wiremock/wiremock:3.13.0"
 WIREMOCK_PORT = 8080
+TEST_TOKEN = "e2e-fixture-token"
+PDP_CLIENT_ID = "e2e-client"
+PDP_CLIENT_SECRET = "e2e-secret"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -62,3 +73,94 @@ def wiremock_base_url(wiremock_container: DockerContainer) -> str:
     httpx.post(f"{base}/__admin/mappings/reset", timeout=5.0)
     httpx.post(f"{base}/__admin/requests/reset", timeout=5.0)
     return base
+
+
+@pytest.fixture
+def seeded_wiremock(wiremock_base_url: str) -> str:
+    """WireMock URL with spec-derived stubs and a PDP token stub loaded."""
+    load_all_mappings(wiremock_base_url)
+    register_pdp_token_stub(wiremock_base_url, TEST_TOKEN)
+    return wiremock_base_url
+
+
+@pytest.fixture
+def cloudaz_client(seeded_wiremock: str) -> Iterator[CloudAzClient]:
+    client = CloudAzClient(
+        base_url=seeded_wiremock,
+        auth=StaticBearer(TEST_TOKEN),
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+@pytest.fixture
+async def async_cloudaz_client(
+    seeded_wiremock: str,
+) -> AsyncIterator[AsyncCloudAzClient]:
+    client = AsyncCloudAzClient(
+        base_url=seeded_wiremock,
+        auth=StaticBearer(TEST_TOKEN),
+    )
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest.fixture
+def pdp_client(seeded_wiremock: str) -> Iterator[PdpClient]:
+    client = PdpClient(
+        base_url=seeded_wiremock,
+        client_id=PDP_CLIENT_ID,
+        client_secret=PDP_CLIENT_SECRET,
+    )
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+@pytest.fixture
+async def async_pdp_client(seeded_wiremock: str) -> AsyncIterator[AsyncPdpClient]:
+    client = AsyncPdpClient(
+        base_url=seeded_wiremock,
+        client_id=PDP_CLIENT_ID,
+        client_secret=PDP_CLIENT_SECRET,
+    )
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
+@pytest.fixture
+def cli_runner(
+    seeded_wiremock: str,
+    tmp_path: Path,
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    """Return a callable that runs the installed ``nextlabs`` entry point."""
+
+    def _run(
+        *args: str,
+        stdin: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        env = {
+            "NEXTLABS_BASE_URL": seeded_wiremock,
+            "NEXTLABS_TOKEN": TEST_TOKEN,
+            "XDG_CONFIG_HOME": str(tmp_path),
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path),
+        }
+        return subprocess.run(
+            ["nextlabs", *args],
+            capture_output=True,
+            text=True,
+            input=stdin,
+            env=env,
+            timeout=30,
+            check=False,
+        )
+
+    return _run
