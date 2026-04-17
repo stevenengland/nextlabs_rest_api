@@ -27,3 +27,7 @@ def test_save_is_noop_and_load_still_returns_none() -> None:
 
 def test_delete_is_noop() -> None:
     NullTokenCache().delete("k")
+
+
+def test_keys_returns_empty_list() -> None:
+    assert NullTokenCache().keys() == []

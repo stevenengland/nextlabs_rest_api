@@ -152,6 +152,9 @@ class _InMemoryTokenCache(TokenCache):
     def delete(self, key: str) -> None:
         self.entries.pop(key, None)
 
+    def keys(self) -> list[str]:
+        return list(self.entries.keys())
+
 
 _DERIVED_KEY = f"{TOKEN_URL}|admin|ControlCenterOIDCClient"
 

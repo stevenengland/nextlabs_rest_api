@@ -57,6 +57,9 @@ class FileTokenCache(TokenCache):
         if entries.pop(key, None) is not None:
             self._write_all(entries)
 
+    def keys(self) -> list[str]:
+        return list(self._read_all().keys())
+
     def _read_all(self) -> dict[str, object]:
         if not self._path.exists():
             return {}

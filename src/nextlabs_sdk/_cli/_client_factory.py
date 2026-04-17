@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
@@ -11,7 +13,9 @@ from nextlabs_sdk._pdp._client import PdpClient
 
 
 def _build_file_cache(ctx: CliContext) -> FileTokenCache:
-    return FileTokenCache(path=ctx.cache_dir) if ctx.cache_dir else FileTokenCache()
+    if ctx.cache_dir:
+        return FileTokenCache(path=Path(ctx.cache_dir) / "tokens.json")
+    return FileTokenCache()
 
 
 def _cache_key(ctx: CliContext) -> str:

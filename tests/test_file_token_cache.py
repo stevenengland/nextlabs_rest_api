@@ -80,6 +80,29 @@ def test_save_is_atomic_no_stale_tmp_files(tmp_path: Path) -> None:
     assert leftovers == []
 
 
+def test_keys_returns_empty_when_file_missing(tmp_path: Path) -> None:
+    cache = FileTokenCache(path=tmp_path / "tokens.json")
+    assert cache.keys() == []
+
+
+def test_keys_returns_inserted_keys_in_order(tmp_path: Path) -> None:
+    cache = FileTokenCache(path=tmp_path / "tokens.json")
+    cache.save("first", _tok(id_token="1"))
+    cache.save("second", _tok(id_token="2"))
+    cache.save("third", _tok(id_token="3"))
+
+    assert cache.keys() == ["first", "second", "third"]
+
+
+def test_keys_reflects_deletions(tmp_path: Path) -> None:
+    cache = FileTokenCache(path=tmp_path / "tokens.json")
+    cache.save("a", _tok())
+    cache.save("b", _tok())
+    cache.delete("a")
+
+    assert cache.keys() == ["b"]
+
+
 def test_default_path_respects_nextlabs_cache_dir(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

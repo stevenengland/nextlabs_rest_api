@@ -19,3 +19,7 @@ class TokenCache(ABC):
     @abstractmethod
     def delete(self, key: str) -> None:
         """Remove the entry under ``key``. No-op if the entry does not exist."""
+
+    @abstractmethod
+    def keys(self) -> list[str]:
+        """Return all cached keys in insertion order."""

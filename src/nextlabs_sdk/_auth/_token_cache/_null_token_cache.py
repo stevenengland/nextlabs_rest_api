@@ -15,3 +15,7 @@ class NullTokenCache(TokenCache):
 
     def delete(self, key: str) -> None:
         """No-op."""
+
+    def keys(self) -> list[str]:
+        """Always return an empty list."""
+        return []
