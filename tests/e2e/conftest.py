@@ -144,13 +144,13 @@ def cli_runner(
         *args: str,
         stdin: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        env = {
-            "NEXTLABS_BASE_URL": seeded_wiremock,
-            "NEXTLABS_TOKEN": TEST_TOKEN,
-            "XDG_CONFIG_HOME": str(tmp_path),
-            "PATH": os.environ["PATH"],
-            "HOME": str(tmp_path),
-        }
+        env = dict(os.environ)
+        for proxy_var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            env.pop(proxy_var, None)
+        env["NEXTLABS_BASE_URL"] = seeded_wiremock
+        env["NEXTLABS_TOKEN"] = TEST_TOKEN
+        env["NEXTLABS_CLIENT_SECRET"] = "e2e-client-secret"
+        env["NEXTLABS_CACHE_DIR"] = str(tmp_path / "tokens.json")
         return subprocess.run(
             ["nextlabs", *args],
             capture_output=True,
