@@ -1,21 +1,71 @@
 """E2E test infrastructure.
 
-This conftest provides fixtures for end-to-end tests using testcontainers.
-Tests in this directory are only collected when E2E_COLLECT=1 is set
-(see tests/conftest.py for the collection guard).
-
-Usage:
-    python ./tools/tests.py --short --e2e  # e2e only
-    python ./tools/tests.py --short --all  # unit + e2e
+Collected only when ``E2E_COLLECT=1`` (see ``tests/conftest.py``). Every
+test in this directory is auto-marked ``e2e`` and given a 60 s timeout.
+Running ``tools/tests.py --short --e2e`` sets the env var and filters to
+the ``e2e`` marker.
 """
 
-# ── Example: WireMock container fixture ──
-# from testcontainers.core.container import DockerContainer
-#
-# @pytest.fixture(scope="session")
-# def wiremock_container():
-#     container = DockerContainer("wiremock/wiremock:3.13.0")
-#     container.with_exposed_ports(8080)
-#     container.start()
-#     yield container
-#     container.stop()
+from __future__ import annotations
+
+from collections.abc import Iterator
+from contextlib import suppress
+
+import httpx
+import pytest
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.waiting_utils import wait_for_logs
+
+WIREMOCK_IMAGE = "wiremock/wiremock:3.13.0"
+WIREMOCK_PORT = 8080
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every test under ``tests/e2e/`` with ``e2e`` + ``timeout(60)``."""
+    for item in items:
+        if "tests/e2e/" in str(item.fspath):
+            item.add_marker(pytest.mark.e2e)
+            item.add_marker(pytest.mark.timeout(60))
+
+
+def _ensure_docker_reachable() -> None:
+    try:
+        container = DockerContainer("hello-world")
+        container.start()
+    except (OSError, RuntimeError) as exc:
+        pytest.skip(f"Docker not available; skipping E2E tests ({exc})")
+    with suppress(OSError, RuntimeError):
+        container.stop()
+
+
+@pytest.fixture(scope="session")
+def wiremock_container() -> Iterator[DockerContainer]:
+    """Start a single WireMock container for the whole test session."""
+    _ensure_docker_reachable()
+    container = DockerContainer(WIREMOCK_IMAGE).with_exposed_ports(
+        WIREMOCK_PORT,
+    )
+    container.start()
+    wait_for_logs(container, "verbose:", timeout=30)
+    try:
+        yield container
+    finally:
+        container.stop()
+
+
+@pytest.fixture(scope="session")
+def wiremock_base_url(wiremock_container: DockerContainer) -> str:
+    """HTTP base URL for the running WireMock instance."""
+    host = wiremock_container.get_container_host_ip()
+    port = wiremock_container.get_exposed_port(WIREMOCK_PORT)
+    return f"http://{host}:{port}"
+
+
+@pytest.fixture(autouse=True)
+def _reset_wiremock(  # pyright: ignore[reportUnusedFunction]
+    wiremock_base_url: str,
+) -> Iterator[None]:
+    """Reset request journal and mappings between tests for isolation."""
+    httpx.post(f"{wiremock_base_url}/__admin/mappings/reset", timeout=5.0)
+    httpx.post(f"{wiremock_base_url}/__admin/requests/reset", timeout=5.0)
+    yield
