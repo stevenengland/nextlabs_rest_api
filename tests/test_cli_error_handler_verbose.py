@@ -5,6 +5,7 @@ import pytest
 import typer
 
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk.exceptions import ApiError, AuthenticationError
 
@@ -17,7 +18,7 @@ def _ctx(verbose: int) -> typer.Context:
         client_id="cid",
         client_secret=None,
         pdp_url=None,
-        json_output=False,
+        output_format=OutputFormat.TABLE,
         verify=None,
         timeout=30.0,
         verbose=verbose,

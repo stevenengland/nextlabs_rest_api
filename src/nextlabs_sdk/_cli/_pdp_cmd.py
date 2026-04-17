@@ -12,6 +12,7 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import render_json
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._parsing import parse_key_value_attrs
 from nextlabs_sdk._pdp import (
     Action,
@@ -179,7 +180,7 @@ def evaluate(
     )
     client = _client_factory.make_pdp_client(cli_ctx)
     response = client.evaluate(request, content_type=ct_enum)
-    if cli_ctx.json_output:
+    if cli_ctx.output_format is OutputFormat.JSON:
         render_json(response)
     else:
         _render_eval_response(response)
@@ -271,7 +272,7 @@ def permissions(
     )
     client = _client_factory.make_pdp_client(cli_ctx)
     response = client.permissions(request, content_type=ct_enum)
-    if cli_ctx.json_output:
+    if cli_ctx.output_format is OutputFormat.JSON:
         render_json(response)
     else:
         _render_permissions_response(response)

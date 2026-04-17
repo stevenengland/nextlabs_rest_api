@@ -11,6 +11,7 @@ from nextlabs_sdk._cli._account_resolver import (
     resolve_account,
 )
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._output_format import OutputFormat
 
 
 def _ctx(
@@ -27,7 +28,7 @@ def _ctx(
         client_id=client_id,
         client_secret=None,
         pdp_url=None,
-        json_output=False,
+        output_format=OutputFormat.TABLE,
         verify=None,
         timeout=30.0,
         cache_dir=cache_dir,

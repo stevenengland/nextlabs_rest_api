@@ -10,6 +10,7 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._pdp._client import PdpClient
 
@@ -31,7 +32,7 @@ def _make_ctx(
         client_id=client_id,
         client_secret=client_secret,
         pdp_url=None,
-        json_output=False,
+        output_format=OutputFormat.TABLE,
         verify=verify,
         timeout=30.0,
         cache_dir=cache_dir,

@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._output_format import OutputFormat
 
 
 class ColumnDef(NamedTuple):
@@ -49,7 +50,7 @@ def render(
     *,
     title: str | None = None,
 ) -> None:
-    if ctx.json_output:
+    if ctx.output_format is OutputFormat.JSON:
         render_json(source)
     elif isinstance(source, BaseModel):
         render_table([source], columns, title=title)

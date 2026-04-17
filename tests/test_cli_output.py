@@ -15,6 +15,7 @@ from nextlabs_sdk._cli._output import (
     render_json,
     render_table,
 )
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cloudaz._models import Tag, TagType
 
 
@@ -28,7 +29,7 @@ def _make_tag() -> Tag:
     )
 
 
-def _make_ctx(*, json_output: bool = False) -> CliContext:
+def _make_ctx(*, output_format: OutputFormat = OutputFormat.TABLE) -> CliContext:
     return CliContext(
         base_url="https://example.com",
         username="u",
@@ -36,7 +37,7 @@ def _make_ctx(*, json_output: bool = False) -> CliContext:
         client_id="c",
         client_secret=None,
         pdp_url=None,
-        json_output=json_output,
+        output_format=output_format,
         verify=None,
         timeout=30.0,
     )
@@ -100,7 +101,7 @@ def test_render_json(
 
 
 def test_render_dispatches_to_json_when_flag_set(capsys: CaptureFixture[str]) -> None:
-    render(_make_ctx(json_output=True), _make_tag(), TAG_COLUMNS)
+    render(_make_ctx(output_format=OutputFormat.JSON), _make_tag(), TAG_COLUMNS)
 
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["id"] == 10
@@ -109,6 +110,6 @@ def test_render_dispatches_to_json_when_flag_set(capsys: CaptureFixture[str]) ->
 def test_render_dispatches_to_table_when_flag_unset(
     capsys: CaptureFixture[str],
 ) -> None:
-    render(_make_ctx(json_output=False), _make_tag(), TAG_COLUMNS)
+    render(_make_ctx(output_format=OutputFormat.TABLE), _make_tag(), TAG_COLUMNS)
 
     assert "dept" in capsys.readouterr().out

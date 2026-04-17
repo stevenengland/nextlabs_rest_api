@@ -9,6 +9,7 @@ from nextlabs_sdk._cli._components_cmd import components_app
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
 from nextlabs_sdk._cli._logging_setup import configure_cli_logging
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._pdp_cmd import pdp_app
 from nextlabs_sdk._cli._policies_cmd import policies_app
 from nextlabs_sdk._cli._reports_cmd import reports_app
@@ -112,7 +113,7 @@ def main(
         client_id=client_id,
         client_secret=client_secret,
         pdp_url=pdp_url,
-        json_output=json_output,
+        output_format=OutputFormat.JSON if json_output else OutputFormat.TABLE,
         verify=verify,
         timeout=timeout,
         token=token,

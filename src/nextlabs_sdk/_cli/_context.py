@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from nextlabs_sdk._cli._output_format import OutputFormat
+
 
 @dataclass(frozen=True)
 class CliContext:
@@ -13,7 +15,7 @@ class CliContext:
     client_id: str
     client_secret: str | None
     pdp_url: str | None
-    json_output: bool
+    output_format: OutputFormat
     verify: bool | None
     timeout: float
     token: str | None = None
