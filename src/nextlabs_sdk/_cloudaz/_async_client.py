@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from types import TracebackType
 
+import httpx
+
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+from nextlabs_sdk._auth._token_cache._null_token_cache import NullTokenCache
+from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk._cloudaz._component_search import AsyncComponentSearchService
 from nextlabs_sdk._cloudaz._component_type_search import AsyncComponentTypeSearchService
 from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
@@ -28,18 +32,27 @@ class AsyncCloudAzClient:
         self,
         *,
         base_url: str,
-        username: str,
-        password: str,
+        username: str | None = None,
+        password: str | None = None,
         client_id: str = "ControlCenterOIDCClient",
         http_config: HttpConfig | None = None,
+        token_cache: TokenCache | None = None,
+        auth: httpx.Auth | None = None,
     ) -> None:
         config = http_config or HttpConfig()
-        auth = CloudAzAuth(
-            token_url=f"{base_url}/cas/oidc/accessToken",
-            username=username,
-            password=password,
-            client_id=client_id,
-        )
+        if auth is None:
+            if username is None:
+                raise ValueError(
+                    "username is required when no auth override is provided",
+                )
+            cache = token_cache or NullTokenCache()
+            auth = CloudAzAuth(
+                token_url=f"{base_url}/cas/oidc/accessToken",
+                username=username,
+                password=password,
+                client_id=client_id,
+                token_cache=cache,
+            )
         self._client = transport_mod.create_async_http_client(
             base_url=base_url,
             auth=auth,

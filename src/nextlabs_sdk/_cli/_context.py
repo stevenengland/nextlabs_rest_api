@@ -16,3 +16,5 @@ class CliContext:
     json_output: bool
     no_verify: bool
     timeout: float
+    token: str | None = None
+    cache_dir: str | None = None

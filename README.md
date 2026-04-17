@@ -166,6 +166,8 @@ connection options can be supplied via flags or environment variables:
 | `NEXTLABS_CLIENT_ID`        | OIDC client ID (default: `ControlCenterOIDCClient`) |
 | `NEXTLABS_CLIENT_SECRET`    | PDP client secret                     |
 | `NEXTLABS_PDP_URL`          | PDP base URL (defaults to `--base-url`) |
+| `NEXTLABS_TOKEN`            | Pre-issued bearer token; bypasses login/cache |
+| `NEXTLABS_CACHE_DIR`        | Override the token cache directory    |
 
 ```bash
 nextlabs --help
@@ -179,6 +181,53 @@ nextlabs --json components list          # machine-readable output
 Command groups: `auth`, `tags`, `components`, `component-types`, `policies`,
 `audit-logs`, `reports`, `dashboard`, `pdp`.
 
+## Authentication & token caching
+
+The CLI persists OIDC tokens between invocations so users do not re-authenticate
+on every command.
+
+- **Default cache location** (precedence):
+  1. `--cache-dir` / `NEXTLABS_CACHE_DIR`
+  2. `$XDG_CACHE_HOME/nextlabs-sdk/tokens.json`
+  3. `~/.cache/nextlabs-sdk/tokens.json`
+
+  The file is written with `0600` permissions inside a `0700` directory, and
+  all writes are atomic (temp file + `os.replace`). The key is
+  `"{token_url}|{username}|{client_id}"` so multiple profiles coexist safely.
+
+- **Login / logout / status**
+
+  ```bash
+  nextlabs auth login      # acquire & cache a token
+  nextlabs auth status     # show whether a valid cached token exists
+  nextlabs auth logout     # remove the cached entry
+  ```
+
+- **Refresh tokens** are used transparently when available; on refresh failure
+  the CLI falls back to the password grant (if `--password` / `NEXTLABS_PASSWORD`
+  is set) and raises `AuthenticationError` with a "Run `nextlabs auth login`"
+  hint otherwise.
+
+- **CI bypass** — set `NEXTLABS_TOKEN` (or pass `--token`) to use a pre-issued
+  bearer token. No login, no cache writes.
+
+- **SDK default is `NullTokenCache`** (no silent filesystem writes). Library
+  consumers can opt in explicitly:
+
+  ```python
+  from nextlabs_sdk import CloudAzClient, FileTokenCache
+
+  client = CloudAzClient(
+      base_url="https://cloudaz.example.com",
+      username="admin",
+      password="secret",
+      token_cache=FileTokenCache(),  # or a custom TokenCache
+  )
+  ```
+
+  The public cache API is `TokenCache`, `CachedToken`, `FileTokenCache`,
+  `NullTokenCache`, and `StaticTokenAuth`.
+
 ## Public API surface
 
 All imports come from three public entry points:
@@ -187,7 +236,9 @@ All imports come from three public entry points:
   `PdpClient`, `AsyncPdpClient`), transport (`HttpConfig`, `RetryConfig`,
   `create_http_client`, `create_async_http_client`), pagination
   (`SyncPaginator`, `AsyncPaginator`, `PageResult`), auth
-  (`CloudAzAuth`, `PdpAuth`), and `__version__`.
+  (`CloudAzAuth`, `PdpAuth`, `StaticTokenAuth`), token cache
+  (`TokenCache`, `CachedToken`, `FileTokenCache`, `NullTokenCache`),
+  and `__version__`.
 - `nextlabs_sdk.cloudaz` — CloudAz domain models and enums
   (`Tag`, `TagType`, `Operator`, audit-log / report / dashboard /
   system-config / activity-log models).

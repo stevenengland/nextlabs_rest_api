@@ -77,6 +77,16 @@ def main(
         30.0,
         help="Request timeout in seconds",
     ),
+    token: str | None = typer.Option(
+        None,
+        envvar="NEXTLABS_TOKEN",
+        help="Pre-issued bearer token; bypasses login and token cache.",
+    ),
+    cache_dir: str | None = typer.Option(
+        None,
+        envvar="NEXTLABS_CACHE_DIR",
+        help="Override the token cache directory.",
+    ),
 ) -> None:
     """NextLabs CloudAz SDK CLI."""
     ctx.obj = CliContext(
@@ -89,6 +99,8 @@ def main(
         json_output=json_output,
         no_verify=no_verify,
         timeout=timeout,
+        token=token,
+        cache_dir=cache_dir,
     )
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())

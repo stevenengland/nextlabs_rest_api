@@ -6,15 +6,31 @@ from collections.abc import Generator
 
 import httpx
 
+from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk._auth._token_cache._null_token_cache import NullTokenCache
+from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk.exceptions import AuthenticationError
 
 _EXPIRY_SAFETY_MARGIN = 60
 _OK_STATUS = 200
 _UNAUTHORIZED_STATUS = 401
+_RELOGIN_HINT = "Run `nextlabs auth login` to re-authenticate."
+_HTTP_POST = "POST"
+_FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
+_INITIAL_EXPIRY_AT = float(0)
+
+
+def _form_headers() -> dict[str, str]:
+    return {"Content-Type": _FORM_CONTENT_TYPE}
 
 
 class CloudAzAuth(httpx.Auth):
-    """OIDC password grant auth for the CloudAz Console API."""
+    """OIDC password grant auth for the CloudAz Console API.
+
+    Supports an optional pluggable :class:`TokenCache` backend. Expiry is
+    tracked as absolute UTC epoch seconds so that cached tokens survive
+    process restarts.
+    """
 
     requires_request_body = False
     requires_response_body = True
@@ -23,41 +39,74 @@ class CloudAzAuth(httpx.Auth):
         self,
         token_url: str,
         username: str,
-        password: str,
+        password: str | None,
         client_id: str,
+        *,
+        token_cache: TokenCache | None = None,
     ) -> None:
         self._token_url = token_url
         self._username = username
         self._password = password
         self._client_id = client_id
-        self._token: str | None = None
-        self._token_expiry: float = 0
+        self._cache: TokenCache = token_cache or NullTokenCache()
+        self._cache_key = f"{token_url}|{username}|{client_id}"
         self._lock = threading.Lock()
+
+        self._token: str | None = None
+        self._refresh_token: str | None = None
+        self._expires_at: float = _INITIAL_EXPIRY_AT
+
+        cached = self._cache.load(self._cache_key)
+        if cached is not None:
+            self._refresh_token = cached.refresh_token
+            if not cached.is_expired(
+                now=time.time(),
+                safety_margin=_EXPIRY_SAFETY_MARGIN,
+            ):
+                self._token = cached.id_token
+                self._expires_at = cached.expires_at
 
     def auth_flow(
         self,
         request: httpx.Request,
     ) -> Generator[httpx.Request, httpx.Response, None]:
         if not self._has_valid_token():
-            token_response = yield self._build_token_request()
-            self._parse_token_response(token_response)
+            yield from self._reauthenticate()
 
         request.headers["Authorization"] = f"Bearer {self._token}"
         response = yield request
 
         if response.status_code == _UNAUTHORIZED_STATUS:
-            token_response = yield self._build_token_request()
-            self._parse_token_response(token_response)
+            yield from self._reauthenticate()
             request.headers["Authorization"] = f"Bearer {self._token}"
             yield request
 
     def _has_valid_token(self) -> bool:
         with self._lock:
-            return self._token is not None and time.monotonic() < self._token_expiry
+            return self._token is not None and time.time() < self._expires_at
 
-    def _build_token_request(self) -> httpx.Request:
+    def _reauthenticate(self) -> Generator[httpx.Request, httpx.Response, None]:
+        if self._refresh_token is not None:
+            response = yield self._build_refresh_request(self._refresh_token)
+            if response.status_code == _OK_STATUS:
+                self._parse_token_response(response)
+                return
+
+        if self._password is None:
+            raise AuthenticationError(
+                f"Token expired and no refresh available. {_RELOGIN_HINT}",
+                status_code=None,
+                response_body=None,
+                request_method=_HTTP_POST,
+                request_url=self._token_url,
+            )
+
+        response = yield self._build_password_request()
+        self._parse_token_response(response)
+
+    def _build_password_request(self) -> httpx.Request:
         return httpx.Request(
-            method="POST",
+            method=_HTTP_POST,
             url=self._token_url,
             data={
                 "grant_type": "password",
@@ -65,9 +114,19 @@ class CloudAzAuth(httpx.Auth):
                 "password": self._password,
                 "client_id": self._client_id,
             },
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
+            headers=_form_headers(),
+        )
+
+    def _build_refresh_request(self, refresh_token: str) -> httpx.Request:
+        return httpx.Request(
+            method=_HTTP_POST,
+            url=self._token_url,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": self._client_id,
             },
+            headers=_form_headers(),
         )
 
     def _parse_token_response(
@@ -79,12 +138,31 @@ class CloudAzAuth(httpx.Auth):
                 f"Token acquisition failed: HTTP {response.status_code}",
                 status_code=response.status_code,
                 response_body=response.text,
-                request_method="POST",
+                request_method=_HTTP_POST,
                 request_url=self._token_url,
             )
 
         body = response.json()
+        expires_in = int(body["expires_in"])
+        now = time.time()
+        expires_at = now + expires_in - _EXPIRY_SAFETY_MARGIN
+        id_token = body["id_token"]
+        refresh_token = body.get("refresh_token") or self._refresh_token
+        token_type = body.get("token_type", "bearer")
+        scope = body.get("scope")
+
         with self._lock:
-            self._token = body["id_token"]
-            expires_in = int(body["expires_in"])
-            self._token_expiry = time.monotonic() + expires_in - _EXPIRY_SAFETY_MARGIN
+            self._token = id_token
+            self._refresh_token = refresh_token
+            self._expires_at = expires_at
+
+        self._cache.save(
+            self._cache_key,
+            CachedToken(
+                id_token=id_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+                token_type=token_type,
+                scope=scope,
+            ),
+        )

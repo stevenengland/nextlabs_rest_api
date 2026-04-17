@@ -2,6 +2,19 @@
 
 from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth as CloudAzAuth
 from nextlabs_sdk._auth._pdp_auth import PdpAuth as PdpAuth
+from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth as StaticTokenAuth
+from nextlabs_sdk._auth._token_cache import (
+    CachedToken as CachedToken,
+)
+from nextlabs_sdk._auth._token_cache import (
+    FileTokenCache as FileTokenCache,
+)
+from nextlabs_sdk._auth._token_cache import (
+    NullTokenCache as NullTokenCache,
+)
+from nextlabs_sdk._auth._token_cache import (
+    TokenCache as TokenCache,
+)
 from nextlabs_sdk._cloudaz._async_client import (
     AsyncCloudAzClient as AsyncCloudAzClient,
 )
