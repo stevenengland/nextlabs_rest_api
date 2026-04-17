@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
+from pydantic import BaseModel
+from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_success, render
 from nextlabs_sdk._cli._parsing import parse_json_payload
+from nextlabs_sdk._cloudaz._component_type_models import ComponentType
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
 component_types_app = typer.Typer(help="Component type management commands")
@@ -114,3 +118,35 @@ def search(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     matches = list(client.component_type_search.search(criteria))
     render(cli_ctx, matches, _CT_COLUMNS, title="Component Types")
+
+
+def _render_component_type_detail(model: BaseModel, console: Console) -> None:
+    assert isinstance(model, ComponentType)
+    console.print(f"[bold]ComponentType[/bold] {model.id}")
+    scalar_rows: tuple[tuple[str, object], ...] = (
+        ("Name", model.name),
+        ("Short Name", model.short_name),
+        ("Description", model.description),
+        ("Type", model.type.value),
+        ("Status", model.status),
+        ("Version", model.version),
+        ("Owner ID", model.owner_id),
+        ("Owner Display Name", model.owner_display_name),
+        ("Created Date", model.created_date),
+        ("Last Updated Date", model.last_updated_date),
+        ("Modified By ID", model.modified_by_id),
+        ("Modified By", model.modified_by),
+    )
+    count_rows: tuple[tuple[str, int], ...] = (
+        ("Tags", len(model.tags)),
+        ("Attributes", len(model.attributes)),
+        ("Actions", len(model.actions)),
+        ("Obligations", len(model.obligations)),
+    )
+    for label, scalar_value in scalar_rows:
+        console.print(f"  [bold]{label}[/bold]: {scalar_value}")
+    for label, count in count_rows:
+        console.print(f"  [bold]{label}[/bold]: {count} defined")
+
+
+register_detail_renderer(ComponentType, _render_component_type_detail)
