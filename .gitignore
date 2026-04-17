@@ -13,3 +13,4 @@ htmlcov/
 __pycache__/
 docker/*.tar.gz
 *.egg-info/
+.worktrees/
