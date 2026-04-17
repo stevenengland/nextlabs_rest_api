@@ -25,14 +25,14 @@ class CachedToken:
     """A persisted OIDC token.
 
     Attributes:
-        id_token: The OIDC id_token used as the bearer credential.
+        access_token: The OAuth2 access_token used as the bearer credential.
         refresh_token: Optional refresh_token for silent re-auth.
         expires_at: Absolute UTC epoch seconds at which the token expires.
         token_type: OAuth token type (typically ``"bearer"``).
         scope: Optional OAuth scope string.
     """
 
-    id_token: str
+    access_token: str
     refresh_token: str | None
     expires_at: float
     token_type: str
@@ -51,7 +51,7 @@ class CachedToken:
     def to_dict(self) -> dict[str, object]:
         """Serialize to a JSON-compatible mapping."""
         return {
-            "id_token": self.id_token,
+            "access_token": self.access_token,
             "refresh_token": self.refresh_token,
             "expires_at": self.expires_at,
             "token_type": self.token_type,
@@ -61,7 +61,7 @@ class CachedToken:
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> CachedToken:
         """Deserialize from a mapping produced by :meth:`to_dict`."""
-        id_token = _require(payload, "id_token", str)
+        access_token = _require(payload, "access_token", str)
         refresh_token = _optional(payload, "refresh_token", str)
         expires_at_raw = payload.get("expires_at")
         if not isinstance(expires_at_raw, (int, float)):
@@ -69,13 +69,13 @@ class CachedToken:
         token_type = _require(payload, "token_type", str)
         scope = _optional(payload, "scope", str)
 
-        assert isinstance(id_token, str)
+        assert isinstance(access_token, str)
         assert refresh_token is None or isinstance(refresh_token, str)
         assert isinstance(token_type, str)
         assert scope is None or isinstance(scope, str)
 
         return cls(
-            id_token=id_token,
+            access_token=access_token,
             refresh_token=refresh_token,
             expires_at=float(expires_at_raw),
             token_type=token_type,

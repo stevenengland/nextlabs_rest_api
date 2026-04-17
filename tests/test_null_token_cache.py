@@ -6,7 +6,7 @@ from nextlabs_sdk._auth._token_cache._null_token_cache import NullTokenCache
 
 def _sample() -> CachedToken:
     return CachedToken(
-        id_token="id",
+        access_token="id",
         refresh_token=None,
         expires_at=1.0,
         token_type="bearer",

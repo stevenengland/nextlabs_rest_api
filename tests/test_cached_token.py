@@ -5,7 +5,7 @@ from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 
 def test_roundtrip_to_dict_and_back() -> None:
     original = CachedToken(
-        id_token="id",
+        access_token="id",
         refresh_token="rt",
         expires_at=1_700_000_000.0,
         token_type="bearer",
@@ -20,7 +20,7 @@ def test_roundtrip_to_dict_and_back() -> None:
 def test_from_dict_tolerates_missing_optional_fields() -> None:
     restored = CachedToken.from_dict(
         {
-            "id_token": "id",
+            "access_token": "id",
             "expires_at": 1_700_000_000.0,
             "token_type": "bearer",
         },
@@ -32,7 +32,7 @@ def test_from_dict_tolerates_missing_optional_fields() -> None:
 
 def test_is_expired_uses_absolute_utc_with_safety_margin() -> None:
     token = CachedToken(
-        id_token="id",
+        access_token="id",
         refresh_token=None,
         expires_at=1_000.0,
         token_type="bearer",

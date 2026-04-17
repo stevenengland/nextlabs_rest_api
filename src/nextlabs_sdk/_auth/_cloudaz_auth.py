@@ -15,10 +15,36 @@ from nextlabs_sdk.exceptions import AuthenticationError
 _EXPIRY_SAFETY_MARGIN = 60
 _OK_STATUS = 200
 _UNAUTHORIZED_STATUS = 401
+_REDIRECT_MIN_STATUS = 300
+_REDIRECT_MAX_STATUS = 399
+_SPA_FRAGMENT = "#"
+_LOCATION_HEADER = "location"
 _RELOGIN_HINT = "Run `nextlabs auth login` to re-authenticate."
+_SPA_REDIRECT_MSG = (
+    "Server redirected API call to SPA login page "
+    "(Location={location!r}) — access token was rejected. {hint}"
+)
 _HTTP_POST = "POST"
 _FORM_CONTENT_TYPE = "application/x-www-form-urlencoded"
 _INITIAL_EXPIRY_AT = float(0)
+
+
+def _spa_redirect_location(response: httpx.Response) -> str:
+    for hop in response.history:
+        location = hop.headers.get(_LOCATION_HEADER, "")
+        if _SPA_FRAGMENT in location:
+            return location
+    return response.headers.get(_LOCATION_HEADER, "")
+
+
+def _is_spa_redirect(response: httpx.Response) -> bool:
+    for hop in response.history:
+        if _SPA_FRAGMENT in hop.headers.get(_LOCATION_HEADER, ""):
+            return True
+    status = response.status_code
+    if _REDIRECT_MIN_STATUS <= status <= _REDIRECT_MAX_STATUS:
+        return _SPA_FRAGMENT in response.headers.get(_LOCATION_HEADER, "")
+    return False
 
 
 def _form_headers() -> dict[str, str]:
@@ -64,7 +90,7 @@ class CloudAzAuth(httpx.Auth):
                 now=time.time(),
                 safety_margin=_EXPIRY_SAFETY_MARGIN,
             ):
-                self._token = cached.id_token
+                self._token = cached.access_token
                 self._expires_at = cached.expires_at
 
     def auth_flow(
@@ -77,10 +103,21 @@ class CloudAzAuth(httpx.Auth):
         request.headers["Authorization"] = f"Bearer {self._token}"
         response = yield request
 
-        if response.status_code == _UNAUTHORIZED_STATUS:
+        if response.status_code == _UNAUTHORIZED_STATUS or _is_spa_redirect(response):
             yield from self._reauthenticate()
             request.headers["Authorization"] = f"Bearer {self._token}"
-            yield request
+            retried = yield request
+            if _is_spa_redirect(retried):
+                raise AuthenticationError(
+                    _SPA_REDIRECT_MSG.format(
+                        location=_spa_redirect_location(retried),
+                        hint=_RELOGIN_HINT,
+                    ),
+                    status_code=retried.status_code,
+                    response_body=None,
+                    request_method=request.method,
+                    request_url=str(request.url),
+                )
 
     def _has_valid_token(self) -> bool:
         with self._lock:
@@ -156,9 +193,9 @@ class CloudAzAuth(httpx.Auth):
         )
         now = time.time()
         expires_at = now + expires_in - _EXPIRY_SAFETY_MARGIN
-        id_token = require_str(
+        access_token = require_str(
             body,
-            "id_token",
+            "access_token",
             error_cls=AuthenticationError,
             context=" in token response",
         )
@@ -174,14 +211,14 @@ class CloudAzAuth(httpx.Auth):
         scope = scope_raw if isinstance(scope_raw, str) else None
 
         with self._lock:
-            self._token = id_token
+            self._token = access_token
             self._refresh_token = refresh_token
             self._expires_at = expires_at
 
         self._cache.save(
             self._cache_key,
             CachedToken(
-                id_token=id_token,
+                access_token=access_token,
                 refresh_token=refresh_token,
                 expires_at=expires_at,
                 token_type=token_type,

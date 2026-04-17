@@ -23,14 +23,14 @@ def _make_auth() -> CloudAzAuth:
 
 
 def _make_token_response(
-    id_token: str = "test-id-token",
+    access_token: str = "test-access-token",
     expires_in: int = 1200,
 ) -> httpx.Response:
     return httpx.Response(
         200,
         json={
-            "id_token": id_token,
-            "access_token": "AT-unused",
+            "access_token": access_token,
+            "id_token": "ID-unused",
             "refresh_token": "RT-unused",
             "expires_in": expires_in,
             "token_type": "bearer",
@@ -56,7 +56,7 @@ def test_first_request_acquires_token() -> None:
     api_request = flow.send(_make_token_response())
 
     assert "Authorization" in api_request.headers
-    assert api_request.headers["Authorization"] == "Bearer test-id-token"
+    assert api_request.headers["Authorization"] == "Bearer test-access-token"
 
 
 def test_cached_token_skips_token_request() -> None:
@@ -73,7 +73,7 @@ def test_cached_token_skips_token_request() -> None:
     flow2 = auth.auth_flow(request)
     api_req2 = next(flow2)
 
-    assert api_req2.headers["Authorization"] == "Bearer test-id-token"
+    assert api_req2.headers["Authorization"] == "Bearer test-access-token"
     assert str(api_req2.url) != TOKEN_URL
 
 
@@ -101,7 +101,7 @@ def test_401_triggers_reauth() -> None:
 
     flow = auth.auth_flow(request)
     next(flow)
-    flow.send(_make_token_response(id_token="token-v1"))
+    flow.send(_make_token_response(access_token="token-v1"))
     reauth_token_request = flow.send(
         httpx.Response(401, request=request),
     )
@@ -109,7 +109,7 @@ def test_401_triggers_reauth() -> None:
     assert str(reauth_token_request.url) == TOKEN_URL
 
     retry_request = flow.send(
-        _make_token_response(id_token="token-v2"),
+        _make_token_response(access_token="token-v2"),
     )
 
     assert retry_request.headers["Authorization"] == "Bearer token-v2"
@@ -155,7 +155,7 @@ def test_non_json_200_token_response_raises_authentication_error() -> None:
     assert "Invalid JSON response" in exc_info.value.message
 
 
-def test_token_response_missing_id_token_raises_authentication_error() -> None:
+def test_token_response_missing_access_token_raises_authentication_error() -> None:
     when(time).time().thenReturn(float(0))
     auth = _make_auth()
     request = httpx.Request("GET", "https://cloudaz.example.com/api")
@@ -172,7 +172,7 @@ def test_token_response_missing_id_token_raises_authentication_error() -> None:
             ),
         )
 
-    assert "missing 'id_token'" in exc_info.value.message
+    assert "missing 'access_token'" in exc_info.value.message
 
 
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
@@ -217,7 +217,7 @@ def test_restores_valid_token_from_cache_without_network() -> None:
     when(time).time().thenReturn(100.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = CachedToken(
-        id_token="cached",
+        access_token="cached",
         refresh_token=None,
         expires_at=10_000.0,
         token_type="bearer",
@@ -241,10 +241,10 @@ def test_saves_token_to_cache_after_fresh_acquire() -> None:
 
     flow = auth.auth_flow(request)
     next(flow)
-    flow.send(_make_token_response(id_token="fresh", expires_in=1200))
+    flow.send(_make_token_response(access_token="fresh", expires_in=1200))
 
     saved = cache.entries[_DERIVED_KEY]
-    assert saved.id_token == "fresh"
+    assert saved.access_token == "fresh"
     assert saved.expires_at == pytest.approx(100.0 + 1200 - 60)
 
 
@@ -252,7 +252,7 @@ def test_expired_cached_token_with_refresh_token_uses_refresh_grant() -> None:
     when(time).time().thenReturn(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = CachedToken(
-        id_token="stale",
+        access_token="stale",
         refresh_token="RT-1",
         expires_at=float(0),
         token_type="bearer",
@@ -270,7 +270,7 @@ def test_expired_cached_token_with_refresh_token_uses_refresh_grant() -> None:
     assert "grant_type=refresh_token" in body
     assert "refresh_token=RT-1" in body
 
-    api_req = flow.send(_make_token_response(id_token="refreshed"))
+    api_req = flow.send(_make_token_response(access_token="refreshed"))
     assert api_req.headers["Authorization"] == "Bearer refreshed"
 
 
@@ -278,7 +278,7 @@ def test_refresh_failure_falls_back_to_password_grant() -> None:
     when(time).time().thenReturn(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = CachedToken(
-        id_token="stale",
+        access_token="stale",
         refresh_token="RT-bad",
         expires_at=float(0),
         token_type="bearer",
@@ -301,7 +301,7 @@ def test_refresh_failure_falls_back_to_password_grant() -> None:
     body = bytes(pw_req.content).decode()
     assert "grant_type=password" in body
 
-    api_req = flow.send(_make_token_response(id_token="pw-token"))
+    api_req = flow.send(_make_token_response(access_token="pw-token"))
     assert api_req.headers["Authorization"] == "Bearer pw-token"
 
 
@@ -309,7 +309,7 @@ def test_refresh_failure_without_password_raises() -> None:
     when(time).time().thenReturn(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = CachedToken(
-        id_token="stale",
+        access_token="stale",
         refresh_token="RT-bad",
         expires_at=float(0),
         token_type="bearer",
@@ -347,3 +347,81 @@ def test_no_cache_behaves_like_null_cache() -> None:
     flow = auth.auth_flow(request)
     token_req = next(flow)
     assert str(token_req.url) == TOKEN_URL
+
+
+def _make_spa_redirect_response(
+    request: httpx.Request,
+    location: str = "https://cloudaz.example.com/#/policy-studio/analytics/dashboard",
+) -> httpx.Response:
+    redirect = httpx.Response(
+        302,
+        headers={"location": location},
+        request=request,
+    )
+    final = httpx.Response(
+        200,
+        content=b"<!doctype html><html></html>",
+        headers={"content-type": "text/html"},
+        request=httpx.Request("GET", location),
+    )
+    final.history = [redirect]
+    return final
+
+
+def test_spa_hash_redirect_triggers_reauth() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="v1"))
+    reauth_token_req = flow.send(_make_spa_redirect_response(request))
+
+    assert str(reauth_token_req.url) == TOKEN_URL
+
+    retry_req = flow.send(_make_token_response(access_token="v2"))
+    assert retry_req.headers["Authorization"] == "Bearer v2"
+
+
+def test_persistent_spa_hash_redirect_raises_authentication_error() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="v1"))
+    flow.send(_make_spa_redirect_response(request))
+    flow.send(_make_token_response(access_token="v2"))
+
+    with pytest.raises(exceptions.AuthenticationError) as exc_info:
+        flow.send(_make_spa_redirect_response(request))
+
+    assert "SPA login page" in exc_info.value.message
+    assert "auth login" in exc_info.value.message.lower()
+
+
+def test_non_hash_redirect_does_not_trigger_reauth() -> None:
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    request = httpx.Request("GET", "https://cloudaz.example.com/api/v1/foo")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="v1"))
+
+    trailing_redirect = httpx.Response(
+        302,
+        headers={"location": "https://cloudaz.example.com/api/v1/foo/"},
+        request=request,
+    )
+    final_ok = httpx.Response(
+        200,
+        json={"ok": True},
+        request=httpx.Request("GET", "https://cloudaz.example.com/api/v1/foo/"),
+    )
+    final_ok.history = [trailing_redirect]
+
+    with contextlib.suppress(StopIteration):
+        flow.send(final_ok)

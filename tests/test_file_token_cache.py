@@ -10,9 +10,9 @@ from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 
 
-def _tok(id_token: str = "id", expires_at: float = 1000.0) -> CachedToken:
+def _tok(access_token: str = "id", expires_at: float = 1000.0) -> CachedToken:
     return CachedToken(
-        id_token=id_token,
+        access_token=access_token,
         refresh_token="rt",
         expires_at=expires_at,
         token_type="bearer",
@@ -44,19 +44,19 @@ def test_save_creates_file_with_0600_and_dir_with_0700(tmp_path: Path) -> None:
 
 def test_multiple_keys_isolated_in_same_file(tmp_path: Path) -> None:
     cache = FileTokenCache(path=tmp_path / "tokens.json")
-    cache.save("a", _tok(id_token="A"))
-    cache.save("b", _tok(id_token="B"))
+    cache.save("a", _tok(access_token="A"))
+    cache.save("b", _tok(access_token="B"))
 
     loaded_a = cache.load("a")
     loaded_b = cache.load("b")
-    assert loaded_a is not None and loaded_a.id_token == "A"
-    assert loaded_b is not None and loaded_b.id_token == "B"
+    assert loaded_a is not None and loaded_a.access_token == "A"
+    assert loaded_b is not None and loaded_b.access_token == "B"
 
 
 def test_delete_removes_only_matching_entry(tmp_path: Path) -> None:
     cache = FileTokenCache(path=tmp_path / "tokens.json")
-    cache.save("a", _tok(id_token="A"))
-    cache.save("b", _tok(id_token="B"))
+    cache.save("a", _tok(access_token="A"))
+    cache.save("b", _tok(access_token="B"))
 
     cache.delete("a")
 
@@ -87,9 +87,9 @@ def test_keys_returns_empty_when_file_missing(tmp_path: Path) -> None:
 
 def test_keys_returns_inserted_keys_in_order(tmp_path: Path) -> None:
     cache = FileTokenCache(path=tmp_path / "tokens.json")
-    cache.save("first", _tok(id_token="1"))
-    cache.save("second", _tok(id_token="2"))
-    cache.save("third", _tok(id_token="3"))
+    cache.save("first", _tok(access_token="1"))
+    cache.save("second", _tok(access_token="2"))
+    cache.save("third", _tok(access_token="3"))
 
     assert cache.keys() == ["first", "second", "third"]
 

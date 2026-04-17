@@ -137,7 +137,7 @@ def _seed_cache(tmp_path: object, *keys: str) -> None:
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     tok = CachedToken(
-        id_token="id",
+        access_token="id",
         refresh_token="rt",
         expires_at=1000.0,
         token_type="bearer",
