@@ -39,6 +39,7 @@ class CloudAzClient:
         http_config: HttpConfig | None = None,
         token_cache: TokenCache | None = None,
         auth: httpx.Auth | None = None,
+        refresh_token_lifetime: int | None = None,
     ) -> None:
         config = http_config or HttpConfig()
         if auth is None:
@@ -54,6 +55,7 @@ class CloudAzClient:
                 client_id=client_id,
                 token_cache=cache,
             )
+            auth.refresh_token_lifetime = refresh_token_lifetime
         self._client = transport_mod.create_http_client(
             base_url=base_url,
             auth=auth,

@@ -246,3 +246,80 @@ def test_login_menu_selection_does_not_override_explicit_username(
     assert result.exit_code == 0, result.output
     assert captured[0].base_url == "https://alpha.example.com"
     assert captured[0].username == "carol"  # explicit flag wins
+
+
+def test_status_shows_refresh_expires_when_known(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+
+    _isolate_cache(tmp_path, monkeypatch)
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=8_888_888_888.0,
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "refresh_expires_at=8888888888" in result.output
+
+
+def test_status_omits_refresh_expires_when_unknown(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+
+    _isolate_cache(tmp_path, monkeypatch)
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=None,
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "refresh_expires_at" not in result.output
+    assert "Cached token is valid (expires_at=9999999999" in result.output

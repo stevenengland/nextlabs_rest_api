@@ -11,9 +11,11 @@ from nextlabs_sdk._cli._logging_setup import configure_cli_logging
 @pytest.fixture(autouse=True)
 def _clear_handlers() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
     logger = logging.getLogger("nextlabs_sdk")
-    original = list(logger.handlers)
+    original_handlers = list(logger.handlers)
+    original_level = logger.level
     yield
-    logger.handlers = original
+    logger.handlers = original_handlers
+    logger.setLevel(original_level)
 
 
 def _our_handlers() -> list[logging.Handler]:

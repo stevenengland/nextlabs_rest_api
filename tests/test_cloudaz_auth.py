@@ -570,3 +570,234 @@ def test_ensure_token_async_fetches_and_caches() -> None:
 
     assert len(sent) == 1
     assert auth._token == "async-fresh"
+
+
+# ─────────────── Proactive refresh-token-lifetime tracking ───────────────
+
+
+def _auth_with_lifetime(
+    cache: TokenCache,
+    *,
+    password: str | None = "secret",
+    lifetime: int | None = None,
+) -> CloudAzAuth:
+    auth = CloudAzAuth(
+        token_url=TOKEN_URL,
+        username="admin",
+        password=password,
+        client_id="ControlCenterOIDCClient",
+        token_cache=cache,
+    )
+    auth.refresh_token_lifetime = lifetime
+    return auth
+
+
+def test_refresh_token_lifetime_populates_refresh_expires_at() -> None:
+    when(time).time().thenReturn(1000.0)
+    cache = _InMemoryTokenCache()
+    auth = _auth_with_lifetime(cache, lifetime=86_400)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="fresh", expires_in=1200))
+
+    saved = cache.entries[_DERIVED_KEY]
+    assert saved.refresh_expires_at == pytest.approx(1000.0 + 86_400)
+
+
+def test_no_lifetime_leaves_refresh_expires_at_none() -> None:
+    when(time).time().thenReturn(1000.0)
+    cache = _InMemoryTokenCache()
+    auth = _auth_with_lifetime(cache)  # lifetime=None → reactive mode
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="fresh"))
+
+    saved = cache.entries[_DERIVED_KEY]
+    assert saved.refresh_expires_at is None
+
+
+def test_known_expired_refresh_skips_http_call_and_uses_password() -> None:
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-stale",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=9_000.0,  # already elapsed
+    )
+
+    auth = _auth_with_lifetime(cache, lifetime=86_400)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    token_req = next(flow)
+
+    # Must go straight to password grant without attempting refresh.
+    body = bytes(token_req.content).decode()
+    assert "grant_type=password" in body
+    assert "grant_type=refresh_token" not in body
+
+
+def test_known_expired_refresh_without_password_raises_refresh_token_expired() -> None:
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-stale",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=9_000.0,
+    )
+
+    auth = _auth_with_lifetime(cache, password=None, lifetime=86_400)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+
+    with pytest.raises(exceptions.RefreshTokenExpiredError) as exc_info:
+        next(flow)
+
+    assert "lifetime exceeded" in exc_info.value.message.lower()
+    assert "auth login" in exc_info.value.message.lower()
+
+
+def test_reactive_rejection_without_password_raises_refresh_token_expired() -> None:
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-dead",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=None,  # reactive mode
+    )
+
+    auth = _auth_with_lifetime(cache, password=None)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    flow = auth.auth_flow(request)
+    next(flow)  # yields refresh request
+
+    with pytest.raises(exceptions.RefreshTokenExpiredError) as exc_info:
+        flow.send(
+            httpx.Response(
+                401,
+                text="invalid_grant",
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    assert "rejected by server" in exc_info.value.message.lower()
+    assert "auth login" in exc_info.value.message.lower()
+
+
+def test_refresh_token_expired_is_authentication_error_subclass() -> None:
+    assert issubclass(
+        exceptions.RefreshTokenExpiredError,
+        exceptions.AuthenticationError,
+    )
+
+
+def test_ensure_token_async_known_expired_skips_refresh_http_call() -> None:
+    import asyncio
+
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-stale",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=9_000.0,
+    )
+
+    auth = _auth_with_lifetime(cache, lifetime=86_400)
+    sent: list[httpx.Request] = []
+
+    async def send(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return _make_token_response(access_token="async-pw")
+
+    async def run() -> None:
+        await auth.ensure_token_async(send)
+
+    asyncio.run(run())
+
+    assert len(sent) == 1
+    assert "grant_type=password" in sent[0].content.decode()
+
+
+def test_logs_refresh_attempt_and_success(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-good",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=None,
+    )
+
+    auth = _auth_with_lifetime(cache)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    caplog.set_level(logging.DEBUG, logger="nextlabs_sdk")
+    flow = auth.auth_flow(request)
+    next(flow)
+    flow.send(_make_token_response(access_token="refreshed"))
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("refresh attempt starting" in m for m in messages)
+    assert any("refresh succeeded" in m for m in messages)
+
+
+def test_logs_warning_on_terminal_refresh_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    import logging
+
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = CachedToken(
+        access_token="stale",
+        refresh_token="RT-dead",
+        expires_at=float(0),
+        token_type="bearer",
+        scope=None,
+        refresh_expires_at=None,
+    )
+
+    auth = _auth_with_lifetime(cache, password=None)
+    request = httpx.Request("GET", "https://cloudaz.example.com/api")
+
+    caplog.set_level(logging.WARNING, logger="nextlabs_sdk")
+    flow = auth.auth_flow(request)
+    next(flow)
+
+    with pytest.raises(exceptions.RefreshTokenExpiredError):
+        flow.send(
+            httpx.Response(
+                401,
+                text="invalid_grant",
+                request=httpx.Request("POST", TOKEN_URL),
+            ),
+        )
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings
+    assert any("refresh token rejected" in r.getMessage().lower() for r in warnings)
+    # Token values must never appear in log records.
+    for record in caplog.records:
+        assert "RT-dead" not in record.getMessage()

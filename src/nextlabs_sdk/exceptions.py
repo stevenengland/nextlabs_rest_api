@@ -31,6 +31,18 @@ class AuthenticationError(NextLabsError):
     """HTTP 401 or token acquisition failure."""
 
 
+class RefreshTokenExpiredError(AuthenticationError):
+    """Refresh token is no longer usable.
+
+    Raised either when the SDK determines proactively that the
+    configured refresh-token lifetime has elapsed, or when the token
+    endpoint rejects a refresh-token grant at runtime and no password
+    is available for fallback. Subclasses :class:`AuthenticationError`
+    so that existing ``except AuthenticationError:`` handlers continue
+    to catch it.
+    """
+
+
 class AuthorizationError(NextLabsError):
     """HTTP 403."""
 
