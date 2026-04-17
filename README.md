@@ -175,11 +175,28 @@ nextlabs tags list --type COMPONENT_TAG
 nextlabs policies list
 nextlabs pdp eval --subject alice --resource doc-42 --action read \
                   --resource-type document --application wiki
-nextlabs --output json components list   # machine-readable output
 ```
 
-Output formats (via `-o` / `--output`): `table` (default compact),
-`wide` (extra columns), `detail` (sectioned per-item), `json` (raw JSON).
+### Output formats
+
+Every list/get command accepts `-o` / `--output` to choose how results are
+rendered. Values are case-insensitive.
+
+| Format   | When to use                                                   |
+| -------- | ------------------------------------------------------------- |
+| `table`  | Default. Compact columns; long values wrap (never truncated). |
+| `wide`   | Table plus extra columns (owner, timestamps, version, …).     |
+| `detail` | Sectioned per-item output, kubectl-describe style.            |
+| `json`   | Raw JSON dump of the response model(s). Machine-readable.     |
+
+```bash
+nextlabs -o wide policies list
+nextlabs -o detail components get 42
+nextlabs --output json components list   # machine-readable
+```
+
+> Breaking change: the former `--json` flag has been removed in favor of
+> `-o json`.
 
 Command groups: `auth`, `tags`, `components`, `component-types`, `policies`,
 `audit-logs`, `reports`, `dashboard`, `pdp`.
