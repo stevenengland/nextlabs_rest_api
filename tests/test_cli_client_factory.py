@@ -6,9 +6,12 @@ from typing import cast
 import pytest
 import typer
 
+from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+from nextlabs_sdk._cli._account_resolver import ResolvedAccount
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cloudaz._client import CloudAzClient
@@ -187,3 +190,213 @@ def test_non_login_cli_flag_does_not_mutate_persisted_preference(
     entry = store.load("https://example.com|user|client")
     assert entry is not None
     assert entry.verify_ssl is False
+
+
+# ─── refresh-token-aware pre-flight gate + TTY prompt ──────────────────────
+
+
+_ACCOUNT = ResolvedAccount(
+    base_url="https://example.com",
+    username="user",
+    client_id="client",
+)
+_CACHE_KEY = "https://example.com/cas/oidc/accessToken|user|client"
+
+
+def _isatty_false() -> bool:
+    return False
+
+
+def _isatty_true() -> bool:
+    return True
+
+
+def _seed_token(
+    cache_dir: Path,
+    *,
+    expires_at: float,
+    refresh_token: str | None,
+    refresh_expires_at: float | None,
+) -> None:
+    cache = FileTokenCache(path=cache_dir / "tokens.json")
+    cache.save(
+        _CACHE_KEY,
+        CachedToken(
+            access_token="at",
+            refresh_token=refresh_token,
+            expires_at=expires_at,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=refresh_expires_at,
+        ),
+    )
+
+
+def _capture_cloudaz_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    def _capture(*_args: object, **kwargs: object) -> CloudAzClient:
+        captured.update(kwargs)
+        return cast(CloudAzClient, object())
+
+    monkeypatch.setattr(_client_factory, "CloudAzClient", _capture)
+    return captured
+
+
+def test_gate_accepts_cached_refresh_token_when_access_expired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _seed_token(
+        tmp_path,
+        expires_at=0,
+        refresh_token="rt",
+        refresh_expires_at=10**12,
+    )
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] is None
+
+
+def test_gate_accepts_refresh_token_with_unknown_expiry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _seed_token(
+        tmp_path,
+        expires_at=0,
+        refresh_token="rt",
+        refresh_expires_at=None,
+    )
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] is None
+
+
+def test_gate_rejects_when_refresh_token_known_expired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _seed_token(
+        tmp_path,
+        expires_at=0,
+        refresh_token="rt",
+        refresh_expires_at=0,
+    )
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    with pytest.raises(typer.BadParameter, match="password"):
+        _client_factory.make_cloudaz_client(ctx)
+
+
+def test_gate_rejects_when_no_refresh_token_and_access_expired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _seed_token(
+        tmp_path,
+        expires_at=0,
+        refresh_token=None,
+        refresh_expires_at=None,
+    )
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    with pytest.raises(typer.BadParameter, match="password"):
+        _client_factory.make_cloudaz_client(ctx)
+
+
+def test_gate_rejects_when_no_cache_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    with pytest.raises(typer.BadParameter, match="password"):
+        _client_factory.make_cloudaz_client(ctx)
+
+
+def test_tty_prompt_supplies_password_when_cache_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    prompts: list[tuple[str, bool]] = []
+
+    def _fake_prompt(text: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append((text, hide_input))
+        return "typed-pw"
+
+    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] == "typed-pw"
+    assert prompts and prompts[0][1] is True
+    assert "user@https://example.com" in prompts[0][0]
+
+
+def test_non_tty_raises_bad_parameter_when_cache_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    def _explode(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called in non-TTY mode")
+
+    monkeypatch.setattr(typer, "prompt", _explode)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    with pytest.raises(typer.BadParameter, match="password"):
+        _client_factory.make_cloudaz_client(ctx)
+
+
+def test_explicit_password_bypasses_cache_lookup_and_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+
+    def _explode_prompt(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called when --password is set")
+
+    def _explode_cache_load(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("cache must not be consulted when --password is set")
+
+    monkeypatch.setattr(typer, "prompt", _explode_prompt)
+    monkeypatch.setattr(FileTokenCache, "load", _explode_cache_load)
+
+    ctx = _make_ctx(password="explicit", cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] == "explicit"
+
+
+def test_fresh_access_token_proceeds_without_password(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    _seed_token(
+        tmp_path,
+        expires_at=10**12,
+        refresh_token=None,
+        refresh_expires_at=None,
+    )
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    def _explode_prompt(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called for fresh token")
+
+    monkeypatch.setattr(typer, "prompt", _explode_prompt)
+
+    ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] is None

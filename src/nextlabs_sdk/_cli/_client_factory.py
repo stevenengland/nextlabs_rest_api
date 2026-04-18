@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import sys
+import time
+
 import typer
 
+from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
@@ -24,16 +28,48 @@ _PASSWORD_REQUIRED = f"--password or NEXTLABS_PASSWORD is required (or {_LOGIN_H
 _CLIENT_SECRET_REQUIRED = "--client-secret or NEXTLABS_CLIENT_SECRET is required"
 
 
-def _has_valid_cached_token_for(
-    cache: FileTokenCache,
-    account: ResolvedAccount,
-) -> bool:
-    key = (
+def _token_cache_key(account: ResolvedAccount) -> str:
+    return (
         f"{account.base_url}/cas/oidc/accessToken"
         f"|{account.username}|{account.client_id}"
     )
-    entry = cache.load(key)
-    return entry is not None and not entry.is_expired()
+
+
+def _cached_credentials_usable(
+    cache: FileTokenCache,
+    account: ResolvedAccount,
+    *,
+    now: float | None = None,
+) -> bool:
+    """Return True when the cache holds a credential that avoids a password.
+
+    Either the access token is still fresh, or a refresh token is present
+    and not known to be past its lifetime — in which case ``CloudAzAuth``
+    can redeem it silently on the next request.
+    """
+    entry = cache.load(_token_cache_key(account))
+    if entry is None:
+        return False
+    effective_now = time.time() if now is None else now
+    if not entry.is_expired(now=effective_now):
+        return True
+    return (
+        decide(
+            refresh_token=entry.refresh_token,
+            refresh_expires_at=entry.refresh_expires_at,
+            now=effective_now,
+        )
+        is RefreshDecision.USE_REFRESH
+    )
+
+
+def _prompt_password_if_tty(account: ResolvedAccount) -> str | None:
+    if not sys.stdin.isatty():
+        return None
+    return typer.prompt(
+        f"Password for {account.username}@{account.base_url}",
+        hide_input=True,
+    )
 
 
 def _persisted_verify(
@@ -91,13 +127,17 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
 
     account = _resolve_or_raise(ctx)
     cache = build_file_cache(ctx)
-    if not ctx.password and not _has_valid_cached_token_for(cache, account):
-        raise typer.BadParameter(_PASSWORD_REQUIRED)
+
+    password = ctx.password
+    if password is None and not _cached_credentials_usable(cache, account):
+        password = _prompt_password_if_tty(account)
+        if password is None:
+            raise typer.BadParameter(_PASSWORD_REQUIRED)
 
     return CloudAzClient(
         base_url=account.base_url,
         username=account.username,
-        password=ctx.password,
+        password=password,
         client_id=account.client_id,
         http_config=_http_config(ctx, account),
         token_cache=cache,
