@@ -1,5 +1,5 @@
 # Runtime deps come from pyproject.toml via editable install.
--e .
+-e .[cli]
 black
 bump-my-version
 faker
