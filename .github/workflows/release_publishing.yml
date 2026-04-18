@@ -57,8 +57,16 @@ jobs:
           latest_previous_version=$(echo $response | jq --raw-output "select(.releases != null) | .releases | keys_unsorted | last")
           new_version=''
           if [ -z "$latest_previous_version" ]; then
-            echo "Package not found on Test PyPI."
-            exit 1
+            base_version=$(tr -d '[:space:]' < version.txt)
+            if [[ ! $base_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Error: version.txt does not contain a valid X.Y.Z version: '$base_version'" >&2
+              exit 1
+            fi
+            new_version="${base_version}.dev1"
+            echo "Package not found on Test PyPI; seeding from version.txt."
+            echo "New version: $new_version"
+            echo "$new_version" > version.txt
+            exit 0
           fi
 
           echo "Latest version on PyPI: ->$latest_previous_version"
