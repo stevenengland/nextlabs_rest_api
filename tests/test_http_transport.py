@@ -218,6 +218,42 @@ def test_respects_retry_after_header() -> None:
     assert sleep_values[0] == pytest.approx(5.0)
 
 
+def test_clamps_retry_after_to_max_delay() -> None:
+    request = _make_request()
+    fail_resp = _make_response(429, request, headers={"retry-after": "999"})
+    ok_resp = _make_response(200, request)
+    wrapped = mock(httpx.BaseTransport)
+    when(wrapped).handle_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
+
+    sleep_values: list[float] = []
+    when(time).sleep(...).thenAnswer(lambda delay: sleep_values.append(delay))
+
+    transport = _http_transport.RetryTransport(
+        wrapped=wrapped, max_retries=3, max_delay=10.0
+    )
+    response = transport.handle_request(request)
+
+    assert response.status_code == 200
+    assert sleep_values[0] == pytest.approx(10.0)
+
+
+def test_negative_retry_after_clamped_to_zero_sync() -> None:
+    request = _make_request()
+    fail_resp = _make_response(429, request, headers={"retry-after": "-1"})
+    ok_resp = _make_response(200, request)
+    wrapped = mock(httpx.BaseTransport)
+    when(wrapped).handle_request(request).thenReturn(fail_resp).thenReturn(ok_resp)
+
+    sleep_values: list[float] = []
+    when(time).sleep(...).thenAnswer(lambda delay: sleep_values.append(delay))
+
+    transport = _http_transport.RetryTransport(wrapped=wrapped, max_retries=3)
+    response = transport.handle_request(request)
+
+    assert response.status_code == 200
+    assert sleep_values[0] == pytest.approx(0)
+
+
 # ── Async AsyncRetryTransport tests ──
 
 
@@ -288,6 +324,56 @@ def test_async_retry_raises_request_timeout_error_on_read_timeout() -> None:
     transport = _http_transport.AsyncRetryTransport(wrapped=wrapped, max_retries=1)
     with pytest.raises(RequestTimeoutError):
         asyncio.run(transport.handle_async_request(request))
+
+
+def test_async_clamps_retry_after_to_max_delay() -> None:
+    request = _make_request()
+    fail_resp = _make_response(429, request, headers={"retry-after": "999"})
+    ok_resp = _make_response(200, request)
+    wrapped = mock(httpx.AsyncBaseTransport)
+    when(wrapped).handle_async_request(request).thenReturn(fail_resp).thenReturn(
+        ok_resp
+    )
+
+    sleep_values: list[float] = []
+
+    def _capture(delay: float) -> _ResolvedAwaitable:
+        sleep_values.append(delay)
+        return _ResolvedAwaitable()
+
+    when(asyncio).sleep(...).thenAnswer(_capture)
+
+    transport = _http_transport.AsyncRetryTransport(
+        wrapped=wrapped, max_retries=3, max_delay=10.0
+    )
+    response = asyncio.run(transport.handle_async_request(request))
+
+    assert response.status_code == 200
+    assert sleep_values[0] == pytest.approx(10.0)
+
+
+def test_async_negative_retry_after_clamped_to_zero() -> None:
+    request = _make_request()
+    fail_resp = _make_response(429, request, headers={"retry-after": "-1"})
+    ok_resp = _make_response(200, request)
+    wrapped = mock(httpx.AsyncBaseTransport)
+    when(wrapped).handle_async_request(request).thenReturn(fail_resp).thenReturn(
+        ok_resp
+    )
+
+    sleep_values: list[float] = []
+
+    def _capture(delay: float) -> _ResolvedAwaitable:
+        sleep_values.append(delay)
+        return _ResolvedAwaitable()
+
+    when(asyncio).sleep(...).thenAnswer(_capture)
+
+    transport = _http_transport.AsyncRetryTransport(wrapped=wrapped, max_retries=3)
+    response = asyncio.run(transport.handle_async_request(request))
+
+    assert response.status_code == 200
+    assert sleep_values[0] == pytest.approx(0)
 
 
 # ── Factory tests ──
