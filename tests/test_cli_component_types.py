@@ -220,3 +220,71 @@ def test_component_types_search(stub_client, extra_args, as_json, check):
 
     assert result.exit_code == 0
     assert check(result.output)
+
+
+def test_component_types_get_active(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get_active(1).thenReturn(_make_component_type())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "get-active", "1"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "File Server" in result.output
+
+
+def test_component_types_bulk_delete(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).bulk_delete([3, 4]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "bulk-delete", "--ids", "3,4"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 2 component types" in result.output
+
+
+def test_component_types_clone(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).clone(5).thenReturn(42)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "component-types", "clone", "5"])
+
+    assert result.exit_code == 0, result.output
+    assert "42" in result.output
+
+
+def test_component_types_list_extra_subject_attributes(stub_client):
+    from nextlabs_sdk._cloudaz._component_type_models import AttributeConfig
+
+    _, mock_ct, _ = stub_client
+    when(mock_ct).list_extra_subject_attributes("USER").thenReturn(
+        [
+            AttributeConfig.model_validate(
+                {
+                    "id": 1,
+                    "name": "Department",
+                    "shortName": "dept",
+                    "dataType": "STRING",
+                    "sortOrder": 0,
+                },
+            ),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "component-types",
+            "list-extra-subject-attributes",
+            "USER",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Department" in result.output
