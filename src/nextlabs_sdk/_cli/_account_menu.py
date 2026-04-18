@@ -6,8 +6,8 @@ import click
 import typer
 
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
-
-_TOKEN_PATH_SUFFIX = "/cas/oidc/accessToken"
+from nextlabs_sdk._cli._cache_key import cache_key_for as cache_key_for
+from nextlabs_sdk._cli._cache_key import parse_cache_key as _parse_cache_key
 
 
 @dataclass(frozen=True)
@@ -21,26 +21,14 @@ class AccountIdentifier:
 
 def parse_cache_key(key: str) -> AccountIdentifier | None:
     """Parse a token-cache key into account identifiers, or ``None`` if malformed."""
-    parts = key.split("|")
-    if len(parts) != 3:
+    parsed = _parse_cache_key(key)
+    if parsed is None:
         return None
-    base_part, username, client_id = parts
-    if not base_part.endswith(_TOKEN_PATH_SUFFIX):
-        return None
-    base_url = base_part[: -len(_TOKEN_PATH_SUFFIX)]
-    if not (base_url and username and client_id):
-        return None
+    base_url, username, client_id = parsed
     return AccountIdentifier(
         base_url=base_url,
         username=username,
         client_id=client_id,
-    )
-
-
-def cache_key_for(account: AccountIdentifier) -> str:
-    return (
-        f"{account.base_url}{_TOKEN_PATH_SUFFIX}"
-        f"|{account.username}|{account.client_id}"
     )
 
 
