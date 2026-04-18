@@ -58,10 +58,13 @@ def _build_marker_args(argv: list[str]) -> list[str]:
 
 
 def _is_relevant_pytest_line(line: str) -> bool:
+    if line.startswith("PASSED"):
+        return False
     is_coverage = "coverage" in line.lower() and "CoverageWarning" not in line
     is_test_result = "passed" in line or "failed" in line
     is_failure = line.startswith("FAILED") or line.startswith("ERROR")
-    return is_failure or is_test_result or is_coverage
+    is_error_detail = line.startswith("E   ") or line.startswith(">   ")
+    return is_failure or is_test_result or is_coverage or is_error_detail
 
 
 def call_pytest_short(argv: list[str]) -> dict[str, str]:
@@ -75,7 +78,7 @@ def call_pytest_short(argv: list[str]) -> dict[str, str]:
     """
     marker_args = _build_marker_args(argv)
 
-    cmd = ["python", "-m", "pytest", "."] + marker_args + (argv or [])
+    cmd = ["python", "-m", "pytest", ".", "-rA"] + marker_args + (argv or [])
 
     pytest_run = subprocess.run(
         cmd, check=False, capture_output=True, text=True
