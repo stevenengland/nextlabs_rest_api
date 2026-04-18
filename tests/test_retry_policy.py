@@ -1,12 +1,10 @@
 from __future__ import annotations
 
+import itertools
 import math
 
 import httpx
 import pytest
-
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from nextlabs_sdk._retry_policy import RetryPolicy
 
@@ -17,6 +15,7 @@ _SMALL_MAX_DELAY = 5.0
 def _assert_within_bounds(delay: float, upper: float) -> None:
     assert delay >= 0
     assert delay <= upper
+    assert math.isfinite(delay)
 
 
 def _make_response(
@@ -117,17 +116,28 @@ def test_backoff_never_exceeds_max_delay() -> None:
         _assert_within_bounds(delay, _SMALL_MAX_DELAY)
 
 
-# ── Hypothesis property test (issue #13) ──
+# ── Parametrized invariant sweep (regression for issue #13) ──
 
 
-@settings(max_examples=200)
-@given(
-    retry_after=st.floats(
-        min_value=-1e6, max_value=1e12, allow_nan=False, allow_infinity=False
-    ),
-    base_delay=st.floats(min_value=0.01, max_value=5.0, allow_nan=False),
-    max_delay=st.floats(min_value=0.01, max_value=60.0, allow_nan=False),
-    attempt=st.integers(min_value=0, max_value=5),
+_BOUNDS_SWEEP = tuple(
+    pytest.param(
+        retry_after,
+        base_delay,
+        max_delay,
+        attempt,
+        id=f"ra={retry_after}-bd={base_delay}-md={max_delay}-a={attempt}",
+    )
+    for retry_after, base_delay, max_delay, attempt in itertools.product(
+        (-1e6, -1.0, 0, 0.5, 1.0, 5.0, 30.0, 1e6, 1e12),
+        (0.01, 0.5, 1.0, 5.0),
+        (0.01, 1.0, 10.0, 60.0),
+        (0, 1, 5),
+    )
+)
+
+
+@pytest.mark.parametrize(
+    ("retry_after", "base_delay", "max_delay", "attempt"), _BOUNDS_SWEEP
 )
 def test_next_delay_is_non_negative_and_bounded(
     retry_after: float,
@@ -141,15 +151,24 @@ def test_next_delay_is_non_negative_and_bounded(
     delay = policy.next_delay(attempt, response, None)
 
     _assert_within_bounds(delay, max_delay)
-    assert math.isfinite(delay)
 
 
-@settings(max_examples=100)
-@given(
-    base_delay=st.floats(min_value=0.01, max_value=5.0, allow_nan=False),
-    max_delay=st.floats(min_value=0.01, max_value=60.0, allow_nan=False),
-    attempt=st.integers(min_value=0, max_value=20),
+_BACKOFF_SWEEP = tuple(
+    pytest.param(
+        base_delay,
+        max_delay,
+        attempt,
+        id=f"bd={base_delay}-md={max_delay}-a={attempt}",
+    )
+    for base_delay, max_delay, attempt in itertools.product(
+        (0.01, 0.5, 1.0, 5.0),
+        (0.01, 1.0, 10.0, 60.0),
+        (0, 1, 5, 10, 20),
+    )
 )
+
+
+@pytest.mark.parametrize(("base_delay", "max_delay", "attempt"), _BACKOFF_SWEEP)
 def test_backoff_without_header_is_non_negative_and_bounded(
     base_delay: float,
     max_delay: float,
