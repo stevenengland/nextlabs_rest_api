@@ -15,3 +15,4 @@ docker/*.tar.gz
 *.egg-info/
 .worktrees/
 docs/*/
+!docs/cast/
