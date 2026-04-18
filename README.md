@@ -1,39 +1,59 @@
 # nextlabs-sdk
 
-A typed, async-ready Python SDK (and optional CLI) for the
-[NextLabs CloudAz Console API](https://developer.nextlabs.com/#/product/cc/api)
-and the [NextLabs PDP REST API](https://developer.nextlabs.com/#/product/cc/pdpapi).
+[![PyPI version](https://img.shields.io/pypi/v/nextlabs-sdk.svg)](https://pypi.org/project/nextlabs-sdk/)
+[![Python versions](https://img.shields.io/pypi/pyversions/nextlabs-sdk.svg)](https://pypi.org/project/nextlabs-sdk/)
+[![CI](https://github.com/stevenengland/nextlabs_rest_api/actions/workflows/code_testing.yml/badge.svg)](https://github.com/stevenengland/nextlabs_rest_api/actions/workflows/code_testing.yml)
+[![License: MIT](https://img.shields.io/github/license/stevenengland/nextlabs_rest_api.svg)](LICENSE)
 
-> **Status:** Alpha — the public surface may still change. Unofficial project,
-> not affiliated with NextLabs.
+> *Typed Python SDK and CLI for the NextLabs CloudAz Console & PDP REST APIs.*
+
+> [!WARNING]
+> **Alpha** — the public surface may still change. Unofficial project, not
+> affiliated with NextLabs.
+
+![CLI demo: auth login → policies search → pdp eval](docs/cast/demo.gif)
+
+## Table of contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Using the SDK](#using-the-sdk)
+- [Using the CLI](#using-the-cli)
+- [Configuration & authentication](#configuration--authentication)
+- [Project layout](#project-layout)
+- [Development](#development)
+- [License](#license)
 
 ## Features
 
-- **Two API clients:** `CloudAzClient` for Console management operations and
+- **Two API clients** — `CloudAzClient` for Console management and
   `PdpClient` for XACML-style authorization decisions.
-- **Sync and async:** every client ships in a sync (`CloudAzClient`,
-  `PdpClient`) and an async (`AsyncCloudAzClient`, `AsyncPdpClient`) flavor,
-  built on `httpx`.
+- **Sync and async parity** — every client ships in a sync
+  (`CloudAzClient`, `PdpClient`) and an async (`AsyncCloudAzClient`,
+  `AsyncPdpClient`) flavor, built on `httpx`.
 - **Fully typed** (PEP 561, `py.typed`) with Pydantic v2 request/response
-  models — good autocompletion and static checking with mypy/Pyright.
-- **CloudAz coverage:** tags, components, component types, policies
+  models — strong autocompletion under mypy and Pyright.
+- **CloudAz coverage** — tags, components, component types, policies
   (incl. `retrieveAllPolicies` export and named/scoped search), operators,
-  entity audit logs, reporter audit logs (Policy Activity Reports, Monitors,
-  Alerts), policy activity reports, activity logs, dashboard, and system
-  config.
-- **PDP coverage:** `evaluate` (single-action decision) and `permissions`
+  entity audit logs, reporter audit logs (Policy Activity Reports,
+  Monitors, Alerts), policy activity reports, activity logs, dashboard,
+  and system config.
+- **PDP coverage** — `evaluate` (single decision) and `permissions`
   (multi-action discovery), with **JSON or XML** payloads.
-- **Resilient transport:** OIDC token acquisition + refresh, configurable
-  timeout, SSL verification, and retries with exponential backoff.
-- **Typed error hierarchy:** HTTP status codes are mapped to
+- **Resilient transport** — OIDC token acquisition + refresh,
+  configurable timeout, SSL verification, and retries with exponential
+  backoff (clamped `Retry-After` honoured on 429/503).
+- **Typed error hierarchy** — HTTP status codes map to
   `AuthenticationError`, `AuthorizationError`, `NotFoundError`,
   `ValidationError`, `ConflictError`, `RateLimitError`, `ServerError`,
-  `RequestTimeoutError`, `TransportError`, and `ApiError` — all subclasses
-  of `NextLabsError`.
-- **Pagination helpers:** `SyncPaginator` / `AsyncPaginator` iterate listed
-  endpoints page-by-page or item-by-item.
-- **Optional CLI:** a `nextlabs` command-line tool (Typer + Rich) for
-  scripting, admin tasks, and quick exploration.
+  `RequestTimeoutError`, `TransportError`, and `ApiError` — all
+  subclasses of `NextLabsError`.
+- **Pagination helpers** — `SyncPaginator` / `AsyncPaginator` iterate
+  listed endpoints page-by-page or item-by-item.
+- **Optional CLI** — a `nextlabs` command (Typer + Rich) for scripting,
+  admin tasks, and quick exploration. Persistent OIDC token cache, four
+  output formats (`table` / `wide` / `detail` / `json`), per-call
+  verbosity for HTTP tracing.
 
 ## Installation
 
@@ -44,7 +64,11 @@ pip install "nextlabs-sdk[cli]"     # + nextlabs CLI (Typer, Rich)
 
 Requires Python **3.11+**.
 
-## Quick Start — CloudAz (Console API)
+---
+
+## Using the SDK
+
+### Quick start — CloudAz (sync)
 
 ```python
 from nextlabs_sdk import CloudAzClient
@@ -55,17 +79,15 @@ with CloudAzClient(
     username="admin",
     password="secret",
 ) as client:
-    # Paginated list of component tags
     for tag in client.tags.list(TagType.COMPONENT):
         print(tag.id, tag.label)
 
-    # Create a tag, fetch it, then delete it
     tag_id = client.tags.create(TagType.COMPONENT, key="env", label="Env")
     tag = client.tags.get(tag_id)
     client.tags.delete(tag.id)
 ```
 
-Async equivalent:
+### Quick start — CloudAz (async)
 
 ```python
 import asyncio
@@ -84,7 +106,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## Quick Start — PDP (authorization decisions)
+### Quick start — PDP
 
 ```python
 from nextlabs_sdk import PdpClient
@@ -100,8 +122,11 @@ with PdpClient(
     decision = pdp.evaluate(
         EvalRequest(
             subject=Subject(id="alice", attributes={"role": "engineer"}),
-            resource=Resource(id="doc-42", type="document",
-                              attributes={"classification": "internal"}),
+            resource=Resource(
+                id="doc-42",
+                type="document",
+                attributes={"classification": "internal"},
+            ),
             action=Action(id="read"),
             application=Application(id="wiki"),
             return_policy_ids=True,
@@ -111,31 +136,24 @@ with PdpClient(
     print(result.decision, [p.id for p in result.policy_refs])
 ```
 
-Use `content_type=ContentType.XML` to exchange XACML XML payloads instead of
-JSON. `pdp.permissions(...)` returns the set of actions a subject may perform
-on a resource.
+Use `content_type=ContentType.XML` to exchange XACML XML payloads
+instead of JSON. `pdp.permissions(...)` returns the set of actions a
+subject may perform on a resource.
 
-## Configuration
+### Pagination
+
+`SyncPaginator` / `AsyncPaginator` are returned by every list method.
+Iterate page-by-page (`.pages()`) or item-by-item (default `__iter__`):
 
 ```python
-from nextlabs_sdk import CloudAzClient, HttpConfig, RetryConfig
+for tag in client.tags.list(TagType.COMPONENT):       # one item at a time
+    ...
 
-client = CloudAzClient(
-    base_url="https://cloudaz.example.com",
-    username="admin",
-    password="secret",
-    http_config=HttpConfig(
-        timeout=15.0,
-        verify_ssl=True,
-        retry=RetryConfig(max_retries=5, base_delay=0.5, max_delay=10.0),
-    ),
-)
+for page in client.tags.list(TagType.COMPONENT).pages():
+    print(page.total, len(page.items))                # PageResult metadata
 ```
 
-Retries use exponential backoff with jitter and apply to transient transport
-failures and 5xx/429 responses.
-
-## Error handling
+### Error handling
 
 ```python
 from nextlabs_sdk import CloudAzClient
@@ -153,111 +171,19 @@ except NextLabsError as exc:
     print(exc.status_code, exc.request_method, exc.request_url, exc.response_body)
 ```
 
-## CLI
+### Public API surface
 
-The optional CLI exposes most CloudAz operations plus PDP evaluation. All
-connection options can be supplied via flags or environment variables:
-
-| Variable                    | Purpose                               |
-| --------------------------- | ------------------------------------- |
-| `NEXTLABS_BASE_URL`         | CloudAz base URL                      |
-| `NEXTLABS_USERNAME`         | CloudAz username                      |
-| `NEXTLABS_PASSWORD`         | CloudAz password                      |
-| `NEXTLABS_CLIENT_ID`        | OIDC client ID (default: `ControlCenterOIDCClient`) |
-| `NEXTLABS_CLIENT_SECRET`    | PDP client secret                     |
-| `NEXTLABS_PDP_URL`          | PDP base URL (defaults to `--base-url`) |
-| `NEXTLABS_TOKEN`            | Pre-issued bearer token; bypasses login/cache |
-| `NEXTLABS_CACHE_DIR`        | Override the token cache directory    |
-
-```bash
-nextlabs --help
-nextlabs tags list --type COMPONENT_TAG
-nextlabs policies list
-nextlabs pdp eval --subject alice --resource doc-42 --action read \
-                  --resource-type document --application wiki
-```
-
-### Output formats
-
-Every list/get command accepts `-o` / `--output` to choose how results are
-rendered. Values are case-insensitive.
-
-| Format   | When to use                                                   |
-| -------- | ------------------------------------------------------------- |
-| `table`  | Default. Compact columns; long values wrap (never truncated). |
-| `wide`   | Table plus extra columns (owner, timestamps, version, …).     |
-| `detail` | Sectioned per-item output, kubectl-describe style.            |
-| `json`   | Raw JSON dump of the response model(s). Machine-readable.     |
-
-```bash
-nextlabs -o wide policies list
-nextlabs -o detail components get 42
-nextlabs --output json components list   # machine-readable
-```
-
-Command groups: `auth`, `tags`, `components`, `component-types`, `policies`,
-`audit-logs`, `reports`, `dashboard`, `pdp`.
-
-## Authentication & token caching
-
-The CLI persists OIDC tokens between invocations so users do not re-authenticate
-on every command.
-
-- **Default cache location** (precedence):
-  1. `--cache-dir` / `NEXTLABS_CACHE_DIR`
-  2. `$XDG_CACHE_HOME/nextlabs-sdk/tokens.json`
-  3. `~/.cache/nextlabs-sdk/tokens.json`
-
-  The file is written with `0600` permissions inside a `0700` directory, and
-  all writes are atomic (temp file + `os.replace`). The key is
-  `"{token_url}|{username}|{client_id}"` so multiple profiles coexist safely.
-
-- **Login / logout / status**
-
-  ```bash
-  nextlabs auth login      # acquire & cache a token
-  nextlabs auth status     # show whether a valid cached token exists
-  nextlabs auth logout     # remove the cached entry
-  ```
-
-- **Refresh tokens** are used transparently when available; on refresh failure
-  the CLI falls back to the password grant (if `--password` / `NEXTLABS_PASSWORD`
-  is set) and raises `AuthenticationError` with a "Run `nextlabs auth login`"
-  hint otherwise.
-
-- **CI bypass** — set `NEXTLABS_TOKEN` (or pass `--token`) to use a pre-issued
-  bearer token. No login, no cache writes.
-
-- **SDK default is `NullTokenCache`** (no silent filesystem writes). Library
-  consumers can opt in explicitly:
-
-  ```python
-  from nextlabs_sdk import CloudAzClient, FileTokenCache
-
-  client = CloudAzClient(
-      base_url="https://cloudaz.example.com",
-      username="admin",
-      password="secret",
-      token_cache=FileTokenCache(),  # or a custom TokenCache
-  )
-  ```
-
-  The public cache API is `TokenCache`, `CachedToken`, `FileTokenCache`,
-  `NullTokenCache`, and `StaticTokenAuth`.
-
-## Public API surface
-
-All imports come from three public entry points:
+All imports come from four public entry points:
 
 - `nextlabs_sdk` — clients (`CloudAzClient`, `AsyncCloudAzClient`,
-  `PdpClient`, `AsyncPdpClient`), transport (`HttpConfig`, `RetryConfig`,
-  `create_http_client`, `create_async_http_client`), pagination
-  (`SyncPaginator`, `AsyncPaginator`, `PageResult`), auth
+  `PdpClient`, `AsyncPdpClient`), transport (`HttpConfig`,
+  `RetryConfig`, `create_http_client`, `create_async_http_client`),
+  pagination (`SyncPaginator`, `AsyncPaginator`, `PageResult`), auth
   (`CloudAzAuth`, `PdpAuth`, `StaticTokenAuth`), token cache
   (`TokenCache`, `CachedToken`, `FileTokenCache`, `NullTokenCache`),
   and `__version__`.
-- `nextlabs_sdk.cloudaz` — CloudAz domain models and enums
-  (`Tag`, `TagType`, `Operator`, audit-log / report / dashboard /
+- `nextlabs_sdk.cloudaz` — CloudAz domain models and enums (`Tag`,
+  `TagType`, `Operator`, audit-log / report / dashboard /
   system-config / activity-log models).
 - `nextlabs_sdk.pdp` — PDP request/response models and enums
   (`Subject`, `Resource`, `Action`, `Application`, `Environment`,
@@ -267,8 +193,198 @@ All imports come from three public entry points:
 - `nextlabs_sdk.exceptions` — the `NextLabsError` hierarchy.
 
 Anything with a leading underscore (`nextlabs_sdk._cloudaz`,
-`nextlabs_sdk._pdp`, etc.) is an internal implementation detail and may
-change without notice.
+`nextlabs_sdk._pdp`, `nextlabs_sdk._cli`, `nextlabs_sdk._auth`, …)
+is an internal implementation detail and may change without notice.
+
+---
+
+## Using the CLI
+
+The optional CLI exposes most CloudAz operations plus PDP evaluation.
+
+### Quick start
+
+```bash
+pip install "nextlabs-sdk[cli]"
+
+export NEXTLABS_BASE_URL="https://cloudaz.example.com"
+export NEXTLABS_USERNAME="admin"
+
+nextlabs auth login                # acquire & cache a token
+nextlabs auth status               # is the cached token still valid?
+nextlabs policies search --status APPROVED
+nextlabs pdp eval --subject alice --resource doc-42 \
+                  --resource-type document --action read --application wiki
+```
+
+### Command groups
+
+```text
+auth             login | logout | status | test | accounts | use
+tags             list (positional <tag_type>) | get | create | delete
+components       search | get | create | update | delete
+component-types  list | get | create | update | delete
+policies         search | get | export-all | tags
+audit-logs       search (--start-date / --end-date in epoch-ms)
+reports          ...
+dashboard        ...
+pdp              eval | permissions
+```
+
+Use `nextlabs <group> --help` for the exact flags of each subcommand.
+
+### Output formats
+
+Every list/get command accepts `-o` / `--output`. Values are
+case-insensitive.
+
+| Format   | When to use                                                   |
+| -------- | ------------------------------------------------------------- |
+| `table`  | Default. Compact columns; long values wrap (never truncated). |
+| `wide`   | Table plus extra columns (owner, timestamps, version, …).     |
+| `detail` | Sectioned per-item output, `kubectl describe` style.          |
+| `json`   | Raw JSON dump of the response model(s). Machine-readable.     |
+
+```bash
+nextlabs -o wide policies search
+nextlabs -o detail policies get 17
+nextlabs --output json components search    # machine-readable
+```
+
+### Recipes
+
+Real workflows assembled from the commands shipped today.
+
+**1. Daily admin — find an approved policy and read it.**
+
+```bash
+nextlabs auth login
+nextlabs policies search --status APPROVED --text "billing"
+nextlabs policies get 17 -o detail
+```
+
+**2. CI authorization smoke test — fail the build if `alice` cannot read the wiki.**
+
+```bash
+nextlabs --token "$NEXTLABS_TOKEN" \
+  pdp eval --subject alice --resource doc-42 --resource-type document \
+           --action read --application wiki -o json \
+  | jq -e '.eval_results[0].decision == "Permit"'
+```
+
+**3. Export the policy catalogue to version control.**
+
+```bash
+nextlabs -o json policies search --page-size 1000 > policies.json
+git add policies.json && git commit -m "chore: snapshot policies"
+```
+
+**4. Audit recent activity (last hour).**
+
+```bash
+END=$(date +%s%3N)
+START=$((END - 3600000))
+nextlabs audit-logs search --start-date "$START" --end-date "$END"
+```
+
+**5. Run in CI without an interactive login.**
+
+```bash
+NEXTLABS_BASE_URL="https://cloudaz.example.com" \
+NEXTLABS_TOKEN="$(vault kv get -field=token secret/nextlabs/ci)" \
+  nextlabs policies search --page-size 50
+```
+
+`NEXTLABS_TOKEN` (or `--token`) bypasses the OIDC login flow **and** the
+token cache — nothing is read from or written to disk.
+
+**6. Templated extraction with `jq`.**
+
+```bash
+nextlabs -o json components search | jq '.[].id'
+```
+
+For more day-to-day fixes (auth cache, SSL trust, missing PDP attributes,
+…) see [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
+---
+
+## Configuration & authentication
+
+Both the SDK and the CLI share the same transport, retry, and OIDC
+machinery.
+
+### `HttpConfig` and `RetryConfig`
+
+```python
+from nextlabs_sdk import CloudAzClient, HttpConfig, RetryConfig
+
+client = CloudAzClient(
+    base_url="https://cloudaz.example.com",
+    username="admin",
+    password="secret",
+    http_config=HttpConfig(
+        timeout=15.0,
+        verify_ssl=True,
+        retry=RetryConfig(max_retries=5, base_delay=0.5, max_delay=10.0),
+    ),
+)
+```
+
+Retries use exponential backoff with jitter and apply to transient
+transport failures and 5xx / 429 responses. `Retry-After` is honoured
+and clamped to `max_delay`.
+
+### OIDC tokens, caching, and environment variables
+
+The CLI persists OIDC tokens between invocations so users do not
+re-authenticate on every command. The SDK defaults to `NullTokenCache`
+(no silent filesystem writes); library consumers opt in explicitly:
+
+```python
+from nextlabs_sdk import CloudAzClient, FileTokenCache
+
+client = CloudAzClient(
+    base_url="https://cloudaz.example.com",
+    username="admin",
+    password="secret",
+    token_cache=FileTokenCache(),  # or any custom TokenCache
+)
+```
+
+**Token cache lookup precedence** (CLI):
+
+1. `--cache-dir <path>` or `NEXTLABS_CACHE_DIR` → `<path>/tokens.json`
+2. `$XDG_CACHE_HOME/nextlabs-sdk/tokens.json`
+3. `~/.cache/nextlabs-sdk/tokens.json`
+
+The file is written `0600` inside a `0700` directory; writes are atomic
+(temp file + `os.replace`). The cache key is
+`"{token_url}|{username}|{client_id}"` so multiple profiles coexist.
+
+Refresh tokens are used transparently when available; on refresh failure
+the CLI falls back to the password grant (if `--password` /
+`NEXTLABS_PASSWORD` is set) and otherwise raises `AuthenticationError`
+with a "Run `nextlabs auth login`" hint.
+
+**Environment variables**
+
+| Variable                   | Purpose                                                       |
+| -------------------------- | ------------------------------------------------------------- |
+| `NEXTLABS_BASE_URL`        | CloudAz base URL                                              |
+| `NEXTLABS_USERNAME`        | CloudAz username                                              |
+| `NEXTLABS_PASSWORD`        | CloudAz password                                              |
+| `NEXTLABS_CLIENT_ID`       | OIDC client ID (default: `ControlCenterOIDCClient`)           |
+| `NEXTLABS_CLIENT_SECRET`   | PDP client secret                                             |
+| `NEXTLABS_PDP_URL`         | PDP base URL (defaults to `--base-url`)                       |
+| `NEXTLABS_TOKEN`           | Pre-issued bearer token; bypasses the login flow and cache    |
+| `NEXTLABS_CACHE_DIR`       | Directory holding `tokens.json` (overrides XDG default)       |
+
+Top-level CLI flags worth knowing: `--no-verify` (skip TLS verification —
+dev only), `-v` / `-vv` (verbose; `-vv` logs every HTTP request and
+response body), `--token` (one-shot bearer override).
+
+---
 
 ## Project layout
 
@@ -277,7 +393,7 @@ src/nextlabs_sdk/
 ├── cloudaz/        # Public: CloudAz models & enums (re-exports)
 ├── pdp/            # Public: PDP models & enums (re-exports)
 ├── exceptions.py   # Public: NextLabsError hierarchy
-├── _auth/          # Internal: OIDC auth flows
+├── _auth/          # Internal: OIDC auth flows + token cache
 ├── _cloudaz/       # Internal: CloudAz service classes + models
 ├── _pdp/           # Internal: PDP client + JSON/XML serializers
 ├── _cli/           # Internal: Typer-based CLI (optional extra)
@@ -298,8 +414,16 @@ python ./tools/tests.py --short --e2e # E2E tests only (requires Docker)
 python ./tools/tests.py --short --all # unit + E2E tests (requires Docker)
 ```
 
-A `.devcontainer` is provided; pre-commit hooks are preconfigured.
+A `.devcontainer` is provided; pre-commit hooks (`black`, `flake8`,
+`mypy`, `pyright`) are preconfigured. The CLI demo above is regenerated
+with `vhs docs/cast/demo.tape` — see
+[`docs/cast/README.md`](docs/cast/README.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
+
+---
+
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
+[Changelog](CHANGELOG.md) · [Troubleshooting](docs/troubleshooting.md)
