@@ -78,7 +78,7 @@ def get(
 
 @policies_app.command(name="get-active")
 @cli_error_handler
-def get_active(
+def get_active(  # noqa: WPS463
     ctx: typer.Context,
     policy_id: Annotated[int, typer.Argument(help="Policy ID")],
 ) -> None:
@@ -87,7 +87,6 @@ def get_active(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     policy = client.policies.get_active(policy_id)
     render(cli_ctx, policy, _POLICY_COLUMNS, wide_columns=_POLICY_WIDE_COLUMNS)
-    return
 
 
 @policies_app.command(name="create-sub")

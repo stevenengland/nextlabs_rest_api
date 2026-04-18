@@ -87,12 +87,14 @@ def list_reports(
     shared: Annotated[bool, typer.Option(help="Include shared reports")] = True,
     decision: Annotated[str, typer.Option(help="Policy decision filter")] = "AD",
     sort_by: Annotated[str, typer.Option(help="Sort field")] = "title",
-    sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
+    sort_order: Annotated[
+        str, typer.Option(help="Sort order")
+    ] = "ascending",  # noqa: WPS226
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
     """List saved reports."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     reports = list(
         client.reports.list(
             title=title,
@@ -179,7 +181,7 @@ def widgets(
 def enforcements(
     ctx: typer.Context,
     report_id: Annotated[int, typer.Argument(help="Report ID")],
-    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",
+    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",  # noqa: WPS226
     sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:

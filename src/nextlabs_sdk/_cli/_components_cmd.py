@@ -62,14 +62,14 @@ def get(
 ) -> None:
     """Get a component by ID."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     comp = client.components.get(component_id)
     render(cli_ctx, comp, _COMP_COLUMNS, wide_columns=_COMPONENT_WIDE_COLUMNS)
 
 
 @components_app.command(name="get-active")
 @cli_error_handler
-def get_active(
+def get_active(  # noqa: WPS463
     ctx: typer.Context,
     component_id: Annotated[int, typer.Argument(help="Component ID")],
 ) -> None:
@@ -78,7 +78,6 @@ def get_active(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     comp = client.components.get_active(component_id)
     render(cli_ctx, comp, _COMP_COLUMNS, wide_columns=_COMPONENT_WIDE_COLUMNS)
-    return
 
 
 @components_app.command(name="create-sub")

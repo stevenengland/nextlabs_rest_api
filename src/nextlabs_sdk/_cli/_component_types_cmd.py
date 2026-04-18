@@ -44,14 +44,14 @@ def get(
 ) -> None:
     """Get a component type by ID."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     ct = client.component_types.get(component_type_id)
     render(cli_ctx, ct, _CT_COLUMNS)
 
 
 @component_types_app.command(name="get-active")
 @cli_error_handler
-def get_active(
+def get_active(  # noqa: WPS463
     ctx: typer.Context,
     component_type_id: Annotated[int, typer.Argument(help="Component type ID")],
 ) -> None:
@@ -60,7 +60,6 @@ def get_active(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     ct = client.component_types.get_active(component_type_id)
     render(cli_ctx, ct, _CT_COLUMNS)
-    return
 
 
 @component_types_app.command(name="bulk-delete")
