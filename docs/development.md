@@ -7,6 +7,9 @@
 3. Wait for the container to build and `post-create.sh` to complete
 4. You're ready — pre-commit hooks, linters, and tests are pre-configured
 
+Dependencies are preinstalled in the container's system Python — use `pip`
+directly; no `venv`, `pipx`, `uv`, or `poetry` is needed inside the container.
+
 ### Docker from inside the dev container
 
 The dev container uses Docker-outside-of-Docker. To run Docker commands that
