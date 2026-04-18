@@ -291,3 +291,66 @@ def test_components_undeploy_success(stub: tuple[Any, Any, Any]):
 
     assert result.exit_code == 0
     assert "Undeployed" in result.output
+
+
+def test_components_get_active(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_comp, _ = stub
+    when(mock_comp).get_active(1).thenReturn(_make_component())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "get-active", "1"])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_components_create_sub_success(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_comp, _ = stub
+    payload = {"name": "Child"}
+    when(mock_comp).create_sub_component({**payload, "parentId": 9}).thenReturn(200)
+    payload_path = tmp_path / "s.json"
+    payload_path.write_text(json.dumps(payload))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "components",
+            "create-sub",
+            "--parent-id",
+            "9",
+            "--payload",
+            str(payload_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "200" in result.output
+
+
+def test_components_bulk_delete(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_comp, _ = stub
+    when(mock_comp).bulk_delete([1, 2]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "components", "bulk-delete", "--ids", "1,2"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 2 components" in result.output
+
+
+def test_components_find_dependencies(stub: tuple[Any, Any, Any]) -> None:
+    from nextlabs_sdk._cloudaz._component_models import Dependency
+
+    _, mock_comp, _ = stub
+    when(mock_comp).find_dependencies([4]).thenReturn(
+        [Dependency(id=77, type="POLICY", name="PolA")],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "find-dependencies", "4"])
+
+    assert result.exit_code == 0, result.output
+    assert "PolA" in result.output
