@@ -31,9 +31,11 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install vhs (Charm apt repo) + ttyd (GitHub release binary).
-# Used to (re)generate the README CLI demo at docs/cast/demo.svg from
-# docs/cast/demo.tape. See docs/cast/README.md.
+# Install vhs (Charm apt repo) + ttyd (GitHub release binary) + chromium.
+# Used to (re)generate the README CLI demo at docs/cast/demo.gif from
+# docs/cast/demo.tape. See docs/cast/README.md. Chromium runs headless
+# under vhs; in this container the kernel lacks user-namespaces, so we
+# inject --no-sandbox via /etc/chromium.d/.
 ARG TTYD_VERSION=1.7.7
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://repo.charm.sh/apt/gpg.key \
@@ -41,10 +43,12 @@ RUN mkdir -p /etc/apt/keyrings \
     && echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
        > /etc/apt/sources.list.d/charm.list \
     && apt-get update \
-    && apt-get install -y vhs \
+    && apt-get install -y vhs chromium \
     && curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.$(uname -m)" \
          -o /usr/local/bin/ttyd \
     && chmod +x /usr/local/bin/ttyd \
+    && echo 'export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox --no-zygote"' \
+         > /etc/chromium.d/no-sandbox \
     && rm -rf /var/lib/apt/lists/*
 
 # Create workspace directory
