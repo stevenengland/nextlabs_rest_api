@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli._app import app
@@ -9,7 +10,8 @@ runner = CliRunner()
 
 def test_verbose_flag_appears_in_help():
     result = runner.invoke(app, ["--help"])
+    output = strip_ansi(result.output)
 
     assert result.exit_code == 0
-    assert "-v" in result.output
-    assert "--verbose" in result.output
+    assert "-v" in output
+    assert "--verbose" in output

@@ -13,6 +13,7 @@ pytest-cov
 pytest-env
 pytest-mock
 pytest-timeout
+strip_ansi
 testcontainers
 types-PyYAML
 types-requests

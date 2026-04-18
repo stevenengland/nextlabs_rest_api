@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -155,7 +156,7 @@ def test_search_missing_required_dates():
     result = runner.invoke(app, [*_GLOBAL_OPTS, "audit-logs", "search"])
 
     assert result.exit_code != 0
-    output = result.output.lower()
+    output = strip_ansi(result.output).lower()
     assert "start-date" in output or "start_date" in output
 
 

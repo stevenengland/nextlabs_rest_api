@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -339,7 +340,7 @@ def test_components_bulk_delete(stub: tuple[Any, Any, Any]) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "Deleted 2 components" in result.output
+    assert "Deleted 2 components" in strip_ansi(result.output)
 
 
 def test_components_find_dependencies(stub: tuple[Any, Any, Any]) -> None:

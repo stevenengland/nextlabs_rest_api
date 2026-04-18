@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -140,7 +141,8 @@ def test_alerts_missing_dates():
     result = runner.invoke(app, [*_GLOBAL_OPTS, "dashboard", "alerts"])
 
     assert result.exit_code != 0
-    assert "from-date" in result.output.lower() or "from_date" in result.output.lower()
+    output = strip_ansi(result.output).lower()
+    assert "from-date" in output or "from_date" in output
 
 
 def test_top_users_custom_decision():
@@ -203,7 +205,7 @@ def test_top_policies_output_formats(output_format, assertions):
     )
 
     assert result.exit_code == 0
-    assert assertions(result.output)
+    assert assertions(strip_ansi(result.output))
 
 
 def test_top_policies_custom_decision():

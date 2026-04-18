@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import typer
+from strip_ansi import strip_ansi
 
 from nextlabs_sdk._cli._binary_output import write_bytes
 
@@ -17,7 +18,7 @@ def test_write_bytes_creates_new_file(
     write_bytes(path, b"hello", overwrite=False)
 
     assert path.read_bytes() == b"hello"
-    captured = capsys.readouterr().out.replace("\n", "")
+    captured = strip_ansi(capsys.readouterr().out.replace("\n", ""))
     assert "5" in captured
     assert str(path) in captured
 

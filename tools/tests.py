@@ -1,9 +1,8 @@
 import os
-import re
 import subprocess  # noqa: S404
 import sys
 
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+from strip_ansi import strip_ansi
 
 
 def _extract_no_cov(argv: list[str]) -> bool:
@@ -88,7 +87,7 @@ def call_pytest_short(argv: list[str]) -> dict[str, str]:
     )  # noqa: S603
 
     lines = (pytest_run.stdout + pytest_run.stderr).splitlines()
-    lines = [_ANSI_RE.sub("", line) for line in lines]
+    lines = [strip_ansi(line) for line in lines]
     keep = [line for line in lines if _is_relevant_pytest_line(line)]
 
     return {

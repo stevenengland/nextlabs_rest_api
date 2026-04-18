@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -436,8 +437,9 @@ def test_policies_import_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> N
     )
 
     assert result.exit_code == 0
-    assert "Imported" in result.output
-    assert "1 policies" in result.output
+    output = strip_ansi(result.output)
+    assert "Imported" in output
+    assert "1 policies" in output
 
 
 def test_policies_import_file_not_found(stub: tuple[Any, Any, Any]) -> None:
@@ -503,7 +505,7 @@ def test_policies_bulk_delete(stub: tuple[Any, Any, Any]) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "Deleted 3 policies" in result.output
+    assert "Deleted 3 policies" in strip_ansi(result.output)
 
 
 def test_policies_bulk_delete_xacml(stub: tuple[Any, Any, Any]) -> None:
@@ -524,7 +526,7 @@ def test_policies_bulk_delete_xacml(stub: tuple[Any, Any, Any]) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    assert "Deleted 2 XACML policies" in result.output
+    assert "Deleted 2 XACML policies" in strip_ansi(result.output)
 
 
 def test_policies_find_dependencies(stub: tuple[Any, Any, Any]) -> None:

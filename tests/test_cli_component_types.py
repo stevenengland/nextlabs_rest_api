@@ -4,6 +4,7 @@ import json
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -245,7 +246,7 @@ def test_component_types_bulk_delete(stub_client):
     )
 
     assert result.exit_code == 0, result.output
-    assert "Deleted 2 component types" in result.output
+    assert "Deleted 2 component types" in strip_ansi(result.output)
 
 
 def test_component_types_clone(stub_client):
