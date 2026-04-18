@@ -12,6 +12,7 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._account_resolver import ResolvedAccount
+from nextlabs_sdk._cli._cache_key import cache_key_for
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cloudaz._client import CloudAzClient
@@ -200,7 +201,7 @@ _ACCOUNT = ResolvedAccount(
     username="user",
     client_id="client",
 )
-_CACHE_KEY = "https://example.com/cas/oidc/accessToken|user|client"
+_CACHE_KEY = cache_key_for(_ACCOUNT)
 
 
 def _isatty_false() -> bool:
@@ -397,6 +398,41 @@ def test_fresh_access_token_proceeds_without_password(
     monkeypatch.setattr(typer, "prompt", _explode_prompt)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
+    _client_factory.make_cloudaz_client(ctx)
+
+    assert captured["password"] is None
+
+
+def test_empty_password_is_treated_as_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """An empty --password / NEXTLABS_PASSWORD must not bypass the gate."""
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    def _explode_prompt(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called in non-TTY mode")
+
+    monkeypatch.setattr(typer, "prompt", _explode_prompt)
+
+    ctx = _make_ctx(password="", cache_dir=str(tmp_path))
+    with pytest.raises(typer.BadParameter, match="password"):
+        _client_factory.make_cloudaz_client(ctx)
+
+
+def test_empty_password_falls_back_to_cached_refresh_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Empty password must allow refresh-token fallback rather than bypassing."""
+    _seed_token(
+        tmp_path,
+        expires_at=0,
+        refresh_token="rt",
+        refresh_expires_at=10**12,
+    )
+    captured = _capture_cloudaz_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    ctx = _make_ctx(password="", cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
 
     assert captured["password"] is None

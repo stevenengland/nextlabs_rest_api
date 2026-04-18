@@ -16,6 +16,7 @@ from nextlabs_sdk._cli._account_resolver import (
     prefs_key_for,
     resolve_account,
 )
+from nextlabs_sdk._cli._cache_key import cache_key_for
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._config import HttpConfig
@@ -26,13 +27,6 @@ _BASE_URL_REQUIRED = f"--base-url is required (or {_LOGIN_HINT})"
 _USERNAME_REQUIRED = f"--username is required (or {_LOGIN_HINT})"
 _PASSWORD_REQUIRED = f"--password or NEXTLABS_PASSWORD is required (or {_LOGIN_HINT})"
 _CLIENT_SECRET_REQUIRED = "--client-secret or NEXTLABS_CLIENT_SECRET is required"
-
-
-def _token_cache_key(account: ResolvedAccount) -> str:
-    return (
-        f"{account.base_url}/cas/oidc/accessToken"
-        f"|{account.username}|{account.client_id}"
-    )
 
 
 def _cached_credentials_usable(
@@ -47,7 +41,7 @@ def _cached_credentials_usable(
     and not known to be past its lifetime — in which case ``CloudAzAuth``
     can redeem it silently on the next request.
     """
-    entry = cache.load(_token_cache_key(account))
+    entry = cache.load(cache_key_for(account))
     if entry is None:
         return False
     effective_now = time.time() if now is None else now
@@ -128,7 +122,7 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
     account = _resolve_or_raise(ctx)
     cache = build_file_cache(ctx)
 
-    password = ctx.password
+    password = ctx.password or None
     if password is None and not _cached_credentials_usable(cache, account):
         password = _prompt_password_if_tty(account)
         if password is None:
