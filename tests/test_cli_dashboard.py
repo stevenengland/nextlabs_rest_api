@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -140,7 +141,8 @@ def test_alerts_missing_dates():
     result = runner.invoke(app, [*_GLOBAL_OPTS, "dashboard", "alerts"])
 
     assert result.exit_code != 0
-    assert "from-date" in result.output.lower() or "from_date" in result.output.lower()
+    output = strip_ansi(result.output).lower()
+    assert "from-date" in output or "from_date" in output
 
 
 def test_top_users_custom_decision():
@@ -203,7 +205,7 @@ def test_top_policies_output_formats(output_format, assertions):
     )
 
     assert result.exit_code == 0
-    assert assertions(result.output)
+    assert assertions(strip_ansi(result.output))
 
 
 def test_top_policies_custom_decision():
@@ -215,3 +217,56 @@ def test_top_policies_custom_decision():
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed[0]["policy_name"] == "Access Control Policy"
+
+
+def _make_tag_alert(tag: str = "red", count: int = 3) -> Any:
+    from nextlabs_sdk._cloudaz._dashboard_models import MonitorTagAlert
+
+    return MonitorTagAlert.model_validate(
+        {"tagValue": tag, "monitorName": "Mon", "alertCount": count},
+    )
+
+
+def test_dashboard_alerts_by_monitor_tags(tmp_path: Any) -> None:
+    _, mock_dashboard = _stub_client()
+    when(mock_dashboard).alerts_by_monitor_tags(
+        1713264000000,
+        1713350400000,
+    ).thenReturn([_make_tag_alert("red"), _make_tag_alert("blue", 5)])
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "dashboard",
+            "alerts-by-monitor-tags",
+            *_DATE_OPTS,
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "red" in result.output
+    assert "blue" in result.output
+
+
+def test_dashboard_alerts_by_monitor_tags_filter() -> None:
+    _, mock_dashboard = _stub_client()
+    when(mock_dashboard).alerts_by_monitor_tags(...).thenReturn(
+        [_make_tag_alert("red"), _make_tag_alert("blue", 5)],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "dashboard",
+            "alerts-by-monitor-tags",
+            *_DATE_OPTS,
+            "--tag",
+            "red",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "red" in result.output
+    assert "blue" not in result.output

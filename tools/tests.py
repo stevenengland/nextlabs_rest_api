@@ -2,6 +2,8 @@ import os
 import subprocess  # noqa: S404
 import sys
 
+from strip_ansi import strip_ansi
+
 
 def _extract_no_cov(argv: list[str]) -> bool:
     """Extract standalone --no-cov flag from argv.
@@ -58,10 +60,13 @@ def _build_marker_args(argv: list[str]) -> list[str]:
 
 
 def _is_relevant_pytest_line(line: str) -> bool:
+    if line.startswith("PASSED"):
+        return False
     is_coverage = "coverage" in line.lower() and "CoverageWarning" not in line
     is_test_result = "passed" in line or "failed" in line
     is_failure = line.startswith("FAILED") or line.startswith("ERROR")
-    return is_failure or is_test_result or is_coverage
+    is_error_detail = line.startswith("E   ") or line.startswith(">   ")
+    return is_failure or is_test_result or is_coverage or is_error_detail
 
 
 def call_pytest_short(argv: list[str]) -> dict[str, str]:
@@ -75,13 +80,14 @@ def call_pytest_short(argv: list[str]) -> dict[str, str]:
     """
     marker_args = _build_marker_args(argv)
 
-    cmd = ["python", "-m", "pytest", "."] + marker_args + (argv or [])
+    cmd = ["python", "-m", "pytest", ".", "-rA"] + marker_args + (argv or [])
 
     pytest_run = subprocess.run(
         cmd, check=False, capture_output=True, text=True
     )  # noqa: S603
 
     lines = (pytest_run.stdout + pytest_run.stderr).splitlines()
+    lines = [strip_ansi(line) for line in lines]
     keep = [line for line in lines if _is_relevant_pytest_line(line)]
 
     return {

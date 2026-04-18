@@ -3,6 +3,7 @@ from __future__ import annotations
 import click
 import pytest
 import typer
+from strip_ansi import strip_ansi
 
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
@@ -102,9 +103,11 @@ def test_verbose_one_prints_envelope_status_code(
     )
 
     captured = capsys.readouterr()
-    assert "API error: No data found" in captured.out
-    assert "envelope:" in captured.err
-    assert "statusCode=5000" in captured.err
+    stdout = strip_ansi(captured.out)
+    stderr = strip_ansi(captured.err)
+    assert "API error: No data found" in stdout
+    assert "envelope:" in stderr
+    assert "statusCode=5000" in stderr
 
 
 def test_verbose_zero_hides_envelope_status_code(

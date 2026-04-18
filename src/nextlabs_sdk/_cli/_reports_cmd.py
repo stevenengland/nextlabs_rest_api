@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -8,11 +9,18 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk._cli._output import ColumnDef, print_success, render
+from nextlabs_sdk._cli._output import (
+    ColumnDef,
+    print_success,
+    render,
+    render_json,
+)
 from nextlabs_sdk._cli._parsing import parse_json_payload
+from nextlabs_sdk._cli._payload_loader import require_payload
 from nextlabs_sdk._cloudaz._report_models import (
     DeleteReportsRequest,
     PolicyActivityReportDetail,
@@ -48,6 +56,28 @@ _REPORT_DETAIL_COLUMNS = (
 
 _WIDGET_DATA_COLUMNS = (ColumnDef("Enforcements", "enforcements"),)
 
+_CACHED_USER_COLUMNS = (
+    ColumnDef("Display Name", "display_name"),
+    ColumnDef("First Name", "first_name"),
+    ColumnDef("Last Name", "last_name"),
+)
+
+_CACHED_POLICY_COLUMNS = (
+    ColumnDef("Name", "name"),
+    ColumnDef("Full Name", "full_name"),
+)
+
+_USER_GROUP_COLUMNS = (
+    ColumnDef("ID", "id"),
+    ColumnDef("Title", "title"),
+)
+
+_APPLICATION_USER_COLUMNS = (
+    ColumnDef("Username", "username"),
+    ColumnDef("First Name", "first_name"),
+    ColumnDef("Last Name", "last_name"),
+)
+
 
 @reports_app.command(name="list")
 @cli_error_handler
@@ -57,12 +87,14 @@ def list_reports(
     shared: Annotated[bool, typer.Option(help="Include shared reports")] = True,
     decision: Annotated[str, typer.Option(help="Policy decision filter")] = "AD",
     sort_by: Annotated[str, typer.Option(help="Sort field")] = "title",
-    sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
+    sort_order: Annotated[
+        str, typer.Option(help="Sort order")
+    ] = "ascending",  # noqa: WPS226
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
     """List saved reports."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     reports = list(
         client.reports.list(
             title=title,
@@ -149,7 +181,7 @@ def widgets(
 def enforcements(
     ctx: typer.Context,
     report_id: Annotated[int, typer.Argument(help="Report ID")],
-    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",
+    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",  # noqa: WPS226
     sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
@@ -183,6 +215,138 @@ def export_report(
         sort_order=sort_order,
     )
     sys.stdout.buffer.write(exported)
+
+
+@reports_app.command(name="generate-widgets")
+@cli_error_handler
+def generate_widgets(
+    ctx: typer.Context,
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+) -> None:
+    """Generate widget data for an ad-hoc criteria payload."""
+    payload = require_payload(payload_path)
+    request = PolicyActivityReportRequest.model_validate(payload)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    widget_data = client.reports.generate_widgets(request)
+    render(cli_ctx, widget_data, _WIDGET_DATA_COLUMNS)
+
+
+@reports_app.command(name="generate-enforcements")
+@cli_error_handler
+def generate_enforcements(
+    ctx: typer.Context,
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",
+    sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
+    page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
+) -> None:
+    """Generate enforcement logs for an ad-hoc criteria payload."""
+    payload = require_payload(payload_path)
+    request = PolicyActivityReportRequest.model_validate(payload)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    paginator = client.reports.generate_enforcements(
+        request,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page_size=page_size,
+    )
+    entries = list(paginator.first_page().entries)
+    render(cli_ctx, entries, _ENFORCEMENT_COLUMNS, title="Enforcements")
+
+
+@reports_app.command(name="generate-export")
+@cli_error_handler
+def generate_export(
+    ctx: typer.Context,
+    output: Annotated[
+        Path,
+        typer.Option("--output", help="Destination file path"),
+    ],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    sort_by: Annotated[str, typer.Option(help="Sort field")] = "rowId",
+    sort_order: Annotated[str, typer.Option(help="Sort order")] = "ascending",
+    overwrite: Annotated[
+        bool,
+        typer.Option("--overwrite/--no-overwrite", help="Replace existing file"),
+    ] = False,
+) -> None:
+    """Export enforcement logs for an ad-hoc criteria payload."""
+    payload = require_payload(payload_path)
+    request = PolicyActivityReportRequest.model_validate(payload)
+    client = _client_factory.make_cloudaz_client(ctx.obj)
+    exported = client.reports.generate_export(
+        request, sort_by=sort_by, sort_order=sort_order
+    )
+    write_bytes(output, exported, overwrite=overwrite)
+
+
+@reports_app.command(name="list-cached-users")
+@cli_error_handler
+def list_cached_users(ctx: typer.Context) -> None:
+    """List cached enforcement users."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    users = client.reports.list_cached_users()
+    render(cli_ctx, users, _CACHED_USER_COLUMNS, title="Cached Users")
+
+
+@reports_app.command(name="list-cached-policies")
+@cli_error_handler
+def list_cached_policies(ctx: typer.Context) -> None:
+    """List cached policies available for report filtering."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    policies = client.reports.list_cached_policies()
+    render(cli_ctx, policies, _CACHED_POLICY_COLUMNS, title="Cached Policies")
+
+
+@reports_app.command(name="resource-actions")
+@cli_error_handler
+def resource_actions(ctx: typer.Context) -> None:
+    """List policy models grouped by name with their available actions."""
+    client = _client_factory.make_cloudaz_client(ctx.obj)
+    actions = client.reports.get_resource_actions()
+    render_json(actions)
+
+
+@reports_app.command(name="mappings")
+@cli_error_handler
+def mappings(ctx: typer.Context) -> None:
+    """List attribute mappings grouped by category."""
+    client = _client_factory.make_cloudaz_client(ctx.obj)
+    attribute_mappings = client.reports.get_mappings()
+    render_json(attribute_mappings)
+
+
+@reports_app.command(name="list-user-groups")
+@cli_error_handler
+def list_user_groups(ctx: typer.Context) -> None:
+    """List user groups available for report sharing."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    groups = client.reports.list_user_groups()
+    render(cli_ctx, groups, _USER_GROUP_COLUMNS, title="User Groups")
+
+
+@reports_app.command(name="list-application-users")
+@cli_error_handler
+def list_application_users(ctx: typer.Context) -> None:
+    """List application users available for report sharing."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    users = client.reports.list_application_users()
+    render(cli_ctx, users, _APPLICATION_USER_COLUMNS, title="Application Users")
 
 
 def _render_report_detail(model: BaseModel, console: Console) -> None:

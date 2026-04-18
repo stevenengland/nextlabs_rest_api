@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -155,5 +156,84 @@ def test_search_missing_required_dates():
     result = runner.invoke(app, [*_GLOBAL_OPTS, "audit-logs", "search"])
 
     assert result.exit_code != 0
-    output = result.output.lower()
+    output = strip_ansi(result.output).lower()
     assert "start-date" in output or "start_date" in output
+
+
+def test_audit_logs_export_with_ids(stubbed_audit: Any, tmp_path: Any) -> None:
+    from nextlabs_sdk._cloudaz._audit_log_models import ExportAuditLogsRequest
+
+    when(stubbed_audit).export(
+        ExportAuditLogsRequest(ids=[1, 2], query=None),
+    ).thenReturn(b"csv")
+
+    out = tmp_path / "out.csv"
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "audit-logs",
+            "export",
+            "--ids",
+            "1,2",
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"csv"
+
+
+def test_audit_logs_export_with_query(stubbed_audit: Any, tmp_path: Any) -> None:
+    when(stubbed_audit).export(...).thenReturn(b"csv-q")
+
+    query_file = tmp_path / "q.json"
+    query_file.write_text(
+        json.dumps({"start_date": 1700000000000, "end_date": 1700100000000}),
+    )
+    out = tmp_path / "out.csv"
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "audit-logs",
+            "export",
+            "--query",
+            str(query_file),
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"csv-q"
+
+
+def test_audit_logs_export_requires_input(stubbed_audit: Any, tmp_path: Any) -> None:
+    out = tmp_path / "out.csv"
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "audit-logs", "export", "--output", str(out)],
+    )
+
+    assert result.exit_code == 1
+    assert "Provide" in result.output
+
+
+def test_audit_logs_list_users(stubbed_audit: Any) -> None:
+    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogUser
+
+    when(stubbed_audit).list_users().thenReturn(
+        [
+            AuditLogUser.model_validate(
+                {"firstName": "Ada", "lastName": "Lovelace", "username": "ada"}
+            )
+        ],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "audit-logs", "list-users"])
+
+    assert result.exit_code == 0, result.output
+    assert "ada" in result.output

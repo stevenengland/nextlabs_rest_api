@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -143,14 +144,16 @@ def test_policies_get_not_found(stub: tuple[Any, Any, Any]) -> None:
 # --- create ---
 
 
-def test_policies_create_success(stub: tuple[Any, Any, Any]) -> None:
+def test_policies_create_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
     _, mock_policies, _ = stub
     payload = {"name": "New Policy", "effectType": "ALLOW"}
     when(mock_policies).create(payload).thenReturn(100)
+    payload_path = tmp_path / "policy.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "policies", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
@@ -158,38 +161,75 @@ def test_policies_create_success(stub: tuple[Any, Any, Any]) -> None:
 
 
 @pytest.mark.parametrize(
-    "data,expected_msg",
+    "body,expected_msg",
     [
         pytest.param("not-json", "Invalid JSON", id="invalid-json"),
-        pytest.param("[1, 2]", "must be an object", id="json-array-rejected"),
+        pytest.param("[1, 2]", "must be a JSON object", id="json-array-rejected"),
     ],
 )
-def test_policies_create_invalid_data(
+def test_policies_create_invalid_payload(
     stub: tuple[Any, Any, Any],
-    data: str,
+    tmp_path: Any,
+    body: str,
     expected_msg: str,
 ) -> None:
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text(body)
+
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "create", "--data", data],
+        [*_GLOBAL_OPTS, "policies", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 1
     assert expected_msg in result.output
 
 
-def test_policies_modify_success(stub: tuple[Any, Any, Any]) -> None:
+def test_policies_create_rejects_deprecated_data_flag(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "create", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_policies_create_requires_payload(stub: tuple[Any, Any, Any]) -> None:
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "create"])
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_policies_modify_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
     _, mock_policies, _ = stub
     payload = {"id": 82, "name": "Updated Policy"}
     when(mock_policies).modify(payload).thenReturn(82)
+    payload_path = tmp_path / "policy.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "policies", "modify", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "policies", "modify", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
     assert "Modified" in result.output
+
+
+def test_policies_modify_rejects_deprecated_data_flag(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "modify", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
 
 
 def test_policies_delete_success(stub: tuple[Any, Any, Any]) -> None:
@@ -397,8 +437,9 @@ def test_policies_import_success(stub: tuple[Any, Any, Any], tmp_path: Any) -> N
     )
 
     assert result.exit_code == 0
-    assert "Imported" in result.output
-    assert "1 policies" in result.output
+    output = strip_ansi(result.output)
+    assert "Imported" in output
+    assert "1 policies" in output
 
 
 def test_policies_import_file_not_found(stub: tuple[Any, Any, Any]) -> None:
@@ -415,3 +456,206 @@ def test_policies_import_file_not_found(stub: tuple[Any, Any, Any]) -> None:
 
     assert result.exit_code == 1
     assert "File not found" in result.output
+
+
+def test_policies_get_active(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).get_active(82).thenReturn(_make_policy())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "get-active", "82"])
+
+    assert result.exit_code == 0, result.output
+    assert "Allow IT Access" in result.output
+
+
+def test_policies_create_sub_success(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_policies, _ = stub
+    payload = {"name": "Child"}
+    when(mock_policies).create_sub_policy({**payload, "parentId": 5}).thenReturn(101)
+    payload_path = tmp_path / "sub.json"
+    payload_path.write_text(json.dumps(payload))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "create-sub",
+            "--parent-id",
+            "5",
+            "--payload",
+            str(payload_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "101" in result.output
+
+
+def test_policies_bulk_delete(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).bulk_delete([1, 2, 3]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "bulk-delete", "--ids", "1,2,3"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 3 policies" in strip_ansi(result.output)
+
+
+def test_policies_bulk_delete_xacml(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).bulk_delete_xacml([7, 8]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "bulk-delete-xacml",
+            "--id",
+            "7",
+            "--id",
+            "8",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 2 XACML policies" in strip_ansi(result.output)
+
+
+def test_policies_find_dependencies(stub: tuple[Any, Any, Any]) -> None:
+    from nextlabs_sdk._cloudaz._component_models import Dependency
+
+    _, mock_policies, _ = stub
+    when(mock_policies).find_dependencies([5]).thenReturn(
+        [Dependency(id=99, type="COMPONENT", name="CompA")],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "find-dependencies", "5"])
+
+    assert result.exit_code == 0, result.output
+    assert "CompA" in result.output
+
+
+def test_policies_export_all_writes_bytes(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).export_all(export_mode="PLAIN").thenReturn("<xml/>")
+
+    out = tmp_path / "all.xml"
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "export-all", "--output", str(out)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"<xml/>"
+
+
+def test_policies_export_options(stub: tuple[Any, Any, Any]) -> None:
+    from nextlabs_sdk._cloudaz._policy_models import ExportOptions
+
+    _, mock_policies, _ = stub
+    when(mock_policies).export_options().thenReturn(
+        ExportOptions(sande_enabled=True, plain_text_enabled=False),
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "export-options"])
+
+    assert result.exit_code == 0, result.output
+    assert "True" in result.output
+
+
+def test_policies_generate_xacml(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).generate_xacml([{"id": 42}]).thenReturn("<xacml/>")
+    out = tmp_path / "p.xml"
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "generate-xacml", "42", "--output", str(out)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"<xacml/>"
+
+
+def test_policies_generate_pdf(stub: tuple[Any, Any, Any], tmp_path: Any) -> None:
+    _, mock_policies, _ = stub
+    when(mock_policies).generate_pdf([{"id": 42}]).thenReturn("%PDF-1.4")
+    out = tmp_path / "p.pdf"
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "generate-pdf", "42", "--output", str(out)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"%PDF-1.4"
+
+
+def test_policies_import_xacml_success(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_policies, _ = stub
+    xacml = tmp_path / "p.xml"
+    xacml.write_bytes(b"<policy/>")
+    when(mock_policies).import_xacml(...).thenReturn(
+        ImportResult(
+            total_components=0,
+            total_policies=1,
+            total_policy_models=0,
+            non_blocking_error=False,
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "import-xacml", "--payload", str(xacml)],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_policies_import_xacml_file_not_found(stub: tuple[Any, Any, Any]) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "import-xacml", "--payload", "/nope.xml"],
+    )
+
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
+def test_policies_validate_obligations(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_policies, _ = stub
+    payload = {"foo": "bar"}
+    when(mock_policies).validate_obligations(payload).thenReturn(None)
+    payload_path = tmp_path / "o.json"
+    payload_path.write_text(json.dumps(payload))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "validate-obligations",
+            "--payload",
+            str(payload_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "valid" in result.output

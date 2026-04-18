@@ -3,6 +3,11 @@
 Typed Python SDK wrapping the NextLabs CloudAz Console API and PDP REST API.
 Python 3.11+. See @docs/development.md for the full development guide.
 
+## Environment
+
+Devcontainer — deps preinstalled in system Python. Use `pip` directly; no
+`venv`/`pipx`/`uv`/`poetry`.
+
 ## Commands
 
 ```bash

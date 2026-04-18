@@ -4,6 +4,7 @@ import json
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -113,38 +114,55 @@ def test_component_types_get_not_found(stub_client):
     assert "Not found" in result.output
 
 
-def test_component_types_create_success(stub_client):
+def test_component_types_create_success(stub_client, tmp_path):
     _, mock_ct, _ = stub_client
     payload = {"name": "New Type", "shortName": "new", "type": "RESOURCE"}
     when(mock_ct).create(payload).thenReturn(42)
+    payload_path = tmp_path / "ct.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "create", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "component-types", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
     assert "42" in result.output
 
 
-def test_component_types_create_invalid_json(stub_client):
+def test_component_types_create_invalid_payload(stub_client, tmp_path):
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text("not-json")
+
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "create", "--data", "not-json"],
+        [*_GLOBAL_OPTS, "component-types", "create", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 1
     assert "Invalid JSON" in result.output
 
 
-def test_component_types_modify_success(stub_client):
+def test_component_types_create_rejects_deprecated_data_flag(stub_client):
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "create", "--data", "{}"],
+    )
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_component_types_modify_success(stub_client, tmp_path):
     _, mock_ct, _ = stub_client
     payload = {"id": 1, "name": "Updated"}
     when(mock_ct).modify(payload).thenReturn(1)
+    payload_path = tmp_path / "mod.json"
+    payload_path.write_text(json.dumps(payload))
 
     result = runner.invoke(
         app,
-        [*_GLOBAL_OPTS, "component-types", "modify", "--data", json.dumps(payload)],
+        [*_GLOBAL_OPTS, "component-types", "modify", "--payload", str(payload_path)],
     )
 
     assert result.exit_code == 0
@@ -203,3 +221,71 @@ def test_component_types_search(stub_client, extra_args, as_json, check):
 
     assert result.exit_code == 0
     assert check(result.output)
+
+
+def test_component_types_get_active(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get_active(1).thenReturn(_make_component_type())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "get-active", "1"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "File Server" in result.output
+
+
+def test_component_types_bulk_delete(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).bulk_delete([3, 4]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "component-types", "bulk-delete", "--ids", "3,4"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 2 component types" in strip_ansi(result.output)
+
+
+def test_component_types_clone(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).clone(5).thenReturn(42)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "component-types", "clone", "5"])
+
+    assert result.exit_code == 0, result.output
+    assert "42" in result.output
+
+
+def test_component_types_list_extra_subject_attributes(stub_client):
+    from nextlabs_sdk._cloudaz._component_type_models import AttributeConfig
+
+    _, mock_ct, _ = stub_client
+    when(mock_ct).list_extra_subject_attributes("USER").thenReturn(
+        [
+            AttributeConfig.model_validate(
+                {
+                    "id": 1,
+                    "name": "Department",
+                    "shortName": "dept",
+                    "dataType": "STRING",
+                    "sortOrder": 0,
+                },
+            ),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "component-types",
+            "list-extra-subject-attributes",
+            "USER",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Department" in result.output

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -7,27 +8,31 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_success, render
-from nextlabs_sdk._cli._parsing import parse_json_payload
+from nextlabs_sdk._cli._payload_loader import reject_data_flag, require_payload
 from nextlabs_sdk._cloudaz._component_models import Component
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
 components_app = typer.Typer(help="Component management commands")
 
+_ID_COLUMN = ColumnDef("ID", "id")
+_NAME_COLUMN = ColumnDef("Name", "name")
+
 _COMP_COLUMNS = (
-    ColumnDef("ID", "id"),
-    ColumnDef("Name", "name"),
+    _ID_COLUMN,
+    _NAME_COLUMN,
     ColumnDef("Type", "type"),
     ColumnDef("Status", "status"),
     ColumnDef("Deployed", "deployed"),
 )
 
 _COMP_SEARCH_COLUMNS = (
-    ColumnDef("ID", "id"),
-    ColumnDef("Name", "name"),
+    _ID_COLUMN,
+    _NAME_COLUMN,
     ColumnDef("Group", "group"),
     ColumnDef("Status", "status"),
     ColumnDef("Deployed", "deployed"),
@@ -40,6 +45,14 @@ _COMPONENT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
     ColumnDef("Version", "version"),
 )
 
+_DEPENDENCY_COLUMNS = (
+    _ID_COLUMN,
+    ColumnDef("Type", "type"),
+    ColumnDef("Group", "group"),
+    _NAME_COLUMN,
+    ColumnDef("Folder Path", "folder_path"),
+)
+
 
 @components_app.command()
 @cli_error_handler
@@ -49,20 +62,97 @@ def get(
 ) -> None:
     """Get a component by ID."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     comp = client.components.get(component_id)
     render(cli_ctx, comp, _COMP_COLUMNS, wide_columns=_COMPONENT_WIDE_COLUMNS)
+
+
+@components_app.command(name="get-active")
+@cli_error_handler
+def get_active(  # noqa: WPS463
+    ctx: typer.Context,
+    component_id: Annotated[int, typer.Argument(help="Component ID")],
+) -> None:
+    """Get the deployed (active) revision of a component by ID."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    comp = client.components.get_active(component_id)
+    render(cli_ctx, comp, _COMP_COLUMNS, wide_columns=_COMPONENT_WIDE_COLUMNS)
+
+
+@components_app.command(name="create-sub")
+@cli_error_handler
+def create_sub(
+    ctx: typer.Context,
+    parent_id: Annotated[
+        int,
+        typer.Option("--parent-id", help="Parent component ID"),
+    ],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+) -> None:
+    """Create a sub-component under ``--parent-id`` from a JSON payload."""
+    payload = require_payload(payload_path)
+    payload["parentId"] = parent_id
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    comp_id = client.components.create_sub_component(payload)
+    print_success(f"Created sub-component with ID {comp_id}")
+
+
+@components_app.command(name="bulk-delete")
+@cli_error_handler
+def bulk_delete(
+    ctx: typer.Context,
+    ids: Annotated[
+        list[int] | None,
+        typer.Option("--id", help="Component ID (repeatable)"),
+    ] = None,
+    ids_csv: Annotated[
+        str | None,
+        typer.Option("--ids", help="Comma-separated component IDs"),
+    ] = None,
+) -> None:
+    """Delete several components in a single request."""
+    resolved = parse_bulk_ids(ids, ids_csv)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client.components.bulk_delete(resolved)
+    print_success(f"Deleted {len(resolved)} components")
+
+
+@components_app.command(name="find-dependencies")
+@cli_error_handler
+def find_dependencies(
+    ctx: typer.Context,
+    component_id: Annotated[int, typer.Argument(help="Component ID")],
+) -> None:
+    """List entities that depend on a component."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    deps = client.components.find_dependencies([component_id])
+    render(cli_ctx, deps, _DEPENDENCY_COLUMNS, title="Dependencies")
 
 
 @components_app.command()
 @cli_error_handler
 def create(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Create a component from a JSON payload."""
+    """Create a component from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     comp_id = client.components.create(payload)
     print_success(f"Created component with ID {comp_id}")
@@ -72,11 +162,19 @@ def create(
 @cli_error_handler
 def modify(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Modify a component from a JSON payload."""
+    """Modify a component from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.components.modify(payload)
     print_success("Modified component")

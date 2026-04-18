@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from mockito import mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
@@ -126,30 +127,44 @@ def test_components_get_not_found(stub: tuple[Any, Any, Any]):
     assert "Not found" in result.output
 
 
-def test_components_create_success(stub: tuple[Any, Any, Any]):
+def test_components_create_success(stub: tuple[Any, Any, Any], tmp_path: Any):
     _, mock_comp, _ = stub
     payload = {"name": "New Comp", "type": "RESOURCE"}
     when(mock_comp).create(payload).thenReturn(42)
+    payload_path = tmp_path / "comp.json"
+    payload_path.write_text(json.dumps(payload))
 
-    result = _invoke("components", "create", "--data", json.dumps(payload))
+    result = _invoke("components", "create", "--payload", str(payload_path))
 
     assert result.exit_code == 0
     assert "42" in result.output
 
 
-def test_components_create_invalid_json(stub: tuple[Any, Any, Any]):
-    result = _invoke("components", "create", "--data", "not-json")
+def test_components_create_invalid_payload(stub: tuple[Any, Any, Any], tmp_path: Any):
+    payload_path = tmp_path / "bad.json"
+    payload_path.write_text("not-json")
+
+    result = _invoke("components", "create", "--payload", str(payload_path))
 
     assert result.exit_code == 1
     assert "Invalid JSON" in result.output
 
 
-def test_components_modify_success(stub: tuple[Any, Any, Any]):
+def test_components_create_rejects_deprecated_data_flag(stub: tuple[Any, Any, Any]):
+    result = _invoke("components", "create", "--data", "{}")
+
+    assert result.exit_code == 1
+    assert "--payload" in result.output
+
+
+def test_components_modify_success(stub: tuple[Any, Any, Any], tmp_path: Any):
     _, mock_comp, _ = stub
     payload = {"id": 1, "name": "Updated"}
     when(mock_comp).modify(payload).thenReturn(1)
+    payload_path = tmp_path / "mod.json"
+    payload_path.write_text(json.dumps(payload))
 
-    result = _invoke("components", "modify", "--data", json.dumps(payload))
+    result = _invoke("components", "modify", "--payload", str(payload_path))
 
     assert result.exit_code == 0
     assert "Modified" in result.output
@@ -277,3 +292,66 @@ def test_components_undeploy_success(stub: tuple[Any, Any, Any]):
 
     assert result.exit_code == 0
     assert "Undeployed" in result.output
+
+
+def test_components_get_active(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_comp, _ = stub
+    when(mock_comp).get_active(1).thenReturn(_make_component())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "get-active", "1"])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_components_create_sub_success(
+    stub: tuple[Any, Any, Any],
+    tmp_path: Any,
+) -> None:
+    _, mock_comp, _ = stub
+    payload = {"name": "Child"}
+    when(mock_comp).create_sub_component({**payload, "parentId": 9}).thenReturn(200)
+    payload_path = tmp_path / "s.json"
+    payload_path.write_text(json.dumps(payload))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "components",
+            "create-sub",
+            "--parent-id",
+            "9",
+            "--payload",
+            str(payload_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "200" in result.output
+
+
+def test_components_bulk_delete(stub: tuple[Any, Any, Any]) -> None:
+    _, mock_comp, _ = stub
+    when(mock_comp).bulk_delete([1, 2]).thenReturn(None)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "components", "bulk-delete", "--ids", "1,2"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Deleted 2 components" in strip_ansi(result.output)
+
+
+def test_components_find_dependencies(stub: tuple[Any, Any, Any]) -> None:
+    from nextlabs_sdk._cloudaz._component_models import Dependency
+
+    _, mock_comp, _ = stub
+    when(mock_comp).find_dependencies([4]).thenReturn(
+        [Dependency(id=77, type="POLICY", name="PolA")],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "find-dependencies", "4"])
+
+    assert result.exit_code == 0, result.output
+    assert "PolA" in result.output

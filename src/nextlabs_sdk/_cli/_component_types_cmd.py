@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -7,11 +8,12 @@ from pydantic import BaseModel
 from rich.console import Console
 
 from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_success, render
-from nextlabs_sdk._cli._parsing import parse_json_payload
+from nextlabs_sdk._cli._payload_loader import reject_data_flag, require_payload
 from nextlabs_sdk._cloudaz._component_type_models import ComponentType
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
@@ -25,6 +27,14 @@ _CT_COLUMNS = (
     ColumnDef("Status", "status"),
 )
 
+_ATTRIBUTE_CONFIG_COLUMNS = (
+    ColumnDef("ID", "id"),
+    ColumnDef("Name", "name"),
+    ColumnDef("Short Name", "short_name"),
+    ColumnDef("Data Type", "data_type"),
+    ColumnDef("Sort Order", "sort_order"),
+)
+
 
 @component_types_app.command()
 @cli_error_handler
@@ -34,20 +44,95 @@ def get(
 ) -> None:
     """Get a component type by ID."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     ct = client.component_types.get(component_type_id)
     render(cli_ctx, ct, _CT_COLUMNS)
+
+
+@component_types_app.command(name="get-active")
+@cli_error_handler
+def get_active(  # noqa: WPS463
+    ctx: typer.Context,
+    component_type_id: Annotated[int, typer.Argument(help="Component type ID")],
+) -> None:
+    """Get the deployed (active) revision of a component type by ID."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    ct = client.component_types.get_active(component_type_id)
+    render(cli_ctx, ct, _CT_COLUMNS)
+
+
+@component_types_app.command(name="bulk-delete")
+@cli_error_handler
+def bulk_delete(
+    ctx: typer.Context,
+    ids: Annotated[
+        list[int] | None,
+        typer.Option("--id", help="Component type ID (repeatable)"),
+    ] = None,
+    ids_csv: Annotated[
+        str | None,
+        typer.Option("--ids", help="Comma-separated component type IDs"),
+    ] = None,
+) -> None:
+    """Delete several component types in a single request."""
+    resolved = parse_bulk_ids(ids, ids_csv)
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client.component_types.bulk_delete(resolved)
+    print_success(f"Deleted {len(resolved)} component types")
+
+
+@component_types_app.command()
+@cli_error_handler
+def clone(
+    ctx: typer.Context,
+    component_type_id: Annotated[int, typer.Argument(help="Component type ID")],
+) -> None:
+    """Clone a component type and print the new ID."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    new_id = client.component_types.clone(component_type_id)
+    print_success(f"Cloned component type; new ID {new_id}")
+
+
+@component_types_app.command(name="list-extra-subject-attributes")
+@cli_error_handler
+def list_extra_subject_attributes(
+    ctx: typer.Context,
+    component_type: Annotated[
+        str, typer.Argument(help="Component type short name (e.g. USER)")
+    ],
+) -> None:
+    """List extra subject attribute configs for a component type."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    attrs = client.component_types.list_extra_subject_attributes(component_type)
+    render(
+        cli_ctx,
+        attrs,
+        _ATTRIBUTE_CONFIG_COLUMNS,
+        title="Extra Subject Attributes",
+    )
 
 
 @component_types_app.command()
 @cli_error_handler
 def create(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Create a component type from a JSON payload."""
+    """Create a component type from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     ct_id = client.component_types.create(payload)
     print_success(f"Created component type with ID {ct_id}")
@@ -57,11 +142,19 @@ def create(
 @cli_error_handler
 def modify(
     ctx: typer.Context,
-    raw_body: Annotated[str, typer.Option("--data", help="JSON payload")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option("--payload", help="Path to a JSON payload file"),
+    ] = None,
+    legacy_data: Annotated[
+        str | None,
+        typer.Option("--data", hidden=True),
+    ] = None,
 ) -> None:
-    """Modify a component type from a JSON payload."""
+    """Modify a component type from a JSON payload file."""
+    reject_data_flag(legacy_data)
+    payload = require_payload(payload_path)
     cli_ctx: CliContext = ctx.obj
-    payload = parse_json_payload(raw_body)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     client.component_types.modify(payload)
     print_success("Modified component type")

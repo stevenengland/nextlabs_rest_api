@@ -428,3 +428,192 @@ def test_reports_export(
 
     assert result.exit_code == 0
     assert expected_text in result.output
+
+
+def _payload_file(tmp_path: Any) -> Any:
+    p = tmp_path / "req.json"
+    p.write_text(json.dumps({"criteria": {"filters": None, "header": ["TIME"]}}))
+    return p
+
+
+def _enforcement_paginator() -> SyncPaginator[EnforcementEntry]:
+    page = PageResult(
+        entries=[_make_enforcement()],
+        page_no=0,
+        page_size=1,
+        total_pages=1,
+        total_records=1,
+    )
+    return SyncPaginator(fetch_page=lambda _pn: page)
+
+
+def test_reports_generate_widgets(mock_reports: Any, tmp_path: Any) -> None:
+    when(mock_reports).generate_widgets(...).thenReturn(_make_widget_data())
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "reports",
+            "generate-widgets",
+            "--payload",
+            str(_payload_file(tmp_path)),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_reports_generate_enforcements(mock_reports: Any, tmp_path: Any) -> None:
+    when(mock_reports).generate_enforcements(
+        ...,
+        sort_by="rowId",
+        sort_order="ascending",
+        page_size=20,
+    ).thenReturn(_enforcement_paginator())
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "reports",
+            "generate-enforcements",
+            "--payload",
+            str(_payload_file(tmp_path)),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "100" in result.output
+
+
+def test_reports_generate_export(mock_reports: Any, tmp_path: Any) -> None:
+    when(mock_reports).generate_export(
+        ...,
+        sort_by="rowId",
+        sort_order="ascending",
+    ).thenReturn(b"csv-bytes")
+
+    out = tmp_path / "export.csv"
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "reports",
+            "generate-export",
+            "--payload",
+            str(_payload_file(tmp_path)),
+            "--output",
+            str(out),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"csv-bytes"
+
+
+def test_reports_list_cached_users(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import CachedUser
+
+    when(mock_reports).list_cached_users().thenReturn(
+        [
+            CachedUser.model_validate(
+                {"displayName": "Ada L.", "firstName": "Ada", "lastName": "Lovelace"}
+            )
+        ],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "list-cached-users"])
+
+    assert result.exit_code == 0, result.output
+    assert "Ada" in result.output
+
+
+def test_reports_list_cached_policies(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import CachedPolicy
+
+    when(mock_reports).list_cached_policies().thenReturn(
+        [CachedPolicy.model_validate({"name": "P1", "fullName": "Root/P1"})],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "list-cached-policies"])
+
+    assert result.exit_code == 0, result.output
+    assert "Root/P1" in result.output
+
+
+def test_reports_resource_actions(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import ResourceActions
+
+    when(mock_reports).get_resource_actions().thenReturn(
+        ResourceActions.model_validate(
+            {
+                "policyModelActions": {
+                    "File": [
+                        {"policyModelId": 1, "label": "Read", "shortCode": "R"},
+                    ],
+                },
+            },
+        ),
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "resource-actions"])
+
+    assert result.exit_code == 0, result.output
+    assert "File" in result.output
+
+
+def test_reports_mappings(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import (
+        AttributeMapping,
+        AttributeMappings,
+    )
+
+    mapping = AttributeMapping.model_validate(
+        {
+            "id": 1,
+            "name": "usr",
+            "mappedColumn": "USER_NAME",
+            "dataType": "string",
+            "attrType": "subject",
+            "isDynamic": False,
+        },
+    )
+    when(mock_reports).get_mappings().thenReturn(
+        AttributeMappings(resource=[], user=[mapping], others=[]),
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "mappings"])
+
+    assert result.exit_code == 0, result.output
+    assert "USER_NAME" in result.output
+
+
+def test_reports_list_user_groups(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import UserGroup
+
+    when(mock_reports).list_user_groups().thenReturn(
+        [UserGroup(id=5, title="Admins")],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "list-user-groups"])
+
+    assert result.exit_code == 0, result.output
+    assert "Admins" in result.output
+
+
+def test_reports_list_application_users(mock_reports: Any) -> None:
+    from nextlabs_sdk._cloudaz._report_models import ApplicationUser
+
+    when(mock_reports).list_application_users().thenReturn(
+        [
+            ApplicationUser.model_validate(
+                {"firstName": "Bob", "lastName": "Smith", "username": "bob"},
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "reports", "list-application-users"])
+
+    assert result.exit_code == 0, result.output
+    assert "bob" in result.output

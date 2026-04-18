@@ -37,6 +37,12 @@ _TOP_POLICIES_COLUMNS: tuple[ColumnDef, ...] = (
     ColumnDef("Total", "decision_total"),
 )
 
+_MONITOR_TAG_ALERT_COLUMNS = (
+    ColumnDef("Tag Value", "tag_value"),
+    ColumnDef("Monitor Name", "monitor_name"),
+    ColumnDef("Alert Count", "alert_count"),
+)
+
 
 @dashboard_app.command()
 @cli_error_handler
@@ -95,6 +101,35 @@ def top_policies(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     policies = client.dashboard.top_policies(from_date, to_date, decision)
     render(cli_ctx, policies, _TOP_POLICIES_COLUMNS, title="Top Policies")
+
+
+@dashboard_app.command(name="alerts-by-monitor-tags")
+@cli_error_handler
+def alerts_by_monitor_tags(
+    ctx: typer.Context,
+    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
+    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    tag: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--tag",
+            help="Filter results to these tag values (repeatable)",
+        ),
+    ] = None,
+) -> None:
+    """Retrieve alert counts grouped by monitor tag."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    alerts_list = client.dashboard.alerts_by_monitor_tags(from_date, to_date)
+    if tag:
+        wanted = set(tag)
+        alerts_list = [entry for entry in alerts_list if entry.tag_value in wanted]
+    render(
+        cli_ctx,
+        alerts_list,
+        _MONITOR_TAG_ALERT_COLUMNS,
+        title="Alerts by Monitor Tag",
+    )
 
 
 def _render_policy_activity_detail(model: BaseModel, console: Console) -> None:

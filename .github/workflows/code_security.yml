@@ -36,6 +36,12 @@ jobs:
         run: "python -m guarddog pypi scan ."
 
       - name: Run pip-audit
-        uses: pypa/gh-action-pip-audit@v1
+        uses: pypa/gh-action-pip-audit@v1.1.0
         with:
           inputs: ./requirements/constraints.txt ./requirements/base.txt
+          # Pre-existing advisories tracked for a dedicated dep-bump PR:
+          #   CVE-2026-32274 — black 24.4.2 → 26.3.1
+          #   CVE-2025-71176 — pytest 8.3.4 → 9.0.3
+          ignore-vulns: |
+            CVE-2026-32274
+            CVE-2025-71176

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typer
 
+from nextlabs_sdk._cli._activity_logs_cmd import activity_logs_app
 from nextlabs_sdk._cli._audit_logs_cmd import audit_logs_app
 from nextlabs_sdk._cli._auth_cmd import auth_app
 from nextlabs_sdk._cli._component_types_cmd import component_types_app
@@ -9,10 +10,13 @@ from nextlabs_sdk._cli._components_cmd import components_app
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
 from nextlabs_sdk._cli._logging_setup import configure_cli_logging
+from nextlabs_sdk._cli._operators_cmd import operators_app
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._pdp_cmd import pdp_app
 from nextlabs_sdk._cli._policies_cmd import policies_app
 from nextlabs_sdk._cli._reports_cmd import reports_app
+from nextlabs_sdk._cli._reporter_audit_logs_cmd import reporter_audit_logs_app
+from nextlabs_sdk._cli._system_config_cmd import system_config_app
 from nextlabs_sdk._cli._tags_cmd import tags_app
 
 app = typer.Typer(
@@ -22,13 +26,17 @@ app = typer.Typer(
 )
 
 app.add_typer(audit_logs_app, name="audit-logs")
+app.add_typer(activity_logs_app, name="activity-logs")
 app.add_typer(auth_app, name="auth")
 app.add_typer(component_types_app, name="component-types")
 app.add_typer(components_app, name="components")
 app.add_typer(dashboard_app, name="dashboard")
+app.add_typer(operators_app, name="operators")
 app.add_typer(pdp_app, name="pdp")
 app.add_typer(policies_app, name="policies")
 app.add_typer(reports_app, name="reports")
+app.add_typer(reporter_audit_logs_app, name="reporter-audit-logs")
+app.add_typer(system_config_app, name="system-config")
 app.add_typer(tags_app, name="tags")
 
 
