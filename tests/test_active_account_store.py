@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,11 @@ import pytest
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
 from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
+)
+
+_SKIP_ON_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits and HOME fallback are not applicable on Windows",
 )
 
 
@@ -30,6 +36,7 @@ def test_save_then_load_roundtrip(tmp_path: Path) -> None:
     assert store.load() == _account()
 
 
+@_SKIP_ON_WINDOWS
 def test_save_creates_file_with_0600_and_dir_with_0700(tmp_path: Path) -> None:
     path = tmp_path / "sub" / "active_account.json"
     store = ActiveAccountStore(path=path)
@@ -110,6 +117,7 @@ def test_save_is_atomic_no_stale_tmp_files(tmp_path: Path) -> None:
             ("NEXTLABS_CACHE_DIR", "XDG_CACHE_HOME"),
             ".cache/nextlabs-sdk/active_account.json",
             id="home-fallback",
+            marks=_SKIP_ON_WINDOWS,
         ),
     ],
 )

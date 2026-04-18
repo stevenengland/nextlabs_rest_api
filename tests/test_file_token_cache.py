@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 import stat
+import sys
 from pathlib import Path
 
 import pytest
+
+_SKIP_ON_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits and HOME fallback are not applicable on Windows",
+)
 
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
@@ -35,6 +41,7 @@ def test_save_then_load_roundtrip(tmp_path: Path):
     assert cache.load("k") == _tok()
 
 
+@_SKIP_ON_WINDOWS
 def test_save_creates_file_with_0600_and_dir_with_0700(tmp_path: Path):
     path = tmp_path / "sub" / "tokens.json"
     cache = FileTokenCache(path=path)
@@ -124,6 +131,7 @@ def test_keys_reflects_deletions(tmp_path: Path):
             (_NEXTLABS_CACHE_DIR, _XDG_CACHE_HOME),
             (".cache", "nextlabs-sdk", "tokens.json"),
             id="home-fallback",
+            marks=_SKIP_ON_WINDOWS,
         ),
     ],
 )

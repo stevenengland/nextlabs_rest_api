@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import stat
+import sys
 from pathlib import Path
 
 import pytest
 
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+_SKIP_ON_WINDOWS = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits and HOME fallback are not applicable on Windows",
+)
 
 
 def _prefs(verify_ssl: bool = False) -> AccountPreferences:
@@ -64,6 +70,7 @@ def test_keys_reports_all_entries(tmp_path: Path) -> None:
     assert sorted(store.keys()) == ["a", "b"]
 
 
+@_SKIP_ON_WINDOWS
 def test_save_creates_file_with_0600_and_dir_with_0700(tmp_path: Path) -> None:
     path = tmp_path / "sub" / "account_prefs.json"
     store = AccountPreferencesStore(path=path)
@@ -135,6 +142,7 @@ def test_load_returns_none_for_entry_with_bad_type(tmp_path: Path) -> None:
             ("NEXTLABS_CACHE_DIR", "XDG_CACHE_HOME"),
             ".cache/nextlabs-sdk/account_prefs.json",
             id="home-fallback",
+            marks=_SKIP_ON_WINDOWS,
         ),
     ],
 )
