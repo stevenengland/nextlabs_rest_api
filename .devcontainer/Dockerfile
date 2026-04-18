@@ -25,8 +25,26 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list || true
 
 # Install system packages (as root)
 RUN apt-get update && apt-get install -y \
-    # Add system deps here, e.g.:
-    # libpq-dev \
+    ca-certificates \
+    curl \
+    gnupg \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install vhs (Charm apt repo) + ttyd (GitHub release binary).
+# Used to (re)generate the README CLI demo at docs/cast/demo.svg from
+# docs/cast/demo.tape. See docs/cast/README.md.
+ARG TTYD_VERSION=1.7.7
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://repo.charm.sh/apt/gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/charm.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
+       > /etc/apt/sources.list.d/charm.list \
+    && apt-get update \
+    && apt-get install -y vhs \
+    && curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.$(uname -m)" \
+         -o /usr/local/bin/ttyd \
+    && chmod +x /usr/local/bin/ttyd \
     && rm -rf /var/lib/apt/lists/*
 
 # Create workspace directory
