@@ -32,6 +32,22 @@ def _isolate_nextlabs_cache(  # pyright: ignore[reportUnusedFunction]
 
 
 @pytest.fixture(autouse=True)
+def _disable_cli_color(  # pyright: ignore[reportUnusedFunction]
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Force Rich/Typer/Click to emit plain (non-ANSI) output in tests.
+
+    CI sets ``FORCE_COLOR=1`` at the job level, which makes Rich wrap
+    every CLI message in ANSI escape sequences and breaks substring
+    assertions in the CLI tests. Setting ``NO_COLOR=1`` and clearing
+    ``FORCE_COLOR`` keeps CLI output identical between local and CI
+    runs.
+    """
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.setenv("NO_COLOR", "1")
+
+
+@pytest.fixture(autouse=True)
 def _unstub() -> Generator[None, None, None]:  # pyright: ignore[reportUnusedFunction]
     """Tear down mockito stubs after every test."""
     yield
