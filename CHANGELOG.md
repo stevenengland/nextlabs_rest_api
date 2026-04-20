@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 - 2026-04-20
+
+### nextlabs-sdk 0.3.0
+
+#### Features
+
+- feat(cli): graceful re-auth when refresh token expires @stevenengland ([#43](https://github.com/stevenengland/nextlabs_rest_api/pull/43))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.2.1...0.3.0
+
 ## 0.2.0 - 2026-04-19
 
 ### nextlabs-sdk 0.2.0
