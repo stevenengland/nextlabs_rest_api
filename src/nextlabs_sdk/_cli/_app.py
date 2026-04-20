@@ -19,6 +19,8 @@ from nextlabs_sdk._cli._reporter_audit_logs_cmd import reporter_audit_logs_app
 from nextlabs_sdk._cli._system_config_cmd import system_config_app
 from nextlabs_sdk._cli._tags_cmd import tags_app
 
+_DEFAULT_TIMEOUT_SECONDS = 30.0
+
 app = typer.Typer(
     name="nextlabs",
     help="NextLabs CloudAz SDK CLI",
@@ -93,7 +95,7 @@ def main(
         ),
     ),
     timeout: float = typer.Option(
-        30.0,
+        _DEFAULT_TIMEOUT_SECONDS,
         help="Request timeout in seconds",
     ),
     token: str | None = typer.Option(

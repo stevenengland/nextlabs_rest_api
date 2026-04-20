@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
+from pydantic import BaseModel
 
 from nextlabs_sdk._envelope import envelope_from_mapping
 from nextlabs_sdk._json_response import decode_json, decode_json_object, require_key
+from nextlabs_sdk._pagination import PageResult
 from nextlabs_sdk.exceptions import ApiError, raise_for_status
+
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 def _request_context(response: httpx.Response) -> tuple[str | None, str | None]:
@@ -98,3 +102,20 @@ def parse_raw(response: httpx.Response) -> Any:
     """Parse a response with no envelope — returns the raw JSON body."""
     raise_for_status(response)
     return decode_json(response)
+
+
+def build_page(
+    response: httpx.Response,
+    model: type[_ModelT],
+    page_no: int,
+) -> PageResult[_ModelT]:
+    """Parse a paginated CloudAz response into a typed ``PageResult``."""
+    raw_items, total_pages, total_records = parse_paginated(response)
+    entries = [model.model_validate(entry) for entry in raw_items]
+    return PageResult(
+        entries=entries,
+        page_no=page_no,
+        page_size=len(entries),
+        total_pages=total_pages,
+        total_records=total_records,
+    )
