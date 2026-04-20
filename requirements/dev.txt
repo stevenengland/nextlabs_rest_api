@@ -1,7 +1,6 @@
 # Runtime deps come from pyproject.toml via editable install.
 -e .[cli]
 black
-bump-my-version
 faker
 isort
 mockito

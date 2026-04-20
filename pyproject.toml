@@ -50,15 +50,6 @@ nextlabs_sdk = ["py.typed"]
 [tool.setuptools.dynamic]
 version = {file = "version.txt"}
 
-# ── Uncomment for version bumping (PyPI publishing) ──
-[tool.bumpversion]
-current_version = "0.1.0"
-commit = true
-tag = true
-tag_name = "v{new_version}"
-[[tool.bumpversion.files]]
-filename = "version.txt"
-
 # solely for Pyright (Pylance is built on top)
 # extraPath and pythonPath settings are necessary to avoid building a complete package
 # - like with setup.py -> package_dir
