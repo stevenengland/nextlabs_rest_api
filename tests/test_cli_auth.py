@@ -442,3 +442,69 @@ def test_status_all_humanizes_expiry(
     assert "expires_at=" not in result.output
     # Accept wrapping within the Rich table column
     assert "2286" in result.output
+
+
+def test_status_shows_refreshable_row(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+
+
+def test_status_refreshable_is_no_when_refresh_known_expired(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    _isolate_cache(tmp_path, monkeypatch)
+    FileTokenCache(path=f"{tmp_path}/tokens.json").save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=1_000.0,  # known-expired
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+    assert "expired" in result.output
+
+
+def test_status_all_has_refreshable_column(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
+
+    result = runner.invoke(app, ["auth", "status", "--all"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+    assert "yes" in result.output
+    assert "; refreshable:" not in result.output

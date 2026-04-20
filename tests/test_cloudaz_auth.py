@@ -297,6 +297,95 @@ def test_refresh_failure_without_password_raises():
     assert "auth login" in exc_info.value.message.lower()
 
 
+@pytest.mark.parametrize(
+    "status,body",
+    [
+        pytest.param(400, "invalid_grant", id="status-400"),
+        pytest.param(401, "token rejected", id="status-401"),
+        pytest.param(403, "forbidden", id="status-403"),
+    ],
+)
+def test_refresh_rejection_populates_error_with_status_and_body(status: int, body: str):
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
+    auth = _make_auth(password=None, token_cache=cache)
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+
+    with pytest.raises(exceptions.RefreshTokenExpiredError) as exc_info:
+        flow.send(_token_error_response(status=status, text=body))
+
+    exc = exc_info.value
+    assert exc.status_code == status
+    assert exc.response_body == body
+    assert exc.request_url == TOKEN_URL
+
+
+def test_refresh_spa_redirect_raises_refresh_token_expired():
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
+    auth = _make_auth(password=None, token_cache=cache)
+
+    spa_redirect = httpx.Response(
+        302,
+        headers={"location": "https://cloudaz.example.com/#/login"},
+        request=httpx.Request("POST", TOKEN_URL),
+    )
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+
+    with pytest.raises(exceptions.RefreshTokenExpiredError) as exc_info:
+        flow.send(spa_redirect)
+
+    assert exc_info.value.status_code == 302
+
+
+def test_refresh_body_preview_stays_within_limit_and_reports_byte_length():
+    from nextlabs_sdk._auth import _cloudaz_auth as mod
+
+    body_chars = "€" * (mod._RESPONSE_BODY_PREVIEW_LIMIT + 100)
+    assert len(body_chars.encode("utf-8")) > len(body_chars)
+
+    preview = mod._truncate_body(body_chars, len(body_chars.encode("utf-8")))
+
+    assert len(preview) <= mod._RESPONSE_BODY_PREVIEW_LIMIT
+    assert preview.endswith(
+        f"truncated, {len(body_chars.encode('utf-8'))} bytes total)",
+    )
+    assert "truncated" in preview
+
+
+def test_refresh_body_short_bodies_returned_verbatim():
+    from nextlabs_sdk._auth import _cloudaz_auth as mod
+
+    short = "hello"
+
+    assert mod._truncate_body(short, len(short.encode("utf-8"))) == short
+
+
+def test_refresh_rejection_populates_byte_length_from_response_content():
+    from nextlabs_sdk._auth import _cloudaz_auth as mod
+
+    when(time).time().thenReturn(10_000.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
+    auth = _make_auth(password=None, token_cache=cache)
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    body_chars = "€" * (mod._RESPONSE_BODY_PREVIEW_LIMIT + 100)
+    with pytest.raises(exceptions.RefreshTokenExpiredError) as exc_info:
+        flow.send(_token_error_response(status=400, text=body_chars))
+
+    preview = exc_info.value.response_body or ""
+    assert len(preview) <= mod._RESPONSE_BODY_PREVIEW_LIMIT
+    assert f"{len(body_chars.encode('utf-8'))} bytes total" in preview
+
+
 def test_no_cache_behaves_like_null_cache():
     when(time).time().thenReturn(100.0)
     auth = _make_auth()

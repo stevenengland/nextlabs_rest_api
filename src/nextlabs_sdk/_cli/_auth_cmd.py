@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 from typing import Annotated
 
@@ -8,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_menu import (
@@ -119,9 +121,24 @@ def _is_active(cli_ctx: CliContext, account: AccountIdentifier) -> bool:
     )
 
 
-def _account_validity(cli_ctx: CliContext, account: AccountIdentifier) -> str:
-    cache = build_file_cache(cli_ctx)
-    entry = cache.load(cache_key_for(account))
+def _refresh_decision_for_entry(entry: CachedToken) -> RefreshDecision:
+    return decide(
+        refresh_token=entry.refresh_token,
+        refresh_expires_at=entry.refresh_expires_at,
+        now=time.time(),
+    )
+
+
+def _refreshable_label(entry: CachedToken) -> str:
+    decision = _refresh_decision_for_entry(entry)
+    if decision is RefreshDecision.USE_REFRESH:
+        return "yes"
+    if decision is RefreshDecision.KNOWN_EXPIRED:
+        return "no (expired)"
+    return "no"
+
+
+def _account_status_label(entry: CachedToken | None) -> str:
     if entry is None:
         return "no cached token"
     qualifier = "expired" if entry.is_expired() else "valid"
@@ -132,6 +149,20 @@ def _account_validity(cli_ctx: CliContext, account: AccountIdentifier) -> str:
     return "".join(parts)
 
 
+def _account_refreshable_label(entry: CachedToken | None) -> str:
+    if entry is None:
+        return _STATUS_NONE
+    return _refreshable_label(entry)
+
+
+def _account_status_and_refreshable(
+    cli_ctx: CliContext,
+    account: AccountIdentifier,
+) -> tuple[str, str]:
+    entry = build_file_cache(cli_ctx).load(cache_key_for(account))
+    return _account_status_label(entry), _account_refreshable_label(entry)
+
+
 def _render_accounts_table(
     cli_ctx: CliContext,
     entries: list[AccountIdentifier],
@@ -140,7 +171,7 @@ def _render_accounts_table(
 ) -> None:
     headers = ["#", "Active", "Username", "Base URL", "Client ID"]
     if include_status:
-        headers.append("Status")
+        headers.extend(("Status", "Refreshable"))
     table = Table(title=_ACCOUNTS_TITLE)
     for header in headers:
         table.add_column(header)
@@ -154,7 +185,11 @@ def _render_accounts_table(
             account.client_id,
         ]
         if include_status:
-            row.append(_account_validity(cli_ctx, account))
+            status_label, refreshable = _account_status_and_refreshable(
+                cli_ctx,
+                account,
+            )
+            row.extend((status_label, refreshable))
         table.add_row(*row)
     Console().print(table)
 
@@ -260,26 +295,38 @@ _STATUS_TITLE = "Auth status"
 _STATUS_NONE = "—"
 
 
-def _render_status_detail(
+def _build_status_table(
     target: AccountIdentifier,
     entry: CachedToken,
-) -> None:
+) -> Table:
     status_text = "expired" if entry.is_expired() else "valid"
     refresh_text = (
         _STATUS_NONE
         if entry.refresh_expires_at is None
         else format_expiry(entry.refresh_expires_at)
     )
+    rows: tuple[tuple[str, str], ...] = (
+        ("Username", target.username),
+        ("Base URL", target.base_url),
+        ("Client ID", target.client_id),
+        ("Status", status_text),
+        ("Expires", format_expiry(entry.expires_at)),
+        ("Refresh expires", refresh_text),
+        ("Refreshable", _refreshable_label(entry)),
+    )
     table = Table(title=_STATUS_TITLE, show_header=False)
     table.add_column("Field")
     table.add_column("Value")
-    table.add_row("Username", target.username)
-    table.add_row("Base URL", target.base_url)
-    table.add_row("Client ID", target.client_id)
-    table.add_row("Status", status_text)
-    table.add_row("Expires", format_expiry(entry.expires_at))
-    table.add_row("Refresh expires", refresh_text)
-    Console().print(table)
+    for field_name, field_value in rows:
+        table.add_row(field_name, field_value)
+    return table
+
+
+def _render_status_detail(
+    target: AccountIdentifier,
+    entry: CachedToken,
+) -> None:
+    Console().print(_build_status_table(target, entry))
 
 
 @auth_app.command(name="status")

@@ -24,6 +24,24 @@ nextlabs auth login
 If you maintain multiple environments, list and switch between cached
 accounts with `nextlabs auth accounts` and `nextlabs auth use <name>`.
 
+## `Re-login required` on a long-running session
+
+**Symptom:** a command fails with
+`Re-login required: Refresh token rejected by server — re-login required`
+(followed by provider detail such as `invalid_grant`).
+
+**Cause:** the cached refresh token is no longer usable (expired, the
+CloudAz session was revoked, or credentials were rotated). The CLI
+surfaces this as `RefreshTokenExpiredError`, a dedicated subclass of
+`AuthenticationError`.
+
+**Fix:** on an interactive TTY the CLI prompts for your password once
+and retries the command transparently. In non-interactive contexts
+(scripts, CI), re-supply credentials explicitly — for example via
+`--password` / `NEXTLABS_PASSWORD`, or by calling
+`nextlabs auth login` again. Run `nextlabs auth status` to confirm
+the new cached entry is `Refreshable: yes`.
+
 ## SSL verification failures against an internal CloudAz instance
 
 **Symptom:**

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import functools
+import sys
 from collections.abc import Callable
+from dataclasses import replace
 from typing import ParamSpec, TypeVar
 
 import typer
@@ -13,6 +15,7 @@ from nextlabs_sdk.exceptions import (
     AuthenticationError,
     NextLabsError,
     NotFoundError,
+    RefreshTokenExpiredError,
     RequestTimeoutError,
     TransportError,
 )
@@ -23,15 +26,20 @@ ReturnType_T = TypeVar("ReturnType_T")
 _BODY_PREVIEW_LIMIT = 2000
 
 
+_ErrorPrefixPair = tuple[type[NextLabsError], str]
+_ERROR_PREFIXES: tuple[_ErrorPrefixPair, ...] = (
+    (RefreshTokenExpiredError, "Re-login required"),
+    (AuthenticationError, "Authentication failed"),
+    (NotFoundError, "Not found"),
+    (RequestTimeoutError, "Request timed out"),
+    (TransportError, "Connection error"),
+)
+
+
 def _error_prefix(exc: NextLabsError) -> str:
-    if isinstance(exc, AuthenticationError):
-        return "Authentication failed"
-    if isinstance(exc, NotFoundError):
-        return "Not found"
-    if isinstance(exc, RequestTimeoutError):
-        return "Request timed out"
-    if isinstance(exc, TransportError):
-        return "Connection error"
+    for exc_type, prefix in _ERROR_PREFIXES:
+        if isinstance(exc, exc_type):
+            return prefix
     return "API error"
 
 
@@ -43,11 +51,44 @@ def _format_error_message(exc: BaseException) -> str:
     return f"Unexpected error: {exc}"
 
 
-def _extract_cli_context(args: tuple[object, ...]) -> CliContext | None:
+def _extract_typer_context(args: tuple[object, ...]) -> typer.Context | None:
     for arg in args:
-        if isinstance(arg, typer.Context) and isinstance(arg.obj, CliContext):
-            return arg.obj
+        if isinstance(arg, typer.Context):
+            return arg
     return None
+
+
+def _extract_cli_context(args: tuple[object, ...]) -> CliContext | None:
+    ctx = _extract_typer_context(args)
+    if ctx is None or not isinstance(ctx.obj, CliContext):
+        return None
+    return ctx.obj
+
+
+def _reauth_prompt_label(cli_ctx: CliContext) -> str:
+    target = cli_ctx.username or "<unknown user>"
+    if cli_ctx.base_url:
+        target = f"{target}@{cli_ctx.base_url}"
+    return f"Password for {target} (re-auth required)"
+
+
+def _prepare_reauth(args: tuple[object, ...]) -> bool:
+    """Mutate the typer context with a freshly prompted password.
+
+    Returns ``True`` if an inline re-auth retry should be attempted,
+    ``False`` if the caller should let the original error propagate.
+    """
+    typer_ctx = _extract_typer_context(args)
+    if typer_ctx is None or not isinstance(typer_ctx.obj, CliContext):
+        return False
+    cli_ctx = typer_ctx.obj
+    if cli_ctx.password:
+        return False
+    if not sys.stdin.isatty():
+        return False
+    password = typer.prompt(_reauth_prompt_label(cli_ctx), hide_input=True)
+    typer_ctx.obj = replace(cli_ctx, password=password)
+    return True
 
 
 def _format_body_preview(body: str, total_length: int) -> str:
@@ -83,18 +124,39 @@ def _maybe_print_verbose(exc: BaseException, args: tuple[object, ...]) -> None:
     _print_verbose_context(exc)
 
 
+def _handle_exception(
+    exc: BaseException,
+    args: tuple[object, ...],
+) -> None:
+    print_error(_format_error_message(exc))
+    _maybe_print_verbose(exc, args)
+    raise typer.Exit(code=1) from exc
+
+
+def _run_with_reauth(
+    func: Callable[ParamSpec_T, ReturnType_T],
+    *args: ParamSpec_T.args,
+    **kwargs: ParamSpec_T.kwargs,
+) -> ReturnType_T:
+    try:
+        return func(*args, **kwargs)
+    except RefreshTokenExpiredError:
+        if not _prepare_reauth(args):
+            raise
+        return func(*args, **kwargs)
+
+
 def cli_error_handler(
     func: Callable[ParamSpec_T, ReturnType_T],
 ) -> Callable[ParamSpec_T, ReturnType_T]:
     @functools.wraps(func)
     def wrapper(*args: ParamSpec_T.args, **kwargs: ParamSpec_T.kwargs) -> ReturnType_T:
         try:
-            return func(*args, **kwargs)
+            return _run_with_reauth(func, *args, **kwargs)
         except typer.Exit:
             raise
         except Exception as exc:
-            print_error(_format_error_message(exc))
-            _maybe_print_verbose(exc, args)
-            raise typer.Exit(code=1) from exc
+            _handle_exception(exc, args)
+            raise  # unreachable; _handle_exception always raises
 
     return wrapper
