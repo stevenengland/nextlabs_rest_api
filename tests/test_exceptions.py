@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -144,3 +146,91 @@ def test_raise_for_status_400_populates_context():
     assert exc_info.value.response_body == "bad request"
     assert exc_info.value.request_method == "POST"
     assert exc_info.value.request_url == "https://example.com/api"
+
+
+def _envelope_response(
+    status: int,
+    payload: object,
+    *,
+    method: str = "GET",
+    url: str = "https://example.com",
+) -> httpx.Response:
+    return _response(status, text=json.dumps(payload), method=method, url=url)
+
+
+def test_raise_for_status_uses_envelope_message_when_present():
+    response = _envelope_response(
+        400,
+        {"statusCode": "6000", "message": "An internal server error occurred."},
+    )
+    with pytest.raises(exceptions.ValidationError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "An internal server error occurred."
+    assert exc_info.value.envelope_status_code == "6000"
+    assert exc_info.value.envelope_message == "An internal server error occurred."
+    assert exc_info.value.status_code == 400
+
+
+def test_raise_for_status_without_envelope_keeps_http_message():
+    response = _envelope_response(400, {"foo": "bar"})
+    with pytest.raises(exceptions.ValidationError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "HTTP 400"
+    assert exc_info.value.envelope_status_code is None
+    assert exc_info.value.envelope_message is None
+
+
+def test_raise_for_status_ignores_non_json_body():
+    response = _response(500, text="<html>internal error</html>")
+    with pytest.raises(exceptions.ServerError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "HTTP 500"
+    assert exc_info.value.envelope_status_code is None
+
+
+def test_raise_for_status_ignores_non_dict_json_body():
+    response = _response(400, text=json.dumps(["statusCode", "6000"]))
+    with pytest.raises(exceptions.ValidationError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "HTTP 400"
+    assert exc_info.value.envelope_status_code is None
+
+
+def test_raise_for_status_ignores_malformed_json_body():
+    response = _response(500, text="{not-json")
+    with pytest.raises(exceptions.ServerError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "HTTP 500"
+    assert exc_info.value.envelope_status_code is None
+
+
+def test_raise_for_status_populates_statuscode_even_without_message():
+    response = _envelope_response(400, {"statusCode": "6000"})
+    with pytest.raises(exceptions.ValidationError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "HTTP 400"
+    assert exc_info.value.envelope_status_code == "6000"
+    assert exc_info.value.envelope_message is None
+
+
+def test_raise_for_status_envelope_on_404_uses_not_found_error():
+    response = _envelope_response(
+        404,
+        {"statusCode": "5000", "message": "No data found"},
+    )
+    with pytest.raises(exceptions.NotFoundError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "No data found"
+    assert exc_info.value.envelope_status_code == "5000"
+
+
+def test_raise_for_status_prefers_envelope_message_even_if_statuscode_looks_successful():
+    response = _envelope_response(
+        400,
+        {"statusCode": "1003", "message": "odd but surfaced"},
+    )
+    with pytest.raises(exceptions.ValidationError) as exc_info:
+        exceptions.raise_for_status(response)
+    assert exc_info.value.message == "odd but surfaced"
+    assert exc_info.value.envelope_status_code == "1003"
+    assert exc_info.value.envelope_message == "odd but surfaced"

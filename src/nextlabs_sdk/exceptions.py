@@ -4,6 +4,8 @@ from types import MappingProxyType
 
 import httpx
 
+from nextlabs_sdk._envelope import envelope_from_response
+
 _CLIENT_ERROR_THRESHOLD = 400
 _SERVER_ERROR_THRESHOLD = 500
 
@@ -104,29 +106,22 @@ def raise_for_status(response: httpx.Response) -> None:
     request_method = response.request.method
     request_url = str(response.request.url)
 
+    envelope_status_code, envelope_message = envelope_from_response(response)
+    message = envelope_message or f"HTTP {status_code}"
+
     error_class = _STATUS_CODE_MAP.get(status_code)
-    if error_class is not None:
-        raise error_class(
-            message=f"HTTP {status_code}",
-            status_code=status_code,
-            response_body=response_body,
-            request_method=request_method,
-            request_url=request_url,
-        )
+    if error_class is None:
+        if status_code >= _SERVER_ERROR_THRESHOLD:
+            error_class = ServerError
+        else:
+            error_class = ApiError
 
-    if status_code >= _SERVER_ERROR_THRESHOLD:
-        raise ServerError(
-            message=f"HTTP {status_code}",
-            status_code=status_code,
-            response_body=response_body,
-            request_method=request_method,
-            request_url=request_url,
-        )
-
-    raise ApiError(
-        message=f"HTTP {status_code}",
+    raise error_class(
+        message=message,
         status_code=status_code,
         response_body=response_body,
         request_method=request_method,
         request_url=request_url,
+        envelope_status_code=envelope_status_code,
+        envelope_message=envelope_message,
     )

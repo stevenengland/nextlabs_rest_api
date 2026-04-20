@@ -8,7 +8,7 @@ from strip_ansi import strip_ansi
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._error_handler import cli_error_handler
-from nextlabs_sdk.exceptions import ApiError, AuthenticationError
+from nextlabs_sdk.exceptions import ApiError, AuthenticationError, ValidationError
 
 
 def _ctx(verbose: int) -> typer.Context:
@@ -125,3 +125,30 @@ def test_verbose_zero_hides_envelope_status_code(
 
     captured = capsys.readouterr()
     assert "envelope:" not in captured.err
+
+
+def test_http_400_with_envelope_surfaces_server_message(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ValidationError(
+            message="An internal server error occurred.",
+            status_code=400,
+            response_body=(
+                '{"statusCode":"6000","message":"An internal server error occurred."}'
+            ),
+            request_method="GET",
+            request_url="https://srv/console/api/v1/policy/mgmt/1",
+            envelope_status_code="6000",
+            envelope_message="An internal server error occurred.",
+        ),
+        verbose=1,
+    )
+
+    captured = capsys.readouterr()
+    stdout = strip_ansi(captured.out)
+    stderr = strip_ansi(captured.err)
+    assert "API error: An internal server error occurred." in stdout
+    assert "HTTP 400" not in stdout
+    assert "statusCode=6000" in stderr
+    assert "400" in stderr
