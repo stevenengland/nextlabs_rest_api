@@ -20,28 +20,24 @@ designed for use from both the success parsers in
 
 from __future__ import annotations
 
+from typing import Mapping
+
 import httpx
 
 
-def envelope_from_response(
-    response: httpx.Response,
+def envelope_from_mapping(
+    body: object,
 ) -> tuple[str | None, str | None]:
-    """Return ``(status_code, message)`` from a CloudAz envelope body.
+    """Return ``(status_code, message)`` from an already-decoded envelope body.
 
-    Both fields are taken verbatim from the response JSON when present
-    as strings. Returns ``(None, None)`` when the body is not JSON, not
-    a JSON object, is missing ``statusCode``, or when ``statusCode`` is
-    not a string. Returns ``(status_code, None)`` when ``statusCode``
-    is a string but ``message`` is missing or not a string.
+    Accepts any object. Returns ``(None, None)`` when ``body`` is not a
+    mapping, is missing ``statusCode``, or when ``statusCode`` is not a
+    string. Returns ``(status_code, None)`` when ``statusCode`` is a
+    string but ``message`` is missing, not a string, or an empty string.
 
-    Never raises; safe to call on any ``httpx.Response``.
+    Never raises.
     """
-    try:
-        body = response.json()
-    except ValueError:
-        return None, None
-
-    if not isinstance(body, dict):
+    if not isinstance(body, Mapping):
         return None, None
 
     raw_code = body.get("statusCode")
@@ -51,3 +47,25 @@ def envelope_from_response(
     raw_message = body.get("message")
     message = raw_message if isinstance(raw_message, str) and raw_message else None
     return raw_code, message
+
+
+def envelope_from_response(
+    response: httpx.Response,
+) -> tuple[str | None, str | None]:
+    """Return ``(status_code, message)`` from a CloudAz envelope response.
+
+    Both fields are taken verbatim from the response JSON when present
+    as strings. Returns ``(None, None)`` when the body is not JSON, not
+    a JSON object, is missing ``statusCode``, or when ``statusCode`` is
+    not a string. Returns ``(status_code, None)`` when ``statusCode``
+    is a string but ``message`` is missing, not a string, or an empty
+    string.
+
+    Never raises; safe to call on any ``httpx.Response``.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return None, None
+
+    return envelope_from_mapping(body)

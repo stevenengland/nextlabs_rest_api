@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from nextlabs_sdk._envelope import envelope_from_response
+from nextlabs_sdk._envelope import envelope_from_mapping, envelope_from_response
 
 
 def _response(body: object | str | None, *, status: int = 200) -> httpx.Response:
@@ -63,3 +63,29 @@ def test_returns_none_when_body_is_empty():
 def test_success_and_error_codes_pass_through_unchanged(code: str):
     response = _response({"statusCode": code, "message": "m"}, status=200)
     assert envelope_from_response(response) == (code, "m")
+
+
+class TestEnvelopeFromMapping:
+    def test_extracts_statuscode_and_message(self):
+        assert envelope_from_mapping({"statusCode": "6000", "message": "boom"}) == (
+            "6000",
+            "boom",
+        )
+
+    def test_returns_none_none_for_non_mapping(self):
+        assert envelope_from_mapping(["statusCode", "6000"]) == (None, None)
+        assert envelope_from_mapping("statusCode=6000") == (None, None)
+        assert envelope_from_mapping(None) == (None, None)
+        assert envelope_from_mapping(42) == (None, None)
+
+    def test_empty_string_message_normalized_to_none(self):
+        assert envelope_from_mapping({"statusCode": "5000", "message": ""}) == (
+            "5000",
+            None,
+        )
+
+    def test_non_string_statuscode_rejected(self):
+        assert envelope_from_mapping({"statusCode": 1003, "message": "m"}) == (
+            None,
+            None,
+        )

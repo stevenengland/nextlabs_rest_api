@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from nextlabs_sdk._envelope import envelope_from_response
+from nextlabs_sdk._envelope import envelope_from_mapping
 from nextlabs_sdk._json_response import decode_json, decode_json_object, require_key
 from nextlabs_sdk.exceptions import ApiError, raise_for_status
 
@@ -27,7 +27,7 @@ def _check_envelope_status(body: dict[str, object], response: httpx.Response) ->
     If the envelope has no statusCode field at all, this returns silently
     to preserve legacy behavior for endpoints that do not use the envelope.
     """
-    raw_code, envelope_message = envelope_from_response(response)
+    raw_code, envelope_message = envelope_from_mapping(body)
     if raw_code is None:
         return
     if raw_code.startswith("1"):
