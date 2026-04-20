@@ -290,3 +290,99 @@ def test_parse_raw_ignores_envelope_error_statusCode():
         "statusCode": "5000",
         "message": "No data found",
     }
+
+
+_ALL_PARSERS = (
+    pytest.param(parse_data, id="parse_data"),
+    pytest.param(parse_paginated, id="parse_paginated"),
+    pytest.param(parse_reporter_paginated, id="parse_reporter_paginated"),
+    pytest.param(parse_raw, id="parse_raw"),
+)
+
+
+@pytest.mark.parametrize("parser", _ALL_PARSERS)
+def test_http_error_with_envelope_surfaces_server_message(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        400,
+        json={
+            "statusCode": "6000",
+            "message": "An internal server error occurred.",
+        },
+        request=_make_request(),
+    )
+    from nextlabs_sdk.exceptions import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "An internal server error occurred."
+    assert exc_info.value.envelope_status_code == "6000"
+    assert exc_info.value.envelope_message == "An internal server error occurred."
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.parametrize("parser", _ALL_PARSERS)
+def test_http_error_without_envelope_preserves_legacy_message(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        400,
+        json={"foo": "bar"},
+        request=_make_request(),
+    )
+    from nextlabs_sdk.exceptions import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "HTTP 400"
+    assert exc_info.value.envelope_status_code is None
+    assert exc_info.value.envelope_message is None
+
+
+@pytest.mark.parametrize("parser", _ALL_PARSERS)
+def test_http_500_with_non_json_body_preserves_legacy_message(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        500,
+        content=b"<html>boom</html>",
+        request=_make_request(),
+    )
+    with pytest.raises(ServerError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "HTTP 500"
+    assert exc_info.value.envelope_status_code is None
+
+
+@pytest.mark.parametrize("parser", _ALL_PARSERS)
+def test_http_404_with_envelope_uses_not_found_error(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        404,
+        json={"statusCode": "5000", "message": "No data found"},
+        request=_make_request(),
+    )
+    with pytest.raises(NotFoundError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "No data found"
+    assert exc_info.value.envelope_status_code == "5000"
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.parametrize("parser", _ALL_PARSERS)
+def test_http_error_prefers_envelope_message_even_for_success_statuscode(
+    parser: Callable[[httpx.Response], object],
+):
+    response = httpx.Response(
+        400,
+        json={"statusCode": "1003", "message": "odd but surfaced"},
+        request=_make_request(),
+    )
+    from nextlabs_sdk.exceptions import ValidationError
+
+    with pytest.raises(ValidationError) as exc_info:
+        parser(response)
+    assert exc_info.value.message == "odd but surfaced"
+    assert exc_info.value.envelope_status_code == "1003"

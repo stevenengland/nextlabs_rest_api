@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from nextlabs_sdk._envelope import envelope_from_response
 from nextlabs_sdk._json_response import decode_json, decode_json_object, require_key
 from nextlabs_sdk.exceptions import ApiError, raise_for_status
 
@@ -26,16 +27,13 @@ def _check_envelope_status(body: dict[str, object], response: httpx.Response) ->
     If the envelope has no statusCode field at all, this returns silently
     to preserve legacy behavior for endpoints that do not use the envelope.
     """
-    raw_code = body.get("statusCode")
-    if not isinstance(raw_code, str):
+    raw_code, envelope_message = envelope_from_response(response)
+    if raw_code is None:
         return
     if raw_code.startswith("1"):
         return
 
-    raw_message = body.get("message")
-    envelope_message = raw_message if isinstance(raw_message, str) else None
     message = envelope_message or f"CloudAz error (statusCode={raw_code})"
-
     request_method, request_url = _request_context(response)
 
     raise ApiError(
