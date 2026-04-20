@@ -38,7 +38,7 @@ cli = [
 ]
 
 [project.scripts]
-nextlabs = "nextlabs_sdk._cli._app:app"
+nextlabs = "nextlabs_sdk._cli._entrypoint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

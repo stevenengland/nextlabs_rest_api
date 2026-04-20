@@ -62,6 +62,10 @@ pip install nextlabs-sdk            # library only
 pip install "nextlabs-sdk[cli]"     # + nextlabs CLI (Typer, Rich)
 ```
 
+If you install the library without the `[cli]` extra, the `nextlabs`
+command is still registered but will print a friendly error pointing at
+`pip install 'nextlabs-sdk[cli]'` and exit with status `1`.
+
 Requires Python **3.11+**.
 
 ---
