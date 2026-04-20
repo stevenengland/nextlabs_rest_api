@@ -138,17 +138,29 @@ def _refreshable_label(entry: CachedToken) -> str:
     return "no"
 
 
-def _account_validity(cli_ctx: CliContext, account: AccountIdentifier) -> str:
-    cache = build_file_cache(cli_ctx)
-    entry = cache.load(cache_key_for(account))
+def _account_status_label(entry: CachedToken | None) -> str:
     if entry is None:
         return "no cached token"
     qualifier = "expired" if entry.is_expired() else "valid"
     parts = [f"{qualifier} (expires {format_expiry(entry.expires_at)}"]
     if entry.refresh_expires_at is not None:
         parts.append(f"; refresh expires {format_expiry(entry.refresh_expires_at)}")
-    parts.append(f"; refreshable: {_refreshable_label(entry)})")
+    parts.append(")")
     return "".join(parts)
+
+
+def _account_refreshable_label(entry: CachedToken | None) -> str:
+    if entry is None:
+        return _STATUS_NONE
+    return _refreshable_label(entry)
+
+
+def _account_status_and_refreshable(
+    cli_ctx: CliContext,
+    account: AccountIdentifier,
+) -> tuple[str, str]:
+    entry = build_file_cache(cli_ctx).load(cache_key_for(account))
+    return _account_status_label(entry), _account_refreshable_label(entry)
 
 
 def _render_accounts_table(
@@ -159,7 +171,7 @@ def _render_accounts_table(
 ) -> None:
     headers = ["#", "Active", "Username", "Base URL", "Client ID"]
     if include_status:
-        headers.append("Status")
+        headers.extend(("Status", "Refreshable"))
     table = Table(title=_ACCOUNTS_TITLE)
     for header in headers:
         table.add_column(header)
@@ -173,7 +185,11 @@ def _render_accounts_table(
             account.client_id,
         ]
         if include_status:
-            row.append(_account_validity(cli_ctx, account))
+            status_label, refreshable = _account_status_and_refreshable(
+                cli_ctx,
+                account,
+            )
+            row.extend((status_label, refreshable))
         table.add_row(*row)
     Console().print(table)
 

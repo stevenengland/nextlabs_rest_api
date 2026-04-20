@@ -495,14 +495,16 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
     assert "expired" in result.output
 
 
-def test_status_all_includes_refreshable_hint(
+def test_status_all_has_refreshable_column(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,
 ):
     _isolate_cache(tmp_path, monkeypatch)
     _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
 
-    result = runner.invoke(app, ["auth", "status", "--all"])
+    result = runner.invoke(app, ["auth", "status", "--all"], env={"COLUMNS": "200"})
 
     assert result.exit_code == 0, result.output
-    assert "refreshable" in result.output.lower()
+    assert "Refreshable" in result.output
+    assert "yes" in result.output
+    assert "; refreshable:" not in result.output

@@ -27,7 +27,8 @@ accounts with `nextlabs auth accounts` and `nextlabs auth use <name>`.
 ## `Re-login required` on a long-running session
 
 **Symptom:** a command fails with
-`Re-login required: cached refresh token has been rejected by the server`.
+`Re-login required: Refresh token rejected by server — re-login required`
+(followed by provider detail such as `invalid_grant`).
 
 **Cause:** the cached refresh token is no longer usable (expired, the
 CloudAz session was revoked, or credentials were rotated). The CLI

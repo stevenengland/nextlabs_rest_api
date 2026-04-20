@@ -38,12 +38,13 @@ _MSG_NO_CREDS = "No refresh token and no password available. {hint}"
 _RESPONSE_BODY_PREVIEW_LIMIT = 2000
 
 
-def _truncate_body(text: str) -> str:
+def _truncate_body(text: str, total_bytes: int) -> str:
     if len(text) <= _RESPONSE_BODY_PREVIEW_LIMIT:
         return text
-    return (
-        f"{text[:_RESPONSE_BODY_PREVIEW_LIMIT]}… (truncated, {len(text)} bytes total)"
-    )
+    suffix = f"… (truncated, {total_bytes} bytes total)"
+    if len(suffix) >= _RESPONSE_BODY_PREVIEW_LIMIT:
+        return suffix[:_RESPONSE_BODY_PREVIEW_LIMIT]
+    return f"{text[: _RESPONSE_BODY_PREVIEW_LIMIT - len(suffix)]}{suffix}"
 
 
 def _refresh_failure_details(
@@ -55,7 +56,11 @@ def _refresh_failure_details(
         body = response.text
     except Exception:  # pragma: no cover - httpx decoding edge case
         body = ""
-    return response.status_code, _truncate_body(body)
+    try:
+        total_bytes = len(response.content)
+    except Exception:  # pragma: no cover - httpx content access edge case
+        total_bytes = len(body.encode("utf-8"))
+    return response.status_code, _truncate_body(body, total_bytes)
 
 
 def _spa_redirect_location(response: httpx.Response) -> str:
