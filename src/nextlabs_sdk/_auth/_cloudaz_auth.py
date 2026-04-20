@@ -35,6 +35,28 @@ _MSG_LIFETIME_EXCEEDED = "Refresh token lifetime exceeded — re-login required.
 _MSG_SERVER_REJECTED = "Refresh token rejected by server — re-login required. {hint}"
 _MSG_NO_CREDS = "No refresh token and no password available. {hint}"
 
+_RESPONSE_BODY_PREVIEW_LIMIT = 2000
+
+
+def _truncate_body(text: str) -> str:
+    if len(text) <= _RESPONSE_BODY_PREVIEW_LIMIT:
+        return text
+    return (
+        f"{text[:_RESPONSE_BODY_PREVIEW_LIMIT]}… (truncated, {len(text)} bytes total)"
+    )
+
+
+def _refresh_failure_details(
+    response: httpx.Response | None,
+) -> tuple[int | None, str | None]:
+    if response is None:
+        return None, None
+    try:
+        body = response.text
+    except Exception:  # pragma: no cover - httpx decoding edge case
+        body = ""
+    return response.status_code, _truncate_body(body)
+
 
 def _spa_redirect_location(response: httpx.Response) -> str:
     for hop in response.history:
@@ -117,20 +139,40 @@ def _raise_unless_password_available(
     )
 
 
+def _raise_server_rejected_refresh(
+    *,
+    password: str | None,
+    token_url: str,
+    refresh_response: httpx.Response | None,
+) -> None:
+    if password is not None:
+        return
+    logger.warning(
+        "cloudaz auth: refresh token rejected by server"
+        " and no password available — re-login required",
+    )
+    status_code, response_body = _refresh_failure_details(refresh_response)
+    raise RefreshTokenExpiredError(
+        _MSG_SERVER_REJECTED.format(hint=_RELOGIN_HINT),
+        status_code=status_code,
+        response_body=response_body,
+        request_method=_HTTP_POST,
+        request_url=token_url,
+    )
+
+
 def _handle_refresh_failure(
     *,
     decision: RefreshDecision,
     password: str | None,
     token_url: str,
+    refresh_response: httpx.Response | None = None,
 ) -> None:
     if decision is RefreshDecision.USE_REFRESH:
-        _raise_unless_password_available(
+        _raise_server_rejected_refresh(
             password=password,
             token_url=token_url,
-            message=_MSG_SERVER_REJECTED,
-            exc_cls=RefreshTokenExpiredError,
-            warn="cloudaz auth: refresh token rejected by server"
-            " and no password available — re-login required",
+            refresh_response=refresh_response,
         )
     elif decision is RefreshDecision.KNOWN_EXPIRED:
         logger.debug("cloudaz auth: refresh skipped (known-expired)")
@@ -303,7 +345,10 @@ class CloudAzAuth(httpx.Auth):
                 logger.debug("cloudaz auth: refresh succeeded")
                 return
             _handle_refresh_failure(
-                decision=decision, password=self._password, token_url=self._token_url
+                decision=decision,
+                password=self._password,
+                token_url=self._token_url,
+                refresh_response=response,
             )
         else:
             _handle_refresh_failure(
@@ -324,22 +369,26 @@ class CloudAzAuth(httpx.Auth):
         send: Callable[[httpx.Request], httpx.Response],
     ) -> bool:
         decision = self._refresh_decision()
+        refresh_response: httpx.Response | None = None
         if decision is RefreshDecision.USE_REFRESH:
             logger.debug("cloudaz auth: refresh attempt starting")
             assert self._refresh_token is not None
-            response = send(
+            refresh_response = send(
                 _build_refresh_request(
                     token_url=self._token_url,
                     refresh_token=self._refresh_token,
                     client_id=self._client_id,
                 ),
             )
-            if response.status_code == _OK_STATUS:
-                self._parse_token_response(response)
+            if refresh_response.status_code == _OK_STATUS:
+                self._parse_token_response(refresh_response)
                 logger.debug("cloudaz auth: refresh succeeded")
                 return True
         _handle_refresh_failure(
-            decision=decision, password=self._password, token_url=self._token_url
+            decision=decision,
+            password=self._password,
+            token_url=self._token_url,
+            refresh_response=refresh_response,
         )
         return False
 
@@ -348,22 +397,26 @@ class CloudAzAuth(httpx.Auth):
         send: Callable[[httpx.Request], Awaitable[httpx.Response]],
     ) -> bool:
         decision = self._refresh_decision()
+        refresh_response: httpx.Response | None = None
         if decision is RefreshDecision.USE_REFRESH:
             logger.debug("cloudaz auth: refresh attempt starting")
             assert self._refresh_token is not None
-            response = await send(
+            refresh_response = await send(
                 _build_refresh_request(
                     token_url=self._token_url,
                     refresh_token=self._refresh_token,
                     client_id=self._client_id,
                 ),
             )
-            if response.status_code == _OK_STATUS:
-                self._parse_token_response(response)
+            if refresh_response.status_code == _OK_STATUS:
+                self._parse_token_response(refresh_response)
                 logger.debug("cloudaz auth: refresh succeeded")
                 return True
         _handle_refresh_failure(
-            decision=decision, password=self._password, token_url=self._token_url
+            decision=decision,
+            password=self._password,
+            token_url=self._token_url,
+            refresh_response=refresh_response,
         )
         return False
 
