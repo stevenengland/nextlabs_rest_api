@@ -23,3 +23,4 @@ class CliContext:
     cache_dir: str | None = None
     verbose: int = 0
     pdp_auth: PdpAuthSource | None = None
+    pdp_client_id: str | None = None
