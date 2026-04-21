@@ -22,7 +22,7 @@ from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
 from nextlabs_sdk._cli._pdp_client_id import resolve_pdp_client_id
-from nextlabs_sdk._json_response import decode_json_object, require_int, require_str
+from nextlabs_sdk._json_response import decode_json_object, require_int
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import (
     AuthenticationError,
@@ -134,6 +134,30 @@ class _TokenPayload:
     scope: str | None
 
 
+_MAX_BODY_SNIPPET = 500
+_METHOD_POST = "POST"
+
+
+def _truncate(text: str, limit: int = _MAX_BODY_SNIPPET) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}…"
+
+
+def _auth_error(
+    message: str,
+    response: httpx.Response,
+    token_url: str,
+) -> AuthenticationError:
+    return AuthenticationError(
+        message,
+        status_code=response.status_code,
+        response_body=response.text,
+        request_method=_METHOD_POST,
+        request_url=token_url,
+    )
+
+
 def _mint_client_credentials_token(
     *,
     token_url: str,
@@ -142,51 +166,26 @@ def _mint_client_credentials_token(
     verify_ssl: bool,
     timeout: float,
 ) -> _TokenPayload:
-    try:
-        response = httpx.post(
-            token_url,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=timeout,
-            verify=verify_ssl,
-        )
-    except (httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
-        detail = str(exc) or exc.__class__.__name__
-        raise RequestTimeoutError(
-            f"Request timed out: {detail}",
-            request_method="POST",
-            request_url=token_url,
-        ) from exc
-    except httpx.RequestError as exc:
-        detail = str(exc) or exc.__class__.__name__
-        raise TransportError(
-            f"Connection error: {detail}",
-            request_method="POST",
-            request_url=token_url,
-        ) from exc
+    response = _post_token(
+        token_url=token_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        verify_ssl=verify_ssl,
+        timeout=timeout,
+    )
     if response.status_code != _HTTP_OK:
-        raise AuthenticationError(
-            f"Token acquisition failed: HTTP {response.status_code}",
-            status_code=response.status_code,
-            response_body=response.text,
-            request_method="POST",
-            request_url=token_url,
+        raise _auth_error(
+            f"Token acquisition failed: HTTP {response.status_code}: "
+            f"{_truncate(response.text)}",
+            response,
+            token_url,
         )
     body = decode_json_object(
         response,
         error_cls=AuthenticationError,
         context=" in token response",
     )
-    access_token = require_str(
-        body,
-        "access_token",
-        error_cls=AuthenticationError,
-        context=" in token response",
-    )
+    access_token = _extract_access_token(body, response, token_url)
     expires_in = require_int(
         body,
         "expires_in",
@@ -203,6 +202,73 @@ def _mint_client_credentials_token(
         token_type=token_type,
         scope=scope,
     )
+
+
+def _post_token(
+    *,
+    token_url: str,
+    client_id: str,
+    client_secret: str,
+    verify_ssl: bool,
+    timeout: float,
+) -> httpx.Response:
+    try:
+        return httpx.post(
+            token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=timeout,
+            verify=verify_ssl,
+        )
+    except (httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+        detail = str(exc) or exc.__class__.__name__
+        raise RequestTimeoutError(
+            f"Request timed out: {detail}",
+            request_method=_METHOD_POST,
+            request_url=token_url,
+        ) from exc
+    except httpx.RequestError as exc:
+        detail = str(exc) or exc.__class__.__name__
+        raise TransportError(
+            f"Connection error: {detail}",
+            request_method=_METHOD_POST,
+            request_url=token_url,
+        ) from exc
+
+
+def _extract_access_token(
+    body: dict[str, object],
+    response: httpx.Response,
+    token_url: str,
+) -> str:
+    if "error" in body:
+        raise _auth_error(
+            _format_oauth_error(body),
+            response,
+            token_url,
+        )
+    access_token_raw = body.get("access_token")
+    if not isinstance(access_token_raw, str):
+        raise _auth_error(
+            f"Token response missing 'access_token'; body: "
+            f"{_truncate(response.text)}",
+            response,
+            token_url,
+        )
+    return access_token_raw
+
+
+def _format_oauth_error(body: dict[str, object]) -> str:
+    error_code = body.get("error")
+    error_desc = body.get("error_description")
+    message = f"OAuth error: {error_code}"
+    if isinstance(error_desc, str) and error_desc:
+        return f"{message}: {error_desc}"
+    return message
 
 
 @dataclass(frozen=True)

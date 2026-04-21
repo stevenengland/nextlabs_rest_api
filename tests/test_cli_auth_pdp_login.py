@@ -418,6 +418,133 @@ def test_login_pdp_cloudaz_flavor_uses_client_id_fallback(
     ]
 
 
+def test_login_pdp_surfaces_oauth_error_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    body: dict[str, object] = {
+        "error": "invalid_client",
+        "error_description": "Client authentication failed",
+    }
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_TokenResp(body))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "bad",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(result.output.split())
+    assert "invalid_client" in normalized
+    assert "Client authentication failed" in normalized
+
+
+class _BodyResp:
+    status_code = 200
+
+    def __init__(self, body: dict[str, object], text: str) -> None:
+        self._body = body
+        self.text = text
+
+    def json(self) -> dict[str, object]:
+        return self._body
+
+
+def test_login_pdp_200_missing_access_token_includes_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(
+        _BodyResp({"foo": "bar"}, '{"foo": "bar"}'),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "s",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "foo" in result.output
+    assert "bar" in result.output
+
+
+def test_login_pdp_non_200_includes_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_ErrResp(status_code=401, text="invalid client credentials"))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "bad",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(result.output.split())
+    assert "401" in normalized
+    assert "invalid client credentials" in normalized
+
+
 # ─────────────────────── Recommended regression tests ──────────────────────
 
 
