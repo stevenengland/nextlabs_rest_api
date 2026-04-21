@@ -243,7 +243,7 @@ class CloudAzAuth(httpx.Auth):
         self._password = password
         self._client_id = client_id
         self._cache: TokenCache = token_cache or NullTokenCache()
-        self._cache_key = f"{token_url}|{username}|{client_id}"
+        self._cache_key = f"{token_url}|{username}|{client_id}|cloudaz"
         self._lock = threading.Lock()
         self.refresh_token_lifetime: int | None = None
 
