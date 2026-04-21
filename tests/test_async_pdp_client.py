@@ -215,3 +215,62 @@ def test_async_permissions_raises_api_error_on_unexpected_shape():
         assert "Unexpected PDP response shape" in exc_info.value.message
 
     _run_async(run())
+
+
+def test_async_pdp_client_defaults_token_url_to_dpc_oauth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def _capture(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return mock(httpx.AsyncClient)
+
+    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+
+    AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+
+    assert captured["auth"]._token_url == f"{BASE_URL}/dpc/oauth"
+
+
+def test_async_pdp_client_uses_auth_base_url_for_cas_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def _capture(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return mock(httpx.AsyncClient)
+
+    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+
+    AsyncPdpClient(
+        base_url=BASE_URL,
+        client_id="c",
+        client_secret="s",
+        auth_base_url="https://cloudaz.example.com",
+    )
+
+    assert captured["auth"]._token_url == "https://cloudaz.example.com/cas/token"
+
+
+def test_async_pdp_client_explicit_token_url_overrides_auth_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def _capture(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return mock(httpx.AsyncClient)
+
+    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+
+    AsyncPdpClient(
+        base_url=BASE_URL,
+        client_id="c",
+        client_secret="s",
+        auth_base_url="https://cloudaz.example.com",
+        token_url="https://override.example.com/oauth",
+    )
+
+    assert captured["auth"]._token_url == "https://override.example.com/oauth"

@@ -124,6 +124,7 @@ def cloudaz_client(seeded_wiremock: str) -> Iterator[CloudAzClient]:
 def pdp_client(seeded_wiremock: str) -> Iterator[PdpClient]:
     client = PdpClient(
         base_url=seeded_wiremock,
+        auth_base_url=seeded_wiremock,
         client_id=PDP_CLIENT_ID,
         client_secret=PDP_CLIENT_SECRET,
     )
