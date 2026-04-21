@@ -12,10 +12,18 @@ from nextlabs_sdk._pdp._request_models import EvalRequest, PermissionsRequest
 from nextlabs_sdk._pdp._response_decode import decode_pdp_response
 from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
-from nextlabs_sdk.exceptions import raise_for_status
+from nextlabs_sdk.exceptions import NextLabsError, raise_for_status
 
 _PDP_ENDPOINT = "/dpc/authorization/pdp"
 _CONTENT_TYPE = "Content-Type"
+
+
+def _require_json_content_type(content_type: ContentType, *, method: str) -> None:
+    if content_type is not ContentType.JSON:
+        raise NextLabsError(
+            f"{method}() only supports ContentType.JSON; "
+            f"raw XML pass-through is not implemented",
+        )
 
 
 class AsyncPdpClient:
@@ -94,6 +102,46 @@ class AsyncPdpClient:
             return xml_ser.deserialize_permissions_response(response.content)
 
         body = json_ser.serialize_permissions_request(request)
+        response = await self._client.post(
+            _PDP_ENDPOINT,
+            json=body,
+            headers={_CONTENT_TYPE: content_type.value},
+        )
+        raise_for_status(response)
+        return decode_pdp_response(
+            response,
+            json_ser.deserialize_permissions_response,
+            what="permissions response",
+        )
+
+    async def evaluate_raw(
+        self,
+        body: dict[str, object],
+        *,
+        content_type: ContentType = ContentType.JSON,
+    ) -> EvalResponse:
+        """POST a pre-built raw XACML JSON body to the PDP eval endpoint."""
+        _require_json_content_type(content_type, method="evaluate_raw")
+        response = await self._client.post(
+            _PDP_ENDPOINT,
+            json=body,
+            headers={_CONTENT_TYPE: content_type.value},
+        )
+        raise_for_status(response)
+        return decode_pdp_response(
+            response,
+            json_ser.deserialize_eval_response,
+            what="eval response",
+        )
+
+    async def permissions_raw(
+        self,
+        body: dict[str, object],
+        *,
+        content_type: ContentType = ContentType.JSON,
+    ) -> PermissionsResponse:
+        """POST a pre-built raw XACML JSON body to the PDP permissions endpoint."""
+        _require_json_content_type(content_type, method="permissions_raw")
         response = await self._client.post(
             _PDP_ENDPOINT,
             json=body,

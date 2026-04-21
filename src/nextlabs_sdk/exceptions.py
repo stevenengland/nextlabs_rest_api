@@ -81,6 +81,10 @@ class ApiError(NextLabsError):
     """Catch-all for unmapped HTTP errors."""
 
 
+class PdpPayloadError(NextLabsError):
+    """Raised for invalid or unreadable PDP request payload files."""
+
+
 class RateLimitError(ApiError):
     """HTTP 429 after retries exhausted."""
 

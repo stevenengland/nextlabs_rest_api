@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated
 
@@ -15,19 +16,30 @@ from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import render_json
 from nextlabs_sdk._cli._output_format import OutputFormat
-from nextlabs_sdk._cli._parsing import parse_key_value_attrs
+from nextlabs_sdk._cli._pdp_payload_helpers import (
+    FlagInputs,
+    build_eval_request,
+    build_permissions_request,
+    reject_payload_conflicts,
+    require_flags,
+    run_payload_loader,
+)
 from nextlabs_sdk._pdp import (
-    Action,
-    Application,
     ContentType,
     Decision,
-    Environment,
     EvalRequest,
     EvalResponse,
-    Resource,
+    Obligation,
+    PermissionsRequest,
+    PermissionsResponse,
+    PolicyRef,
 )
-from nextlabs_sdk._pdp import Obligation, PolicyRef, ResourceDimension, Subject
-from nextlabs_sdk._pdp import PermissionsRequest, PermissionsResponse
+from nextlabs_sdk._pdp._client import PdpClient
+from nextlabs_sdk._pdp._payload._format import LoadedPayload, PayloadFormat
+from nextlabs_sdk._pdp._payload._loader import (
+    load_eval_payload,
+    load_permissions_payload,
+)
 
 pdp_app = typer.Typer(help="PDP evaluation commands")
 
@@ -109,16 +121,85 @@ def _render_permissions_detail(model: BaseModel, console: Console) -> None:
     _render_permissions_response(model, console)
 
 
+def _resolve_content_type(wire_format: str) -> ContentType:
+    return ContentType.XML if wire_format == "xml" else ContentType.JSON
+
+
+def _emit_eval(
+    response: EvalResponse,
+    output_format: OutputFormat,
+) -> None:
+    if output_format is OutputFormat.JSON:
+        render_json(response)
+    else:
+        _render_eval_response(response, Console())
+
+
+def _emit_permissions(
+    response: PermissionsResponse,
+    output_format: OutputFormat,
+) -> None:
+    if output_format is OutputFormat.JSON:
+        render_json(response)
+    else:
+        _render_permissions_response(response, Console())
+
+
+def _dispatch_eval_payload(
+    client: PdpClient,
+    loaded: LoadedPayload,
+    content_type: ContentType,
+) -> EvalResponse:
+    if loaded.kind == "raw_xacml":
+        assert loaded.body is not None
+        return client.evaluate_raw(loaded.body)
+    assert isinstance(loaded.request, EvalRequest)
+    return client.evaluate(loaded.request, content_type=content_type)
+
+
+def _dispatch_permissions_payload(
+    client: PdpClient,
+    loaded: LoadedPayload,
+    content_type: ContentType,
+) -> PermissionsResponse:
+    if loaded.kind == "raw_xacml":
+        assert loaded.body is not None
+        return client.permissions_raw(loaded.body)
+    assert isinstance(loaded.request, PermissionsRequest)
+    return client.permissions(loaded.request, content_type=content_type)
+
+
 @pdp_app.command(name="eval")
 @cli_error_handler
 def evaluate(
     ctx: typer.Context,
-    subject_id: Annotated[str, typer.Option("--subject", help="Subject ID")],
-    resource_id: Annotated[str, typer.Option("--resource", help="Resource ID")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--payload",
+            help="Path to a YAML / JSON / raw XACML JSON request file.",
+        ),
+    ] = None,
+    payload_format: Annotated[
+        PayloadFormat,
+        typer.Option(
+            "--payload-format",
+            help="Force payload format (auto, yaml, json, xacml).",
+            case_sensitive=False,
+        ),
+    ] = PayloadFormat.AUTO,
+    subject_id: Annotated[
+        str | None, typer.Option("--subject", help="Subject ID")
+    ] = None,
+    resource_id: Annotated[
+        str | None, typer.Option("--resource", help="Resource ID")
+    ] = None,
     resource_type: Annotated[
-        str, typer.Option("--resource-type", help="Resource type")
-    ],
-    action_id: Annotated[str, typer.Option("--action", help="Action name")],
+        str | None, typer.Option("--resource-type", help="Resource type")
+    ] = None,
+    action_id: Annotated[
+        str | None, typer.Option("--action", help="Action name")
+    ] = None,
     application_id: Annotated[
         str, typer.Option("--application", help="Application ID")
     ] = "",
@@ -154,59 +235,64 @@ def evaluate(
 ) -> None:
     """Evaluate a PDP policy decision."""
     cli_ctx: CliContext = ctx.obj
-    subject = Subject(
-        id=subject_id,
-        attributes=parse_key_value_attrs(subject_attrs or []),
-    )
-    dimension = None
-    if resource_dimension:
-        try:
-            dimension = ResourceDimension(resource_dimension)
-        except ValueError:
-            raise typer.BadParameter(
-                f"Invalid resource dimension: {resource_dimension}. "
-                f"Must be 'from' or 'to'",
-            )
-    resource = Resource(
-        id=resource_id,
-        type=resource_type,
-        dimension=dimension,
-        nocache=resource_nocache,
-        attributes=parse_key_value_attrs(resource_attrs or []),
-    )
-    application = Application(
-        id=application_id,
-        attributes=parse_key_value_attrs(app_attrs or []),
-    )
-    environment = (
-        Environment(attributes=parse_key_value_attrs(env_attrs)) if env_attrs else None
-    )
-    ct_enum = ContentType.XML if wire_format == "xml" else ContentType.JSON
-    request = EvalRequest(
-        subject=subject,
-        resource=resource,
-        action=Action(id=action_id),
-        application=application,
-        environment=environment,
+    flags = FlagInputs(
+        subject_id=subject_id,
+        resource_id=resource_id,
+        resource_type=resource_type,
+        action_id=action_id,
+        application_id=application_id,
+        subject_attrs=subject_attrs,
+        resource_attrs=resource_attrs,
+        app_attrs=app_attrs,
+        env_attrs=env_attrs,
+        resource_dimension=resource_dimension,
+        resource_nocache=resource_nocache,
         return_policy_ids=return_policy_ids,
     )
+    content_type = _resolve_content_type(wire_format)
     client = _client_factory.make_pdp_client(cli_ctx)
-    response = client.evaluate(request, content_type=ct_enum)
-    if cli_ctx.output_format is OutputFormat.JSON:
-        render_json(response)
+
+    if payload_path is None:
+        require_flags(flags, need_action=True)
+        request = build_eval_request(flags)
+        response = client.evaluate(request, content_type=content_type)
     else:
-        _render_eval_response(response, Console())
+        reject_payload_conflicts(flags)
+        loaded = run_payload_loader(load_eval_payload, payload_path, payload_format)
+        assert isinstance(loaded, LoadedPayload)
+        response = _dispatch_eval_payload(client, loaded, content_type)
+
+    _emit_eval(response, cli_ctx.output_format)
 
 
 @pdp_app.command()
 @cli_error_handler
 def permissions(
     ctx: typer.Context,
-    subject_id: Annotated[str, typer.Option("--subject", help="Subject ID")],
-    resource_id: Annotated[str, typer.Option("--resource", help="Resource ID")],
+    payload_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--payload",
+            help="Path to a YAML / JSON / raw XACML JSON request file.",
+        ),
+    ] = None,
+    payload_format: Annotated[
+        PayloadFormat,
+        typer.Option(
+            "--payload-format",
+            help="Force payload format (auto, yaml, json, xacml).",
+            case_sensitive=False,
+        ),
+    ] = PayloadFormat.AUTO,
+    subject_id: Annotated[
+        str | None, typer.Option("--subject", help="Subject ID")
+    ] = None,
+    resource_id: Annotated[
+        str | None, typer.Option("--resource", help="Resource ID")
+    ] = None,
     resource_type: Annotated[
-        str, typer.Option("--resource-type", help="Resource type")
-    ],
+        str | None, typer.Option("--resource-type", help="Resource type")
+    ] = None,
     application_id: Annotated[
         str, typer.Option("--application", help="Application ID")
     ] = "",
@@ -246,48 +332,38 @@ def permissions(
 ) -> None:
     """Get allowed and denied actions for a subject-resource pair."""
     cli_ctx: CliContext = ctx.obj
-    subject = Subject(
-        id=subject_id,
-        attributes=parse_key_value_attrs(subject_attrs or []),
-    )
-    dimension = None
-    if resource_dimension:
-        try:
-            dimension = ResourceDimension(resource_dimension)
-        except ValueError:
-            raise typer.BadParameter(
-                f"Invalid resource dimension: {resource_dimension}. "
-                f"Must be 'from' or 'to'",
-            )
-    resource = Resource(
-        id=resource_id,
-        type=resource_type,
-        dimension=dimension,
-        nocache=resource_nocache,
-        attributes=parse_key_value_attrs(resource_attrs or []),
-    )
-    application = Application(
-        id=application_id,
-        attributes=parse_key_value_attrs(app_attrs or []),
-    )
-    environment = (
-        Environment(attributes=parse_key_value_attrs(env_attrs)) if env_attrs else None
-    )
-    ct_enum = ContentType.XML if wire_format == "xml" else ContentType.JSON
-    request = PermissionsRequest(
-        subject=subject,
-        resource=resource,
-        application=application,
-        environment=environment,
+    flags = FlagInputs(
+        subject_id=subject_id,
+        resource_id=resource_id,
+        resource_type=resource_type,
+        application_id=application_id,
+        subject_attrs=subject_attrs,
+        resource_attrs=resource_attrs,
+        app_attrs=app_attrs,
+        env_attrs=env_attrs,
+        resource_dimension=resource_dimension,
+        resource_nocache=resource_nocache,
         return_policy_ids=return_policy_ids,
         record_matching_policies=record_matching_policies,
     )
+    content_type = _resolve_content_type(wire_format)
     client = _client_factory.make_pdp_client(cli_ctx)
-    response = client.permissions(request, content_type=ct_enum)
-    if cli_ctx.output_format is OutputFormat.JSON:
-        render_json(response)
+
+    if payload_path is None:
+        require_flags(flags, need_action=False)
+        request = build_permissions_request(flags)
+        response = client.permissions(request, content_type=content_type)
     else:
-        _render_permissions_response(response, Console())
+        reject_payload_conflicts(flags)
+        loaded = run_payload_loader(
+            load_permissions_payload,
+            payload_path,
+            payload_format,
+        )
+        assert isinstance(loaded, LoadedPayload)
+        response = _dispatch_permissions_payload(client, loaded, content_type)
+
+    _emit_permissions(response, cli_ctx.output_format)
 
 
 register_detail_renderer(EvalResponse, _render_eval_detail)
