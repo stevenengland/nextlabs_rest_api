@@ -283,3 +283,152 @@ def test_login_pdp_token_error_surfaces(
         "authentication failed" in result.output.lower()
         or "token acquisition" in result.output.lower()
     )
+
+
+# ─────────────────────── Recommended regression tests ──────────────────────
+
+
+from click.testing import Result as _CliResult
+
+
+def _invoke_pdp_login(secret: str) -> _CliResult:
+    return runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "ccid",
+            "--client-secret",
+            secret,
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+
+def test_pdp_relogin_overwrites_client_secret(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        "https://pdp.example/dpc/oauth",
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(
+        _TokenResp({"access_token": "AT", "expires_in": 3600}),
+    )
+
+    first = _invoke_pdp_login("OLD")
+    assert first.exit_code == 0, first.output
+    second = _invoke_pdp_login("NEW")
+    assert second.exit_code == 0, second.output
+
+    entry = FileTokenCache(path=tmp_path / "tokens.json").load(
+        "https://pdp.example||ccid|pdp",
+    )
+    assert entry is not None
+    assert entry.client_secret == "NEW"
+
+
+def test_cloudaz_login_still_uses_four_segment_cache_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _capture_factory(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://cloudaz.example",
+            "--username",
+            "alice",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    active = ActiveAccountStore(path=tmp_path / "active_account.json").load()
+    assert active is not None
+    assert active.kind == "cloudaz"
+
+    from nextlabs_sdk._cli._account_menu import (
+        AccountIdentifier,
+        cache_key_for,
+    )
+
+    key = cache_key_for(
+        AccountIdentifier(
+            base_url=active.base_url,
+            username=active.username,
+            client_id=active.client_id,
+            kind=active.kind,
+        ),
+    )
+    assert key.count("|") == 3
+    assert key.endswith("|cloudaz")
+
+
+def test_switching_active_account_between_kinds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        "https://pdp.example/dpc/oauth",
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_TokenResp({"access_token": "AT", "expires_in": 3600}))
+
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+
+    cache = FileTokenCache(path=tmp_path / "tokens.json")
+    cache.save(
+        "https://cloudaz.example/cas/oidc/accessToken|alice|cc|cloudaz",
+        CachedToken(
+            access_token="id",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+        ),
+    )
+
+    pdp = _invoke_pdp_login("S")
+    assert pdp.exit_code == 0, pdp.output
+
+    active_store = ActiveAccountStore(path=tmp_path / "active_account.json")
+    active_after_pdp = active_store.load()
+    assert active_after_pdp is not None and active_after_pdp.kind == "pdp"
+
+    back = runner.invoke(
+        app,
+        ["auth", "use", "alice@https://cloudaz.example"],
+    )
+    assert back.exit_code == 0, back.output
+    active_after_back = active_store.load()
+    assert active_after_back is not None
+    assert active_after_back.kind == "cloudaz"
+
+    forward = runner.invoke(
+        app,
+        ["auth", "use", "[pdp]@https://pdp.example"],
+    )
+    assert forward.exit_code == 0, forward.output
+    active_after_forward = active_store.load()
+    assert active_after_forward is not None
+    assert active_after_forward.kind == "pdp"
