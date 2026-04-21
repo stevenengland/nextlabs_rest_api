@@ -20,6 +20,7 @@ from nextlabs_sdk._cli._account_resolver import (
 from nextlabs_sdk._cli._cache_key import cache_key_for
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
+from nextlabs_sdk._cli._pdp_client_id import resolve_pdp_client_id
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk._pdp._client import PdpClient
@@ -181,13 +182,12 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
 
 def make_pdp_client(ctx: CliContext) -> PdpClient:
     account = resolve_account(ctx)
-    client_id = account.client_id if account else ctx.client_id
-
     overrides = _load_pdp_overrides(ctx, account)
     flavor = _resolve_flavor(ctx, overrides)
     base_url = _resolve_cloudaz_base_url(ctx, account, flavor)
     pdp_url = _resolve_pdp_url(ctx, flavor, overrides)
     client_secret = _resolve_client_secret(ctx, flavor, overrides)
+    client_id = _resolve_pdp_client_id(ctx, account, flavor)
 
     auth_base_url = base_url if flavor is PdpAuthSource.CLOUDAZ else None
 
@@ -198,6 +198,18 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
         client_secret=client_secret,
         http_config=_http_config(ctx, account),
     )
+
+
+def _resolve_pdp_client_id(
+    ctx: CliContext,
+    account: ResolvedAccount | None,
+    flavor: PdpAuthSource,
+) -> str:
+    if ctx.pdp_client_id:
+        return ctx.pdp_client_id
+    if account is not None:
+        return account.client_id
+    return resolve_pdp_client_id(ctx, flavor)
 
 
 @dataclass(frozen=True)

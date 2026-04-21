@@ -55,7 +55,7 @@ local cache, the CLI has nowhere to recover them from.
 
 ```bash
 nextlabs auth login --type pdp \
-  --pdp-url https://pdp.example --client-id my-client \
+  --pdp-url https://pdp.example --pdp-client-id my-pdp-client \
   --client-secret "$SECRET" --pdp-auth pdp
 ```
 
@@ -65,6 +65,33 @@ persists `pdp_url` + `pdp_auth` as account preferences. Subsequent
 the secret by re-running `auth login --type pdp` with the new value;
 clear the entry with `nextlabs auth logout` (after
 `nextlabs auth use "[pdp]@<pdp-url>"` if it is not already active).
+
+## `Authentication failed: Token response missing 'access_token'`
+
+**Symptom:** `nextlabs auth login --type pdp` (or any PDP command using
+`--pdp-auth=pdp`) fails with
+`Authentication failed: Token response missing 'access_token'; body: …`,
+`Authentication failed: OAuth error: invalid_client: …`, or
+`Authentication failed: Token acquisition failed: HTTP 401: …`.
+
+**Cause:** the PDP's `/dpc/oauth` endpoint was called with the CloudAz
+OIDC default `client_id` (`ControlCenterOIDCClient`) because no
+PDP-specific client ID was configured. The PDP rejects the request and
+returns either an OAuth error body or a non-standard 200 response that
+lacks `access_token`.
+
+**Fix:** pass `--pdp-client-id` (or export `NEXTLABS_PDP_CLIENT_ID`)
+with the PDP client ID your deployment expects, e.g.
+
+```bash
+nextlabs --pdp-url https://pdp.example --pdp-client-id my-pdp-client \
+  --client-secret "$SECRET" --pdp-auth pdp \
+  auth login --type pdp
+```
+
+The resulting error message now embeds the real server `error` /
+`error_description` (or a truncated response body) so the root cause is
+visible.
 
 ## SSL verification failures against an internal CloudAz instance
 

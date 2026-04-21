@@ -6,6 +6,7 @@ from typing import cast
 import httpx
 import pytest
 from mockito import ANY, mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._auth._active_account._active_account_store import (
@@ -283,6 +284,306 @@ def test_login_pdp_token_error_surfaces(
         "authentication failed" in result.output.lower()
         or "token acquisition" in result.output.lower()
     )
+
+
+def test_login_pdp_uses_pdp_client_id_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    resp = _TokenResp({"access_token": "AT", "expires_in": 3600})
+    captured_data: list[dict[str, str]] = []
+
+    def _fake_post(
+        url: str,
+        *,
+        data: dict[str, str],
+        **_kwargs: object,
+    ) -> _TokenResp:
+        captured_data.append(dict(data))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "pdp-only-id",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_data == [
+        {
+            "grant_type": "client_credentials",
+            "client_id": "pdp-only-id",
+            "client_secret": "S3cret",
+        },
+    ]
+
+    entry = FileTokenCache(path=tmp_path / "tokens.json").load(
+        "https://pdp.example||pdp-only-id|pdp",
+    )
+    assert entry is not None
+    assert entry.access_token == "AT"
+
+
+def _isatty_false_for_pdp_login() -> bool:
+    return False
+
+
+def test_login_pdp_rejects_missing_client_id_non_tty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false_for_pdp_login)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "pdp-client-id" in result.output.lower()
+
+
+def test_login_pdp_cloudaz_flavor_uses_client_id_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    resp = _TokenResp({"access_token": "AT", "expires_in": 3600})
+    captured_data: list[dict[str, str]] = []
+
+    def _fake_post(
+        url: str,
+        *,
+        data: dict[str, str],
+        **_kwargs: object,
+    ) -> _TokenResp:
+        captured_data.append(dict(data))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://cloudaz.example",
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "cloudaz-oidc-client",
+            "--client-secret",
+            "S",
+            "--pdp-auth",
+            "cloudaz",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_data == [
+        {
+            "grant_type": "client_credentials",
+            "client_id": "cloudaz-oidc-client",
+            "client_secret": "S",
+        },
+    ]
+
+
+def test_login_pdp_surfaces_oauth_error_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    body: dict[str, object] = {
+        "error": "invalid_client",
+        "error_description": "Client authentication failed",
+    }
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_TokenResp(body))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "bad",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "invalid_client" in normalized
+    assert "Client authentication failed" in normalized
+
+
+def test_login_pdp_null_error_falls_back_to_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    body: dict[str, object] = {"error": None, "detail": "weird-sentinel"}
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_BodyResp(body, '{"error": null, "detail": "weird-sentinel"}'))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "s",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "OAuth error: None" not in normalized
+    assert "missing 'access_token'" in normalized
+    assert "weird-sentinel" in normalized
+
+
+class _BodyResp:
+    status_code = 200
+
+    def __init__(self, body: dict[str, object], text: str) -> None:
+        self._body = body
+        self.text = text
+
+    def json(self) -> dict[str, object]:
+        return self._body
+
+
+def test_login_pdp_200_missing_access_token_includes_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(
+        _BodyResp({"foo": "bar"}, '{"foo": "bar"}'),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "s",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "foo" in normalized
+    assert "bar" in normalized
+
+
+def test_login_pdp_non_200_includes_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_ErrResp(status_code=401, text="invalid client credentials"))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "bad",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "401" in normalized
+    assert "invalid client credentials" in normalized
 
 
 # ─────────────────────── Recommended regression tests ──────────────────────
