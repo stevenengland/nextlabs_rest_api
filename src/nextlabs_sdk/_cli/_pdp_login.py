@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import httpx
 import typer
@@ -57,14 +57,37 @@ class _PdpLoginAttempt:
 
 def login_pdp(cli_ctx: CliContext) -> None:
     """Register a PDP account via OAuth2 client-credentials."""
+    resolved_ctx = _resolve_login_inputs(cli_ctx)
     attempt = _PdpLoginAttempt()
     used_ctx = _SSL_RETRY_PROMPTER_FACTORY().run_with_ssl_retry(
         attempt=attempt,
-        cli_ctx=cli_ctx,
-        target_url=_target_url_for_prompt(cli_ctx),
+        cli_ctx=resolved_ctx,
+        target_url=_target_url_for_prompt(resolved_ctx),
     )
     _persist_login(used_ctx, attempt.records[-1])
     print_success("PDP login successful; credentials cached")
+
+
+def _resolve_login_inputs(cli_ctx: CliContext) -> CliContext:
+    """Gather every interactive input once, up-front.
+
+    Returns a :class:`CliContext` where every value the token-minting
+    step needs is already populated, so the SSL-retry flow can re-invoke
+    the attempt without re-prompting the user for anything except the
+    retry confirmation itself.
+    """
+    flavor = _resolve_flavor(cli_ctx)
+    pdp_url = _resolve_pdp_url(cli_ctx, flavor)
+    auth_base_url = _resolve_auth_base_url(cli_ctx, flavor)
+    client_id = resolve_pdp_client_id(cli_ctx, flavor)
+    client_secret = _resolve_client_secret(cli_ctx, flavor)
+    return replace(
+        cli_ctx,
+        base_url=auth_base_url if auth_base_url else cli_ctx.base_url,
+        pdp_url=pdp_url,
+        pdp_client_id=client_id,
+        client_secret=client_secret,
+    )
 
 
 def _target_url_for_prompt(cli_ctx: CliContext) -> str:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -17,10 +18,40 @@ from nextlabs_sdk._cli import _auth_cmd, _client_factory
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
+from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._operators import OperatorService
 
 runner = CliRunner()
+
+
+class _RecordingPrompter(SslRetryPrompter):
+    """Test double that records the ``target_url`` it is handed."""
+
+    def __init__(
+        self,
+        sink: list[str],
+        *,
+        isatty: Callable[[], bool],
+        confirm: Callable[..., bool],
+    ) -> None:
+        super().__init__(isatty=isatty, confirm=confirm)
+        self._sink = sink
+
+    def run_with_ssl_retry(
+        self,
+        *,
+        attempt: Callable[[CliContext], None],
+        cli_ctx: CliContext,
+        target_url: str,
+    ) -> CliContext:
+        self._sink.append(target_url)
+        return super().run_with_ssl_retry(
+            attempt=attempt,
+            cli_ctx=cli_ctx,
+            target_url=target_url,
+        )
 
 
 def _mock_cloudaz_client() -> CloudAzClient:
@@ -846,3 +877,154 @@ def test_pdp_login_non_tty_does_not_prompt_on_ssl_failure(
     assert result.exit_code == 1
     normalized = strip_ansi(result.output)
     assert "Connection error" in normalized or "SSL" in normalized
+
+
+def test_pdp_login_ssl_retry_does_not_reprompt_for_missing_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inputs supplied interactively once are reused on retry.
+
+    Regression guard for Copilot review on PR #64: if
+    ``_attempt_login`` were called twice against the original
+    (partially unresolved) ``CliContext``, each helper resolver would
+    fire twice — including the interactive ``typer.prompt`` paths.
+    """
+    import ssl
+
+    from nextlabs_sdk._cli import _pdp_login as _pdp_login_module
+
+    _isolate_cache(tmp_path, monkeypatch)
+
+    pdp_url_calls = [0]
+    client_secret_calls = [0]
+    original_pdp_url = _pdp_login_module._resolve_pdp_url
+    original_client_secret = _pdp_login_module._resolve_client_secret
+
+    def _counting_pdp_url(ctx: CliContext, flavor: PdpAuthSource) -> str:
+        if ctx.pdp_url is None:
+            pdp_url_calls[0] += 1
+            return "https://pdp.example"
+        return original_pdp_url(ctx, flavor)
+
+    def _counting_client_secret(ctx: CliContext, flavor: PdpAuthSource) -> str:
+        if ctx.client_secret is None:
+            client_secret_calls[0] += 1
+            return "S3cret"
+        return original_client_secret(ctx, flavor)
+
+    monkeypatch.setattr(
+        _pdp_login_module,
+        "_resolve_pdp_url",
+        _counting_pdp_url,
+    )
+    monkeypatch.setattr(
+        _pdp_login_module,
+        "_resolve_client_secret",
+        _counting_client_secret,
+    )
+
+    calls_verify: list[object] = []
+    resp = _TokenResp(
+        {"access_token": "AT", "expires_in": 3600, "token_type": "bearer"},
+    )
+
+    def _fake_post(*_args: object, **kwargs: object) -> object:
+        calls_verify.append(kwargs.get("verify"))
+        if len(calls_verify) == 1:
+            cause = ssl.SSLCertVerificationError("verify failed")
+            wrapped = httpx.ConnectError("verify failed")
+            wrapped.__cause__ = cause
+            raise wrapped
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-client-id",
+            "ccid",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls_verify == [True, False]
+    assert pdp_url_calls == [1]
+    assert client_secret_calls == [1]
+
+
+def test_pdp_login_ssl_retry_target_url_reflects_resolved_pdp_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The prompt message shows the resolved PDP URL, not an empty string.
+
+    Regression guard for Copilot review on PR #64: previously,
+    ``target_url`` was computed from the *unresolved* CliContext, so a
+    user prompted for ``--pdp-url`` would see "SSL verification failed
+    for ." with an empty URL.
+    """
+    from nextlabs_sdk._cli import _pdp_login as _pdp_login_module
+
+    _isolate_cache(tmp_path, monkeypatch)
+
+    original_pdp_url = _pdp_login_module._resolve_pdp_url
+
+    def _fake_pdp_url(ctx: CliContext, flavor: PdpAuthSource) -> str:
+        if ctx.pdp_url is None:
+            return "https://pdp.example"
+        return original_pdp_url(ctx, flavor)
+
+    monkeypatch.setattr(
+        _pdp_login_module,
+        "_resolve_pdp_url",
+        _fake_pdp_url,
+    )
+
+    observed_target: list[str] = []
+
+    monkeypatch.setattr(
+        _pdp_login_module,
+        "_SSL_RETRY_PROMPTER_FACTORY",
+        lambda: _RecordingPrompter(
+            observed_target,
+            isatty=lambda: True,
+            confirm=lambda _t, *, default=False: True,
+        ),
+    )
+
+    resp = _TokenResp(
+        {"access_token": "AT", "expires_in": 3600, "token_type": "bearer"},
+    )
+
+    def _fake_post(*_args: object, **_kwargs: object) -> object:
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-client-id",
+            "ccid",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert observed_target == ["https://pdp.example"]
