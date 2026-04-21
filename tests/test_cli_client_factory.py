@@ -31,6 +31,7 @@ def _make_ctx(
     cache_dir: str | None = None,
     pdp_url: str | None = "https://pdp.example.com",
     pdp_auth: PdpAuthSource | None = None,
+    pdp_client_id: str | None = None,
 ) -> CliContext:
     return CliContext(
         base_url=base_url,
@@ -44,6 +45,7 @@ def _make_ctx(
         timeout=30.0,
         cache_dir=cache_dir,
         pdp_auth=pdp_auth,
+        pdp_client_id=pdp_client_id,
     )
 
 
@@ -724,3 +726,52 @@ def test_make_cloudaz_client_rejects_active_pdp_account(
 
     with pytest.raises(typer.BadParameter, match="PDP account"):
         _client_factory.make_cloudaz_client(ctx)
+
+
+# ─── PDP client-id resolver integration (#61) ─────────────────────────────
+
+
+def test_make_pdp_client_uses_pdp_client_id_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = _capture_pdp_kwargs(monkeypatch)
+
+    _client_factory.make_pdp_client(
+        _make_ctx(pdp_client_id="pdp-only-id"),
+    )
+
+    assert captured["client_id"] == "pdp-only-id"
+
+
+def test_make_pdp_client_flag_overrides_active_account_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_active_pdp(tmp_path)
+    captured = _capture_pdp_kwargs(monkeypatch)
+    ctx = _make_ctx(
+        base_url=None,
+        username=None,
+        client_secret=None,
+        cache_dir=str(tmp_path),
+        pdp_client_id="override-id",
+    )
+
+    _client_factory.make_pdp_client(ctx)
+
+    assert captured["client_id"] == "override-id"
+
+
+def test_make_pdp_client_pdp_flavor_missing_client_id_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    with pytest.raises(typer.BadParameter, match="pdp-client-id"):
+        _client_factory.make_pdp_client(
+            _make_ctx(
+                base_url=None,
+                pdp_auth=PdpAuthSource.PDP,
+                client_id="ControlCenterOIDCClient",
+            ),
+        )
