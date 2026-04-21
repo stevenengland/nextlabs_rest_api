@@ -5,7 +5,7 @@ import functools
 import httpx
 
 from nextlabs_sdk._cloudaz._policy_models import PolicyLite
-from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
+from nextlabs_sdk._cloudaz._response import build_page, parse_data
 from nextlabs_sdk._cloudaz._search import SavedSearch, SearchCriteria
 from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
@@ -83,15 +83,7 @@ class PolicySearchService:
             "/console/api/v1/policy/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, PolicyLite, page_no)
 
     def _fetch_search_named_page(
         self,
@@ -103,15 +95,7 @@ class PolicySearchService:
             f"/console/api/v1/policy/search/{search}",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, PolicyLite, page_no)
 
     def _fetch_saved_searches_page(
         self,
@@ -121,15 +105,7 @@ class PolicySearchService:
             "/console/api/v1/policy/search/savedlist",
             params={_PAGE_NO_PARAM: page_no},
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     def _fetch_find_saved_search_page(
         self,
@@ -140,15 +116,7 @@ class PolicySearchService:
             f"/console/api/v1/policy/search/savedlist/{name}",
             params={_PAGE_NO_PARAM: page_no},
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
 
 class AsyncPolicySearchService:
@@ -216,15 +184,7 @@ class AsyncPolicySearchService:
             "/console/api/v1/policy/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, PolicyLite, page_no)
 
     async def _fetch_search_named_page(
         self,
@@ -236,15 +196,7 @@ class AsyncPolicySearchService:
             f"/console/api/v1/policy/search/{search}",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [PolicyLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, PolicyLite, page_no)
 
     async def _fetch_saved_searches_page(
         self,
@@ -254,15 +206,7 @@ class AsyncPolicySearchService:
             "/console/api/v1/policy/search/savedlist",
             params={_PAGE_NO_PARAM: page_no},
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     async def _fetch_find_saved_search_page(
         self,
@@ -273,12 +217,4 @@ class AsyncPolicySearchService:
             f"/console/api/v1/policy/search/savedlist/{name}",
             params={_PAGE_NO_PARAM: page_no},
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)

@@ -8,7 +8,7 @@ from nextlabs_sdk._cloudaz._component_models import (
     ComponentLite,
     ComponentNameEntry,
 )
-from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
+from nextlabs_sdk._cloudaz._response import build_page, parse_data
 from nextlabs_sdk._cloudaz._search import SavedSearch, SearchCriteria
 from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
@@ -76,6 +76,9 @@ class ComponentSearchService:
             ),
         )
 
+    def _page_params(self, page_no: int) -> dict[str, int]:
+        return {_PAGE_NO_PARAM: page_no}
+
     def _fetch_search_page(
         self,
         criteria: SearchCriteria,
@@ -85,15 +88,7 @@ class ComponentSearchService:
             "/console/api/v1/component/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentLite, page_no)
 
     def _fetch_saved_searches_page(
         self,
@@ -101,17 +96,9 @@ class ComponentSearchService:
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             "/console/api/v1/component/search/savedlist",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     def _fetch_find_saved_search_page(
         self,
@@ -120,17 +107,9 @@ class ComponentSearchService:
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             f"/console/api/v1/component/search/savedlist/{name}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     def _fetch_names_page(
         self,
@@ -139,17 +118,9 @@ class ComponentSearchService:
     ) -> PageResult[ComponentNameEntry]:
         response = self._client.get(
             f"/console/api/v1/component/search/listNames/{group}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentNameEntry.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentNameEntry, page_no)
 
     def _fetch_names_by_type_page(
         self,
@@ -159,17 +130,9 @@ class ComponentSearchService:
     ) -> PageResult[ComponentNameEntry]:
         response = self._client.get(
             f"/console/api/v1/component/search/listNames/{group}/{component_type}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentNameEntry.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentNameEntry, page_no)
 
 
 class AsyncComponentSearchService:
@@ -232,6 +195,9 @@ class AsyncComponentSearchService:
             ),
         )
 
+    def _page_params(self, page_no: int) -> dict[str, int]:
+        return {_PAGE_NO_PARAM: page_no}
+
     async def _fetch_search_page(
         self,
         criteria: SearchCriteria,
@@ -241,15 +207,7 @@ class AsyncComponentSearchService:
             "/console/api/v1/component/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentLite.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentLite, page_no)
 
     async def _fetch_saved_searches_page(
         self,
@@ -257,17 +215,9 @@ class AsyncComponentSearchService:
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             "/console/api/v1/component/search/savedlist",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     async def _fetch_find_saved_search_page(
         self,
@@ -276,17 +226,9 @@ class AsyncComponentSearchService:
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             f"/console/api/v1/component/search/savedlist/{name}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, SavedSearch, page_no)
 
     async def _fetch_names_page(
         self,
@@ -295,17 +237,9 @@ class AsyncComponentSearchService:
     ) -> PageResult[ComponentNameEntry]:
         response = await self._client.get(
             f"/console/api/v1/component/search/listNames/{group}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentNameEntry.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentNameEntry, page_no)
 
     async def _fetch_names_by_type_page(
         self,
@@ -315,14 +249,6 @@ class AsyncComponentSearchService:
     ) -> PageResult[ComponentNameEntry]:
         response = await self._client.get(
             f"/console/api/v1/component/search/listNames/{group}/{component_type}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=self._page_params(page_no),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        entries = [ComponentNameEntry.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=entries,
-            page_no=page_no,
-            page_size=len(entries),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return build_page(response, ComponentNameEntry, page_no)

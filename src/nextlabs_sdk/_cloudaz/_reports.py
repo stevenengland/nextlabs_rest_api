@@ -4,6 +4,7 @@ import builtins
 import functools
 
 import httpx
+from pydantic import BaseModel
 
 from nextlabs_sdk._cloudaz._report_models import (
     ApplicationUser,
@@ -25,6 +26,14 @@ from nextlabs_sdk.exceptions import raise_for_status
 
 _BASE_PATH = "/nextlabs-reporter/api/v1/policy-activity-reports"
 
+_FIELD_TITLE = "title"
+_FIELD_SORT_BY = "sortBy"
+_FIELD_SORT_ORDER = "sortOrder"
+_FIELD_PAGE = "page"
+_FIELD_SIZE = "size"
+_SORT_ORDER_ASCENDING = "ascending"
+_SORT_FIELD_ROW_ID = "rowId"
+
 
 class PolicyActivityReportService:
 
@@ -39,8 +48,8 @@ class PolicyActivityReportService:
         title: str = "",
         is_shared: bool = True,
         policy_decision: str = "AD",
-        sort_by: str = "title",
-        sort_order: str = "ascending",
+        sort_by: str = _FIELD_TITLE,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> SyncPaginator[PolicyActivityReport]:
         """List policy activity reports."""
@@ -64,7 +73,7 @@ class PolicyActivityReportService:
 
     def create(self, request: PolicyActivityReportRequest) -> PolicyActivityReport:
         """Create a new policy activity report."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = self._client.post(_BASE_PATH, json=payload)
         raw = parse_data(response)
         return PolicyActivityReport.model_validate(raw)
@@ -73,14 +82,14 @@ class PolicyActivityReportService:
         self, report_id: int, request: PolicyActivityReportRequest
     ) -> PolicyActivityReport:
         """Modify an existing policy activity report."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = self._client.put(f"{_BASE_PATH}/{report_id}", json=payload)
         raw = parse_data(response)
         return PolicyActivityReport.model_validate(raw)
 
     def delete(self, request: DeleteReportsRequest) -> None:
         """Delete reports by IDs or query parameters."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = self._client.post(f"{_BASE_PATH}/delete", json=payload)
         raise_for_status(response)
 
@@ -96,8 +105,8 @@ class PolicyActivityReportService:
         self,
         report_id: int,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> SyncPaginator[EnforcementEntry]:
         """Retrieve enforcement logs for a saved report."""
@@ -115,12 +124,14 @@ class PolicyActivityReportService:
         self,
         report_id: int,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
     ) -> bytes:
         """Export enforcement logs for a saved report."""
-        params = {"sortBy": sort_by, "sortOrder": sort_order}
-        response = self._client.post(f"{_BASE_PATH}/{report_id}/export", params=params)
+        query_params = {_FIELD_SORT_BY: sort_by, _FIELD_SORT_ORDER: sort_order}
+        response = self._client.post(
+            f"{_BASE_PATH}/{report_id}/export", params=query_params
+        )
         raise_for_status(response)
         return response.content
 
@@ -128,7 +139,7 @@ class PolicyActivityReportService:
 
     def generate_widgets(self, request: PolicyActivityReportRequest) -> WidgetData:
         """Generate widget data for ad-hoc criteria."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = self._client.post(f"{_BASE_PATH}/generate/widgets", json=payload)
         raw = parse_data(response)
         return WidgetData.model_validate(raw)
@@ -137,8 +148,8 @@ class PolicyActivityReportService:
         self,
         request: PolicyActivityReportRequest,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> SyncPaginator[EnforcementEntry]:
         """Generate enforcement logs for ad-hoc criteria."""
@@ -156,14 +167,14 @@ class PolicyActivityReportService:
         self,
         request: PolicyActivityReportRequest,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
     ) -> bytes:
         """Export enforcement logs for ad-hoc criteria."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
-        params = {"sortBy": sort_by, "sortOrder": sort_order}
+        payload = self._payload(request)
+        query_params = {_FIELD_SORT_BY: sort_by, _FIELD_SORT_ORDER: sort_order}
         response = self._client.post(
-            f"{_BASE_PATH}/generate/export", json=payload, params=params
+            f"{_BASE_PATH}/generate/export", json=payload, params=query_params
         )
         raise_for_status(response)
         return response.content
@@ -210,6 +221,9 @@ class PolicyActivityReportService:
 
     # --- Internal pagination callbacks ---
 
+    def _payload(self, request: BaseModel) -> dict[str, object]:
+        return request.model_dump(by_alias=True, exclude_none=True)
+
     def _fetch_list_page(
         self,
         title: str,
@@ -220,18 +234,20 @@ class PolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[PolicyActivityReport]:
-        params: dict[str, str | int | bool] = {
-            "title": title,
+        query_params: dict[str, str | int | bool] = {
+            _FIELD_TITLE: title,
             "isShared": is_shared,
             "policyDecision": policy_decision,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
-            "size": page_size,
-            "page": page_no,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
+            _FIELD_SIZE: page_size,
+            _FIELD_PAGE: page_no,
         }
-        response = self._client.get(_BASE_PATH, params=params)
+        response = self._client.get(_BASE_PATH, params=query_params)
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
-        reports = [PolicyActivityReport.model_validate(item) for item in raw_items]
+        reports = [
+            PolicyActivityReport.model_validate(raw_item) for raw_item in raw_items
+        ]
         return PageResult(
             entries=reports,
             page_no=page_no,
@@ -248,14 +264,14 @@ class PolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[EnforcementEntry]:
-        params: dict[str, str | int] = {
-            "page": page_no,
-            "size": page_size,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
+        query_params: dict[str, str | int] = {
+            _FIELD_PAGE: page_no,
+            _FIELD_SIZE: page_size,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
         }
         response = self._client.get(
-            f"{_BASE_PATH}/{report_id}/enforcements", params=params
+            f"{_BASE_PATH}/{report_id}/enforcements", params=query_params
         )
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
         entries = [EnforcementEntry.model_validate(entry) for entry in raw_items]
@@ -275,17 +291,17 @@ class PolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[EnforcementEntry]:
-        payload = request.model_dump(by_alias=True, exclude_none=True)
-        params: dict[str, str | int] = {
-            "page": page_no,
-            "size": page_size,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
+        payload = self._payload(request)
+        query_params: dict[str, str | int] = {
+            _FIELD_PAGE: page_no,
+            _FIELD_SIZE: page_size,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
         }
         response = self._client.post(
             f"{_BASE_PATH}/generate/enforcements",
             json=payload,
-            params=params,
+            params=query_params,
         )
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
         entries = [EnforcementEntry.model_validate(entry) for entry in raw_items]
@@ -311,8 +327,8 @@ class AsyncPolicyActivityReportService:
         title: str = "",
         is_shared: bool = True,
         policy_decision: str = "AD",
-        sort_by: str = "title",
-        sort_order: str = "ascending",
+        sort_by: str = _FIELD_TITLE,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> AsyncPaginator[PolicyActivityReport]:
         """List policy activity reports."""
@@ -338,7 +354,7 @@ class AsyncPolicyActivityReportService:
         self, request: PolicyActivityReportRequest
     ) -> PolicyActivityReport:
         """Create a new policy activity report."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = await self._client.post(_BASE_PATH, json=payload)
         raw = parse_data(response)
         return PolicyActivityReport.model_validate(raw)
@@ -347,14 +363,14 @@ class AsyncPolicyActivityReportService:
         self, report_id: int, request: PolicyActivityReportRequest
     ) -> PolicyActivityReport:
         """Modify an existing policy activity report."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = await self._client.put(f"{_BASE_PATH}/{report_id}", json=payload)
         raw = parse_data(response)
         return PolicyActivityReport.model_validate(raw)
 
     async def delete(self, request: DeleteReportsRequest) -> None:
         """Delete reports by IDs or query parameters."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = await self._client.post(f"{_BASE_PATH}/delete", json=payload)
         raise_for_status(response)
 
@@ -370,8 +386,8 @@ class AsyncPolicyActivityReportService:
         self,
         report_id: int,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> AsyncPaginator[EnforcementEntry]:
         """Retrieve enforcement logs for a saved report."""
@@ -389,13 +405,13 @@ class AsyncPolicyActivityReportService:
         self,
         report_id: int,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
     ) -> bytes:
         """Export enforcement logs for a saved report. Returns raw file bytes."""
-        params = {"sortBy": sort_by, "sortOrder": sort_order}
+        query_params = {_FIELD_SORT_BY: sort_by, _FIELD_SORT_ORDER: sort_order}
         response = await self._client.post(
-            f"{_BASE_PATH}/{report_id}/export", params=params
+            f"{_BASE_PATH}/{report_id}/export", params=query_params
         )
         raise_for_status(response)
         return response.content
@@ -406,7 +422,7 @@ class AsyncPolicyActivityReportService:
         self, request: PolicyActivityReportRequest
     ) -> WidgetData:
         """Generate widget data for ad-hoc criteria."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
+        payload = self._payload(request)
         response = await self._client.post(
             f"{_BASE_PATH}/generate/widgets", json=payload
         )
@@ -417,8 +433,8 @@ class AsyncPolicyActivityReportService:
         self,
         request: PolicyActivityReportRequest,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
         page_size: int = 20,
     ) -> AsyncPaginator[EnforcementEntry]:
         """Generate enforcement logs for ad-hoc criteria."""
@@ -436,14 +452,14 @@ class AsyncPolicyActivityReportService:
         self,
         request: PolicyActivityReportRequest,
         *,
-        sort_by: str = "rowId",
-        sort_order: str = "ascending",
+        sort_by: str = _SORT_FIELD_ROW_ID,
+        sort_order: str = _SORT_ORDER_ASCENDING,
     ) -> bytes:
         """Export enforcement logs for ad-hoc criteria. Returns raw file bytes."""
-        payload = request.model_dump(by_alias=True, exclude_none=True)
-        params = {"sortBy": sort_by, "sortOrder": sort_order}
+        payload = self._payload(request)
+        query_params = {_FIELD_SORT_BY: sort_by, _FIELD_SORT_ORDER: sort_order}
         response = await self._client.post(
-            f"{_BASE_PATH}/generate/export", json=payload, params=params
+            f"{_BASE_PATH}/generate/export", json=payload, params=query_params
         )
         raise_for_status(response)
         return response.content
@@ -454,13 +470,13 @@ class AsyncPolicyActivityReportService:
         """Retrieve cached enforcement users."""
         response = await self._client.get(f"{_BASE_PATH}/users")
         raw = parse_data(response)
-        return [CachedUser.model_validate(item) for item in raw]
+        return [CachedUser.model_validate(raw_item) for raw_item in raw]
 
     async def list_cached_policies(self) -> builtins.list[CachedPolicy]:
         """Retrieve cached policies."""
         response = await self._client.get(f"{_BASE_PATH}/policies")
         raw = parse_data(response)
-        return [CachedPolicy.model_validate(item) for item in raw]
+        return [CachedPolicy.model_validate(raw_item) for raw_item in raw]
 
     async def get_resource_actions(self) -> ResourceActions:
         """Retrieve policy models with their available actions."""
@@ -480,15 +496,18 @@ class AsyncPolicyActivityReportService:
         """Retrieve user groups available for report sharing."""
         response = await self._client.get(f"{_BASE_PATH}/share/user-groups")
         raw = parse_data(response)
-        return [UserGroup.model_validate(item) for item in raw]
+        return [UserGroup.model_validate(raw_item) for raw_item in raw]
 
     async def list_application_users(self) -> builtins.list[ApplicationUser]:
         """Retrieve application users available for report sharing."""
         response = await self._client.get(f"{_BASE_PATH}/share/application-users")
         raw = parse_data(response)
-        return [ApplicationUser.model_validate(item) for item in raw]
+        return [ApplicationUser.model_validate(raw_item) for raw_item in raw]
 
     # --- Internal pagination callbacks ---
+
+    def _payload(self, request: BaseModel) -> dict[str, object]:
+        return request.model_dump(by_alias=True, exclude_none=True)
 
     async def _fetch_list_page(
         self,
@@ -500,18 +519,20 @@ class AsyncPolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[PolicyActivityReport]:
-        params: dict[str, str | int | bool] = {
-            "title": title,
+        query_params: dict[str, str | int | bool] = {
+            _FIELD_TITLE: title,
             "isShared": is_shared,
             "policyDecision": policy_decision,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
-            "size": page_size,
-            "page": page_no,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
+            _FIELD_SIZE: page_size,
+            _FIELD_PAGE: page_no,
         }
-        response = await self._client.get(_BASE_PATH, params=params)
+        response = await self._client.get(_BASE_PATH, params=query_params)
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
-        reports = [PolicyActivityReport.model_validate(item) for item in raw_items]
+        reports = [
+            PolicyActivityReport.model_validate(raw_item) for raw_item in raw_items
+        ]
         return PageResult(
             entries=reports,
             page_no=page_no,
@@ -528,17 +549,17 @@ class AsyncPolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[EnforcementEntry]:
-        params: dict[str, str | int | bool] = {
-            "page": page_no,
-            "size": page_size,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
+        query_params: dict[str, str | int | bool] = {
+            _FIELD_PAGE: page_no,
+            _FIELD_SIZE: page_size,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
         }
         response = await self._client.get(
-            f"{_BASE_PATH}/{report_id}/enforcements", params=params
+            f"{_BASE_PATH}/{report_id}/enforcements", params=query_params
         )
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
-        entries = [EnforcementEntry.model_validate(item) for item in raw_items]
+        entries = [EnforcementEntry.model_validate(raw_item) for raw_item in raw_items]
         return PageResult(
             entries=entries,
             page_no=page_no,
@@ -555,20 +576,20 @@ class AsyncPolicyActivityReportService:
         page_size: int,
         page_no: int,
     ) -> PageResult[EnforcementEntry]:
-        payload = request.model_dump(by_alias=True, exclude_none=True)
-        params: dict[str, str | int | bool] = {
-            "page": page_no,
-            "size": page_size,
-            "sortBy": sort_by,
-            "sortOrder": sort_order,
+        payload = self._payload(request)
+        query_params: dict[str, str | int | bool] = {
+            _FIELD_PAGE: page_no,
+            _FIELD_SIZE: page_size,
+            _FIELD_SORT_BY: sort_by,
+            _FIELD_SORT_ORDER: sort_order,
         }
         response = await self._client.post(
             f"{_BASE_PATH}/generate/enforcements",
             json=payload,
-            params=params,
+            params=query_params,
         )
         raw_items, total_pages, total_records = parse_reporter_paginated(response)
-        entries = [EnforcementEntry.model_validate(item) for item in raw_items]
+        entries = [EnforcementEntry.model_validate(raw_item) for raw_item in raw_items]
         return PageResult(
             entries=entries,
             page_no=page_no,

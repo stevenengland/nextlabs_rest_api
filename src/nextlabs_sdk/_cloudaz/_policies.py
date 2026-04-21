@@ -180,11 +180,11 @@ class PolicyService:
 
     def import_xacml(
         self,
-        file: tuple[str, bytes, str],
+        policy_file: tuple[str, bytes, str],
     ) -> ImportResult:
         response = self._client.post(
             "/console/api/v1/policy/mgmt/importXacmlPolicy",
-            files={"file": file},
+            files={"file": policy_file},
         )
         return ImportResult.model_validate(parse_data(response))
 
@@ -360,11 +360,11 @@ class AsyncPolicyService:
 
     async def import_xacml(
         self,
-        file: tuple[str, bytes, str],
+        policy_file: tuple[str, bytes, str],
     ) -> ImportResult:
         resp = await self._client.post(
             "/console/api/v1/policy/mgmt/importXacmlPolicy",
-            files={"file": file},
+            files={"file": policy_file},
         )
         return ImportResult.model_validate(parse_data(resp))
 
