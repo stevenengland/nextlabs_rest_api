@@ -154,6 +154,7 @@ def test_async_pdp_evaluate_json(
     async def _run() -> object:
         client = AsyncPdpClient(
             base_url=seeded_wiremock,
+            auth_base_url=seeded_wiremock,
             client_id="e2e-client",
             client_secret="e2e-secret",
         )

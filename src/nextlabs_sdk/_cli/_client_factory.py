@@ -151,6 +151,7 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
 
     return PdpClient(
         base_url=ctx.pdp_url or base_url,
+        auth_base_url=base_url,
         client_id=client_id,
         client_secret=ctx.client_secret,
         http_config=_http_config(ctx, account),
