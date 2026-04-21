@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import dataclass
 
 import typer
 
@@ -175,12 +176,11 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
     account = resolve_account(ctx)
     client_id = account.client_id if account else ctx.client_id
 
-    flavor = _resolve_flavor(ctx)
+    overrides = _load_pdp_overrides(ctx, account)
+    flavor = _resolve_flavor(ctx, overrides)
     base_url = _resolve_cloudaz_base_url(ctx, account, flavor)
-    pdp_url = _resolve_pdp_url(ctx, flavor)
-
-    if not ctx.client_secret:
-        raise typer.BadParameter(_client_secret_required(flavor))
+    pdp_url = _resolve_pdp_url(ctx, flavor, overrides)
+    client_secret = _resolve_client_secret(ctx, flavor, overrides)
 
     auth_base_url = base_url if flavor is PdpAuthSource.CLOUDAZ else None
 
@@ -188,14 +188,53 @@ def make_pdp_client(ctx: CliContext) -> PdpClient:
         base_url=pdp_url,
         auth_base_url=auth_base_url,
         client_id=client_id,
-        client_secret=ctx.client_secret,
+        client_secret=client_secret,
         http_config=_http_config(ctx, account),
     )
 
 
-def _resolve_flavor(ctx: CliContext) -> PdpAuthSource:
+@dataclass(frozen=True)
+class _PdpOverrides:
+    """Cached PDP credentials pulled from active-account storage."""
+
+    client_secret: str | None = None
+    pdp_url: str | None = None
+    flavor: PdpAuthSource | None = None
+
+
+def _load_pdp_overrides(
+    ctx: CliContext,
+    account: ResolvedAccount | None,
+) -> _PdpOverrides:
+    if account is None or account.kind != "pdp":
+        return _PdpOverrides()
+    prefs = load_account_prefs(build_prefs_store(ctx), account)
+    entry = build_file_cache(ctx).load(cache_key_for(account))
+    flavor = _coerce_flavor(prefs.pdp_auth_source if prefs else None)
+    return _PdpOverrides(
+        client_secret=entry.client_secret if entry else None,
+        pdp_url=prefs.pdp_url if prefs else None,
+        flavor=flavor,
+    )
+
+
+def _coerce_flavor(raw: str | None) -> PdpAuthSource | None:
+    if raw is None:
+        return None
+    try:
+        return PdpAuthSource(raw)
+    except ValueError:
+        return None
+
+
+def _resolve_flavor(
+    ctx: CliContext,
+    overrides: _PdpOverrides,
+) -> PdpAuthSource:
     if ctx.pdp_auth is not None:
         return ctx.pdp_auth
+    if overrides.flavor is not None:
+        return overrides.flavor
     return PdpAuthSource.CLOUDAZ if ctx.base_url else PdpAuthSource.PDP
 
 
@@ -216,10 +255,28 @@ def _resolve_cloudaz_base_url(
     raise typer.BadParameter(_base_url_required_for_cloudaz_flavor())
 
 
-def _resolve_pdp_url(ctx: CliContext, flavor: PdpAuthSource) -> str:
+def _resolve_pdp_url(
+    ctx: CliContext,
+    flavor: PdpAuthSource,
+    overrides: _PdpOverrides,
+) -> str:
     if ctx.pdp_url:
         return ctx.pdp_url
+    if overrides.pdp_url:
+        return overrides.pdp_url
     prompted = _prompt_url_if_tty("PDP base URL")
     if prompted:
         return prompted
     raise typer.BadParameter(_pdp_url_required(flavor))
+
+
+def _resolve_client_secret(
+    ctx: CliContext,
+    flavor: PdpAuthSource,
+    overrides: _PdpOverrides,
+) -> str:
+    if ctx.client_secret:
+        return ctx.client_secret
+    if overrides.client_secret:
+        return overrides.client_secret
+    raise typer.BadParameter(_client_secret_required(flavor))

@@ -583,3 +583,123 @@ def test_pdp_explicit_flavor_pdp_reaches_factory_via_cli(
     # With --pdp-auth pdp, base_url is ignored even when set.
     assert captured["auth_base_url"] is None
     assert captured["base_url"] == "https://pdp.example.com"
+
+
+# ─── Cached PDP credentials (#58 Task 6) ───────────────────────────────────
+
+
+def _seed_active_pdp(
+    tmp_path: Path,
+    *,
+    base_url: str = "https://pdp.example",
+    pdp_url: str = "https://pdp.example",
+    flavor: str = "pdp",
+    client_secret: str = "CachedSecret",
+) -> None:
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    ActiveAccountStore(path=tmp_path / "active_account.json").save(
+        ActiveAccount(
+            base_url=base_url,
+            username="",
+            client_id="c",
+            kind="pdp",
+        ),
+    )
+    kind_key_base = base_url
+    if flavor == "cloudaz":
+        kind_key_base = base_url  # keep raw for 4-seg format
+    key = f"{kind_key_base}||c|pdp"
+    FileTokenCache(path=tmp_path / "tokens.json").save(
+        key,
+        CachedToken(
+            access_token="AT",
+            refresh_token=None,
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            client_secret=client_secret,
+        ),
+    )
+    AccountPreferencesStore(path=tmp_path / "account_prefs.json").save(
+        key,
+        AccountPreferences(
+            verify_ssl=True,
+            pdp_url=pdp_url,
+            pdp_auth_source=flavor,
+        ),
+    )
+
+
+def test_make_pdp_client_uses_cached_credentials_when_active_is_pdp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_active_pdp(tmp_path)
+    captured = _capture_pdp_kwargs(monkeypatch)
+    ctx = _make_ctx(
+        base_url=None,
+        username=None,
+        password=None,
+        client_id="c",
+        client_secret=None,
+        pdp_url=None,
+        cache_dir=str(tmp_path),
+    )
+
+    _client_factory.make_pdp_client(ctx)
+
+    assert captured["client_secret"] == "CachedSecret"
+    assert captured["base_url"] == "https://pdp.example"
+    assert captured["auth_base_url"] is None
+
+
+def test_make_pdp_client_cli_flag_overrides_cached_secret(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_active_pdp(tmp_path)
+    captured = _capture_pdp_kwargs(monkeypatch)
+    ctx = _make_ctx(
+        base_url=None,
+        username=None,
+        password=None,
+        client_id="c",
+        client_secret="Override",
+        pdp_url=None,
+        cache_dir=str(tmp_path),
+    )
+
+    _client_factory.make_pdp_client(ctx)
+
+    assert captured["client_secret"] == "Override"
+
+
+def test_make_pdp_client_cloudaz_flavor_from_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_active_pdp(
+        tmp_path,
+        base_url="https://cloudaz.example",
+        pdp_url="https://pdp.example",
+        flavor="cloudaz",
+    )
+    captured = _capture_pdp_kwargs(monkeypatch)
+    ctx = _make_ctx(
+        base_url=None,
+        username=None,
+        password=None,
+        client_id="c",
+        client_secret=None,
+        pdp_url=None,
+        cache_dir=str(tmp_path),
+    )
+
+    _client_factory.make_pdp_client(ctx)
+
+    assert captured["base_url"] == "https://pdp.example"
+    assert captured["auth_base_url"] == "https://cloudaz.example"
