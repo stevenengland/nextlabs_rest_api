@@ -419,7 +419,7 @@ nextlabs --base-url https://cloudaz.example --pdp-url https://pdp.example \
 | `NEXTLABS_CLIENT_ID`       | OIDC client ID (default: `ControlCenterOIDCClient`)           |
 | `NEXTLABS_CLIENT_SECRET`   | PDP client secret                                             |
 | `NEXTLABS_PDP_URL`         | PDP base URL (host serving `/dpc/authorization/*`)            |
-| `NEXTLABS_PDP_AUTH`        | PDP token endpoint flavor: `cloudaz` or `pdp` (see below)     |
+| `NEXTLABS_PDP_AUTH`        | PDP token endpoint flavor: `cloudaz` or `pdp` (see above)     |
 | `NEXTLABS_TOKEN`           | Pre-issued bearer token; bypasses the login flow and cache    |
 | `NEXTLABS_CACHE_DIR`       | Directory holding `tokens.json` (overrides XDG default)       |
 
