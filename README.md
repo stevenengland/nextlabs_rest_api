@@ -409,6 +409,30 @@ nextlabs --base-url https://cloudaz.example --pdp-url https://pdp.example \
   pdp eval ...
 ```
 
+#### Register a PDP account once with `auth login --type pdp`
+
+You can also persist the PDP client credentials in the token cache so
+subsequent `nextlabs pdp …` calls do not need `--client-secret`,
+`--pdp-url`, or `--pdp-auth` on every invocation:
+
+```bash
+# One-time login — mints a token, caches it alongside the client_secret,
+# and stores pdp_url / pdp_auth as preferences for this account.
+nextlabs auth login --type pdp \
+  --pdp-url https://pdp.example --client-id my-client \
+  --client-secret "$SECRET" --pdp-auth pdp
+
+# Later commands reuse the cached credentials automatically.
+nextlabs pdp eval --subject alice --resource doc-42 \
+  --resource-type document --action read
+```
+
+PDP entries appear in `nextlabs auth accounts` with kind `pdp` and an
+empty username; target them explicitly with
+`nextlabs auth use "[pdp]@https://pdp.example"`. Running
+`nextlabs auth logout` clears the cached token, preferences, and active
+pointer for the selected account.
+
 **Environment variables**
 
 | Variable                   | Purpose                                                       |
