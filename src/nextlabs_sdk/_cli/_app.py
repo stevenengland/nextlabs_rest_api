@@ -12,6 +12,7 @@ from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
 from nextlabs_sdk._cli._logging_setup import configure_cli_logging
 from nextlabs_sdk._cli._operators_cmd import operators_app
 from nextlabs_sdk._cli._output_format import OutputFormat
+from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
 from nextlabs_sdk._cli._pdp_cmd import pdp_app
 from nextlabs_sdk._cli._policies_cmd import policies_app
 from nextlabs_sdk._cli._reports_cmd import reports_app
@@ -48,7 +49,7 @@ def main(
     base_url: str | None = typer.Option(
         None,
         envvar="NEXTLABS_BASE_URL",
-        help="CloudAz base URL",
+        help="CloudAz base URL (host serving /cas/token).",
     ),
     username: str | None = typer.Option(
         None,
@@ -73,7 +74,19 @@ def main(
     pdp_url: str | None = typer.Option(
         None,
         envvar="NEXTLABS_PDP_URL",
-        help="PDP base URL (defaults to --base-url)",
+        help="PDP base URL (host serving /dpc/authorization/*).",
+    ),
+    pdp_auth: PdpAuthSource | None = typer.Option(
+        None,
+        "--pdp-auth",
+        envvar="NEXTLABS_PDP_AUTH",
+        case_sensitive=False,
+        help=(
+            "Token endpoint PDP commands should use: 'cloudaz' "
+            "(/cas/token on the CloudAz host) or 'pdp' (/dpc/oauth on "
+            "the PDP host). Defaults to 'cloudaz' when --base-url is "
+            "set, else 'pdp'."
+        ),
     ),
     output: OutputFormat = typer.Option(
         OutputFormat.TABLE,
@@ -134,6 +147,7 @@ def main(
         token=token,
         cache_dir=cache_dir,
         verbose=verbose,
+        pdp_auth=pdp_auth,
     )
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())

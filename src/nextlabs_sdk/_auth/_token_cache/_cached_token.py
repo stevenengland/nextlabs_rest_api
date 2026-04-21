@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import TypeAlias, cast
 
 _DEFAULT_SAFETY_MARGIN = 60
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
+
+_OptStr: TypeAlias = "str | None"
 
 
 def _require(payload: dict[str, object], key: str, expected: type) -> object:
@@ -43,14 +46,24 @@ class CachedToken:
     """A persisted OIDC token.
 
     Attributes:
-        access_token: The OAuth2 access_token used as the bearer credential.
+        access_token: The OAuth2 access_token returned by the token
+            endpoint. Retained for diagnostics and refresh flows;
+            CloudAz requests now authenticate with ``id_token``.
         refresh_token: Optional refresh_token for silent re-auth.
         expires_at: Absolute UTC epoch seconds at which the token expires.
         token_type: OAuth token type (typically ``"bearer"``).
         scope: Optional OAuth scope string.
+        id_token: OIDC ``id_token`` sent as the bearer credential on
+            CloudAz API requests. ``None`` on cache entries written by
+            older SDK versions; callers should treat such entries as
+            expired and trigger a refresh.
         refresh_expires_at: Absolute UTC epoch seconds at which the
             refresh token is considered expired, or ``None`` when the
             SDK has no information (reactive mode).
+        client_secret: Optional OAuth2 client_secret persisted alongside
+            the token so PDP accounts can mint a fresh token silently
+            without re-prompting. Stored plain in ``tokens.json``
+            (mode 0600), mirroring ``refresh_token``.
     """
 
     access_token: str
@@ -58,7 +71,9 @@ class CachedToken:
     expires_at: float
     token_type: str
     scope: str | None
+    id_token: str | None = None
     refresh_expires_at: float | None = None
+    client_secret: str | None = None
 
     def is_expired(
         self,
@@ -79,7 +94,9 @@ class CachedToken:
             "expires_at": self.expires_at,
             "token_type": self.token_type,
             "scope": self.scope,
+            "id_token": self.id_token,
             "refresh_expires_at": self.refresh_expires_at,
+            "client_secret": self.client_secret,
         }
 
     @classmethod
@@ -99,19 +116,18 @@ class CachedToken:
             raise TypeError("expires_at must be a number")
         token_type = _require(payload, "token_type", str)
         scope = _optional(payload, "scope", str)
+        id_token = _optional(payload, "id_token", str)
         refresh_expires_at_raw = payload.get("refresh_expires_at")
         refresh_expires_at = _coerce_refresh_expires_at(refresh_expires_at_raw)
-
-        assert isinstance(access_token, str)
-        assert refresh_token is None or isinstance(refresh_token, str)
-        assert isinstance(token_type, str)
-        assert scope is None or isinstance(scope, str)
+        client_secret = _optional(payload, "client_secret", str)
 
         return cls(
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=cast(str, access_token),
+            refresh_token=cast(_OptStr, refresh_token),
             expires_at=float(expires_at_raw),
-            token_type=token_type,
-            scope=scope,
+            token_type=cast(str, token_type),
+            scope=cast(_OptStr, scope),
+            id_token=cast(_OptStr, id_token),
             refresh_expires_at=refresh_expires_at,
+            client_secret=cast(_OptStr, client_secret),
         )

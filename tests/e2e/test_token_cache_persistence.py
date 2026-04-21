@@ -91,6 +91,9 @@ def test_login_then_reuse_cached_token(
     assert cache_file.exists(), f"expected cache at {cache_file}"
     cache_payload = json.loads(cache_file.read_text())
     assert cache_payload, "cache file should contain at least one entry"
+    cache_entry = next(iter(cache_payload.values()))
+    assert cache_entry["id_token"] == "id-e2e-1"
+    assert cache_entry["access_token"] == "at-e2e-1"
 
     assert _oidc_call_count(oidc_stub) == 1
 

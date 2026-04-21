@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import time
+import sys
 from dataclasses import replace
 from typing import Annotated
 
+import click
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
-from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli import _client_factory, _pdp_login
 from nextlabs_sdk._cli._account_menu import (
     AccountIdentifier,
     cache_key_for,
@@ -24,10 +24,12 @@ from nextlabs_sdk._cli._account_resolver import (
     build_file_cache,
     build_prefs_store,
 )
+from nextlabs_sdk._cli._account_status_label import account_status_and_refreshable
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._output import print_success
+
 
 auth_app = typer.Typer(help="Authentication commands")
 
@@ -45,6 +47,32 @@ _STATUS_ALL_OPTION = typer.Option(
 _USE_SELECTOR_ARGUMENT = typer.Argument(
     help="1-based index, or username@base_url. Omit for an interactive menu.",
 )
+_LOGIN_TYPE_OPTION = typer.Option(
+    "--type",
+    help="Account type to register: 'cloudaz' (default) or 'pdp'.",
+)
+_KIND_CLOUDAZ = "cloudaz"
+_KIND_PDP = "pdp"
+_VALID_LOGIN_KINDS = (_KIND_CLOUDAZ, _KIND_PDP)
+
+
+def _resolve_kind(type_arg: str | None) -> str:
+    if type_arg in _VALID_LOGIN_KINDS:
+        return type_arg
+    if type_arg is None:
+        if sys.stdin.isatty():
+            return typer.prompt(
+                "Account type",
+                type=click.Choice(list(_VALID_LOGIN_KINDS)),
+                default=_KIND_CLOUDAZ,
+            )
+        return _KIND_CLOUDAZ
+    raise typer.BadParameter("--type must be 'cloudaz' or 'pdp'")
+
+
+def _login_pdp(cli_ctx: CliContext) -> None:
+    """Thin delegator so tests can patch the PDP login flow."""
+    _pdp_login.login_pdp(cli_ctx)
 
 
 def _apply_menu_defaults(
@@ -88,6 +116,7 @@ def _set_active(cli_ctx: CliContext, account: AccountIdentifier) -> None:
             base_url=account.base_url,
             username=account.username,
             client_id=account.client_id,
+            kind=account.kind,
         ),
     )
 
@@ -107,6 +136,7 @@ def _resolve_active_target(cli_ctx: CliContext) -> AccountIdentifier:
         base_url=pointer.base_url,
         username=pointer.username,
         client_id=pointer.client_id,
+        kind=pointer.kind,
     )
 
 
@@ -118,41 +148,8 @@ def _is_active(cli_ctx: CliContext, account: AccountIdentifier) -> bool:
         pointer.base_url == account.base_url
         and pointer.username == account.username
         and pointer.client_id == account.client_id
+        and pointer.kind == account.kind
     )
-
-
-def _refresh_decision_for_entry(entry: CachedToken) -> RefreshDecision:
-    return decide(
-        refresh_token=entry.refresh_token,
-        refresh_expires_at=entry.refresh_expires_at,
-        now=time.time(),
-    )
-
-
-def _refreshable_label(entry: CachedToken) -> str:
-    decision = _refresh_decision_for_entry(entry)
-    if decision is RefreshDecision.USE_REFRESH:
-        return "yes"
-    if decision is RefreshDecision.KNOWN_EXPIRED:
-        return "no (expired)"
-    return "no"
-
-
-def _account_status_label(entry: CachedToken | None) -> str:
-    if entry is None:
-        return "no cached token"
-    qualifier = "expired" if entry.is_expired() else "valid"
-    parts = [f"{qualifier} (expires {format_expiry(entry.expires_at)}"]
-    if entry.refresh_expires_at is not None:
-        parts.append(f"; refresh expires {format_expiry(entry.refresh_expires_at)}")
-    parts.append(")")
-    return "".join(parts)
-
-
-def _account_refreshable_label(entry: CachedToken | None) -> str:
-    if entry is None:
-        return _STATUS_NONE
-    return _refreshable_label(entry)
 
 
 def _account_status_and_refreshable(
@@ -160,7 +157,7 @@ def _account_status_and_refreshable(
     account: AccountIdentifier,
 ) -> tuple[str, str]:
     entry = build_file_cache(cli_ctx).load(cache_key_for(account))
-    return _account_status_label(entry), _account_refreshable_label(entry)
+    return account_status_and_refreshable(entry)
 
 
 def _render_accounts_table(
@@ -169,7 +166,7 @@ def _render_accounts_table(
     *,
     include_status: bool,
 ) -> None:
-    headers = ["#", "Active", "Username", "Base URL", "Client ID"]
+    headers = ["#", "Active", "Kind", "Username", "Base URL", "Client ID"]
     if include_status:
         headers.extend(("Status", "Refreshable"))
     table = Table(title=_ACCOUNTS_TITLE)
@@ -180,6 +177,7 @@ def _render_accounts_table(
         row = [
             str(idx),
             marker,
+            account.kind,
             account.username,
             account.base_url,
             account.client_id,
@@ -209,12 +207,35 @@ def _select_by_user_at_url(
     entries: list[AccountIdentifier],
     selector: str,
 ) -> AccountIdentifier:
-    username, _, base_url = selector.partition("@")
+    prefix, _, base_url = selector.partition("@")
+    kind = _kind_from_prefix(prefix)
+    username = prefix if kind is None else ""
     for entry in entries:
-        if entry.username == username and entry.base_url == base_url:
+        if _matches_entry(entry, kind, username, base_url):
             return entry
     typer.echo(f"No cached account matches `{selector}`.")
     raise _EXIT_FAILURE
+
+
+def _kind_from_prefix(prefix: str) -> str | None:
+    if prefix == "[pdp]":
+        return "pdp"
+    if prefix == "[cloudaz]":
+        return "cloudaz"
+    return None
+
+
+def _matches_entry(
+    entry: AccountIdentifier,
+    kind: str | None,
+    username: str,
+    base_url: str,
+) -> bool:
+    if entry.base_url != base_url:
+        return False
+    if kind is not None:
+        return entry.kind == kind
+    return entry.username == username
 
 
 def _pick_account(
@@ -249,9 +270,16 @@ def test_auth(ctx: typer.Context) -> None:
 
 @auth_app.command(name="login")
 @cli_error_handler
-def login(ctx: typer.Context) -> None:
+def login(
+    ctx: typer.Context,
+    type_: Annotated[str | None, _LOGIN_TYPE_OPTION] = None,
+) -> None:
     """Acquire a token, persist it, and mark this account as active."""
     cli_ctx: CliContext = ctx.obj
+    kind = _resolve_kind(type_)
+    if kind == _KIND_PDP:
+        _login_pdp(cli_ctx)
+        return
     resolved = _resolve_login_context(cli_ctx)
     client = _client_factory.make_cloudaz_client(resolved)
     client.authenticate()
@@ -266,7 +294,7 @@ def login(ctx: typer.Context) -> None:
 
 
 def _prefs_key(account: AccountIdentifier) -> str:
-    return f"{account.base_url}|{account.username}|{account.client_id}"
+    return f"{account.base_url}|{account.username}|{account.client_id}|{account.kind}"
 
 
 def _save_prefs(cli_ctx: CliContext, account: AccountIdentifier) -> None:
@@ -312,7 +340,7 @@ def _build_status_table(
         ("Status", status_text),
         ("Expires", format_expiry(entry.expires_at)),
         ("Refresh expires", refresh_text),
-        ("Refreshable", _refreshable_label(entry)),
+        ("Refreshable", account_status_and_refreshable(entry)[1]),
     )
     table = Table(title=_STATUS_TITLE, show_header=False)
     table.add_column("Field")
@@ -385,4 +413,10 @@ def use(
         raise _EXIT_FAILURE
     target = _pick_account(entries, selector)
     _set_active(cli_ctx, target)
-    print_success(f"Active account: {target.username} @ {target.base_url}")
+    print_success(f"Active account: {_account_display_label(target)}")
+
+
+def _account_display_label(account: AccountIdentifier) -> str:
+    if account.kind == "pdp":
+        return f"[pdp] @ {account.base_url}"
+    return f"{account.username} @ {account.base_url}"

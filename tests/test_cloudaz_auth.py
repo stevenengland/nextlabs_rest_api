@@ -18,7 +18,7 @@ from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 
 TOKEN_URL = "https://cloudaz.example.com/cas/oidc/accessToken"
 API_URL = "https://cloudaz.example.com/api"
-_DERIVED_KEY = f"{TOKEN_URL}|admin|ControlCenterOIDCClient"
+_DERIVED_KEY = f"{TOKEN_URL}|admin|ControlCenterOIDCClient|cloudaz"
 
 
 def _make_auth(
@@ -41,19 +41,27 @@ def _make_auth(
     return auth
 
 
+_UNSET: Any = object()
+
+
 def _make_token_response(
     access_token: str = "test-access-token",
     expires_in: int = 1200,
+    id_token: Any = _UNSET,
+    refresh_token: str = "RT-unused",
+    include_id_token: bool = True,
 ) -> httpx.Response:
+    body: dict[str, Any] = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_in": expires_in,
+        "token_type": "bearer",
+    }
+    if include_id_token:
+        body["id_token"] = access_token if id_token is _UNSET else id_token
     return httpx.Response(
         200,
-        json={
-            "access_token": access_token,
-            "id_token": "ID-unused",
-            "refresh_token": "RT-unused",
-            "expires_in": expires_in,
-            "token_type": "bearer",
-        },
+        json=body,
         request=httpx.Request("POST", TOKEN_URL),
     )
 
@@ -208,6 +216,7 @@ def _cached(
     refresh_token: str | None = "RT-1",
     expires_at: float | None = None,
     refresh_expires_at: float | None = None,
+    id_token: Any = _UNSET,
 ) -> CachedToken:
     return CachedToken(
         access_token=access_token,
@@ -215,6 +224,7 @@ def _cached(
         expires_at=float(0) if expires_at is None else expires_at,
         token_type="bearer",
         scope=None,
+        id_token=access_token if id_token is _UNSET else id_token,
         refresh_expires_at=refresh_expires_at,
     )
 
@@ -510,7 +520,7 @@ def test_ensure_token_uses_password_grant_when_no_refresh():
     assert len(sent) == 1
     assert str(sent[0].url) == TOKEN_URL
     assert "grant_type=password" in sent[0].content.decode()
-    assert auth._token == "fresh"
+    assert auth._id_token == "fresh"
 
 
 def test_ensure_token_prefers_refresh_token_when_available():
@@ -524,7 +534,7 @@ def test_ensure_token_prefers_refresh_token_when_available():
     body = sent[0].content.decode()
     assert "grant_type=refresh_token" in body
     assert "refresh_token=RT-cached" in body
-    assert auth._token == "refreshed"
+    assert auth._id_token == "refreshed"
 
 
 def test_ensure_token_falls_back_to_password_when_refresh_fails():
@@ -543,7 +553,7 @@ def test_ensure_token_falls_back_to_password_when_refresh_fails():
     assert len(sent) == 2
     assert "grant_type=refresh_token" in sent[0].content.decode()
     assert "grant_type=password" in sent[1].content.decode()
-    assert auth._token == "pwd-grant"
+    assert auth._id_token == "pwd-grant"
 
 
 def test_ensure_token_raises_when_no_password_and_refresh_fails():
@@ -582,7 +592,7 @@ def test_ensure_token_async_fetches_and_caches():
     asyncio.run(auth.ensure_token_async(send))
 
     assert len(sent) == 1
-    assert auth._token == "async-fresh"
+    assert auth._id_token == "async-fresh"
 
 
 # ─────────────── Proactive refresh-token-lifetime tracking ───────────────
@@ -724,3 +734,77 @@ def test_logs_warning_on_terminal_refresh_failure(caplog: pytest.LogCaptureFixtu
     assert any("refresh token rejected" in r.getMessage().lower() for r in warnings)
     for record in caplog.records:
         assert "RT-dead" not in record.getMessage()
+
+
+# ────────────────────────── id_token bearer (OIDC) ──────────────────────────
+
+
+def test_authorization_header_uses_id_token_not_access_token():
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    api_request = flow.send(
+        _make_token_response(access_token="AT-value", id_token="IDT-value"),
+    )
+
+    assert api_request.headers["Authorization"] == "Bearer IDT-value"
+    assert "AT-value" not in api_request.headers["Authorization"]
+
+
+def test_cache_persists_both_access_and_id_token():
+    when(time).time().thenReturn(100.0)
+    cache = _InMemoryTokenCache()
+    auth = _make_auth(token_cache=cache)
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    flow.send(_make_token_response(access_token="AT-1", id_token="IDT-1"))
+
+    saved = cache.entries[_DERIVED_KEY]
+    assert saved.access_token == "AT-1"
+    assert saved.id_token == "IDT-1"
+
+
+def test_response_missing_id_token_falls_back_to_access_token_with_warning(
+    caplog: pytest.LogCaptureFixture,
+):
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+    caplog.set_level(logging.WARNING, logger="nextlabs_sdk")
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    api_request = flow.send(
+        _make_token_response(access_token="AT-only", include_id_token=False),
+    )
+
+    assert api_request.headers["Authorization"] == "Bearer AT-only"
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("missing id_token" in r.getMessage().lower() for r in warnings)
+
+
+def test_legacy_cache_without_id_token_triggers_silent_refresh_not_relogin():
+    when(time).time().thenReturn(100.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(
+        access_token="legacy-at",
+        refresh_token="RT-legacy",
+        expires_at=10_000.0,
+        id_token=None,
+    )
+    auth = _make_auth(password=None, token_cache=cache)
+
+    flow = auth.auth_flow(_api_request())
+    token_req = next(flow)
+
+    body = bytes(token_req.content).decode()
+    assert "grant_type=refresh_token" in body
+    assert "refresh_token=RT-legacy" in body
+
+    api_request = flow.send(
+        _make_token_response(access_token="AT-new", id_token="IDT-new"),
+    )
+    assert api_request.headers["Authorization"] == "Bearer IDT-new"
+    assert cache.entries[_DERIVED_KEY].id_token == "IDT-new"

@@ -51,7 +51,7 @@ def _capture_factory(monkeypatch: pytest.MonkeyPatch) -> list[CliContext]:
 
 
 def _key(base_url: str, username: str, client_id: str) -> str:
-    return f"{base_url}/cas/oidc/accessToken|{username}|{client_id}"
+    return f"{base_url}/cas/oidc/accessToken|{username}|{client_id}|cloudaz"
 
 
 def _seed_cache(
@@ -103,7 +103,12 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             None,
             ALPHA,
             "alice",
-            {"base_url": ALPHA, "username": "alice", "client_id": CLIENT},
+            {
+                "base_url": ALPHA,
+                "username": "alice",
+                "client_id": CLIENT,
+                "kind": "cloudaz",
+            },
             id="promote-new",
         ),
         pytest.param(
@@ -114,6 +119,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 "base_url": "https://new.example.com",
                 "username": "newbie",
                 "client_id": CLIENT,
+                "kind": "cloudaz",
             },
             id="overwrite-existing",
         ),
