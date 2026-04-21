@@ -6,6 +6,7 @@ from typing import cast
 import httpx
 import pytest
 from mockito import ANY, mock, when
+from strip_ansi import strip_ansi
 from typer.testing import CliRunner
 
 from nextlabs_sdk._auth._active_account._active_account_store import (
@@ -454,7 +455,7 @@ def test_login_pdp_surfaces_oauth_error_fields(
     )
 
     assert result.exit_code == 1
-    normalized = " ".join(result.output.split())
+    normalized = " ".join(strip_ansi(result.output).split())
     assert "invalid_client" in normalized
     assert "Client authentication failed" in normalized
 
@@ -504,8 +505,9 @@ def test_login_pdp_200_missing_access_token_includes_body_snippet(
     )
 
     assert result.exit_code == 1
-    assert "foo" in result.output
-    assert "bar" in result.output
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "foo" in normalized
+    assert "bar" in normalized
 
 
 def test_login_pdp_non_200_includes_body_snippet(
@@ -540,7 +542,7 @@ def test_login_pdp_non_200_includes_body_snippet(
     )
 
     assert result.exit_code == 1
-    normalized = " ".join(result.output.split())
+    normalized = " ".join(strip_ansi(result.output).split())
     assert "401" in normalized
     assert "invalid client credentials" in normalized
 
