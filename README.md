@@ -371,6 +371,44 @@ the CLI falls back to the password grant (if `--password` /
 `NEXTLABS_PASSWORD` is set) and otherwise raises `AuthenticationError`
 with a "Run `nextlabs auth login`" hint.
 
+### PDP authentication — CloudAz vs PDP token endpoint
+
+The NextLabs docs describe two legitimate OAuth token endpoints for PDP
+calls:
+
+- **CloudAz endpoint** — `/cas/token` on the CloudAz host.
+- **PDP endpoint** — `/dpc/oauth` on the PDP host.
+
+The CLI exposes both via `--pdp-auth {cloudaz,pdp}` (env
+`NEXTLABS_PDP_AUTH`). The default depends on which hosts you pass:
+
+| Flags set                          | Default flavor | Token URL hit                 |
+| ---------------------------------- | -------------- | ----------------------------- |
+| `--base-url` + `--pdp-url`         | `cloudaz`      | `<base-url>/cas/token`        |
+| `--pdp-url` only                   | `pdp`          | `<pdp-url>/dpc/oauth`         |
+
+Explicit `--pdp-auth` always wins over the derivation. `--pdp-url` is
+required for every PDP command; `--base-url` is required only for the
+`cloudaz` flavor.
+
+```bash
+# CloudAz-hosted auth (default when --base-url is set)
+nextlabs --base-url https://cloudaz.example --pdp-url https://pdp.example \
+  --client-secret "$SECRET" \
+  pdp eval --subject alice --resource doc-42 --resource-type document \
+           --action read
+
+# PDP-hosted auth
+nextlabs --pdp-url https://pdp.example --client-secret "$SECRET" \
+  pdp eval --subject alice --resource doc-42 --resource-type document \
+           --action read
+
+# Force PDP-hosted auth even when a CloudAz host is configured
+nextlabs --base-url https://cloudaz.example --pdp-url https://pdp.example \
+  --pdp-auth pdp --client-secret "$SECRET" \
+  pdp eval ...
+```
+
 **Environment variables**
 
 | Variable                   | Purpose                                                       |
@@ -380,7 +418,8 @@ with a "Run `nextlabs auth login`" hint.
 | `NEXTLABS_PASSWORD`        | CloudAz password                                              |
 | `NEXTLABS_CLIENT_ID`       | OIDC client ID (default: `ControlCenterOIDCClient`)           |
 | `NEXTLABS_CLIENT_SECRET`   | PDP client secret                                             |
-| `NEXTLABS_PDP_URL`         | PDP base URL (defaults to `--base-url`)                       |
+| `NEXTLABS_PDP_URL`         | PDP base URL (host serving `/dpc/authorization/*`)            |
+| `NEXTLABS_PDP_AUTH`        | PDP token endpoint flavor: `cloudaz` or `pdp` (see below)     |
 | `NEXTLABS_TOKEN`           | Pre-issued bearer token; bypasses the login flow and cache    |
 | `NEXTLABS_CACHE_DIR`       | Directory holding `tokens.json` (overrides XDG default)       |
 
