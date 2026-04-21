@@ -7,9 +7,8 @@ import sys
 import typer
 
 from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._defaults import CLOUDAZ_DEFAULT_CLIENT_ID
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
-
-_CLOUDAZ_DEFAULT_CLIENT_ID = "ControlCenterOIDCClient"
 
 
 def resolve_pdp_client_id(ctx: CliContext, flavor: PdpAuthSource) -> str:
@@ -27,7 +26,7 @@ def resolve_pdp_client_id(ctx: CliContext, flavor: PdpAuthSource) -> str:
         return ctx.pdp_client_id
     if flavor is PdpAuthSource.CLOUDAZ:
         return ctx.client_id
-    if ctx.client_id and ctx.client_id != _CLOUDAZ_DEFAULT_CLIENT_ID:
+    if ctx.client_id and ctx.client_id != CLOUDAZ_DEFAULT_CLIENT_ID:
         return ctx.client_id
     if sys.stdin.isatty():
         return typer.prompt("PDP client ID")

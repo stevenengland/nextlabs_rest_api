@@ -66,12 +66,13 @@ the secret by re-running `auth login --type pdp` with the new value;
 clear the entry with `nextlabs auth logout` (after
 `nextlabs auth use "[pdp]@<pdp-url>"` if it is not already active).
 
-## `Authentication failed: missing 'access_token' in token response`
+## `Authentication failed: Token response missing 'access_token'`
 
 **Symptom:** `nextlabs auth login --type pdp` (or any PDP command using
 `--pdp-auth=pdp`) fails with
-`Authentication failed: missing 'access_token' in token response` or the
-server's own `OAuth error: invalid_client` text.
+`Authentication failed: Token response missing 'access_token'; body: …`,
+`Authentication failed: OAuth error: invalid_client: …`, or
+`Authentication failed: Token acquisition failed: HTTP 401: …`.
 
 **Cause:** the PDP's `/dpc/oauth` endpoint was called with the CloudAz
 OIDC default `client_id` (`ControlCenterOIDCClient`) because no

@@ -460,6 +460,45 @@ def test_login_pdp_surfaces_oauth_error_fields(
     assert "Client authentication failed" in normalized
 
 
+def test_login_pdp_null_error_falls_back_to_body_snippet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    body: dict[str, object] = {"error": None, "detail": "weird-sentinel"}
+    when(httpx).post(
+        ANY,
+        data=ANY,
+        headers=ANY,
+        timeout=ANY,
+        verify=ANY,
+    ).thenReturn(_BodyResp(body, '{"error": null, "detail": "weird-sentinel"}'))
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "c",
+            "--client-secret",
+            "s",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = " ".join(strip_ansi(result.output).split())
+    assert "OAuth error: None" not in normalized
+    assert "missing 'access_token'" in normalized
+    assert "weird-sentinel" in normalized
+
+
 class _BodyResp:
     status_code = 200
 

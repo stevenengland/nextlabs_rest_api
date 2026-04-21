@@ -245,9 +245,10 @@ def _extract_access_token(
     response: httpx.Response,
     token_url: str,
 ) -> str:
-    if "error" in body:
+    error_raw = body.get("error")
+    if isinstance(error_raw, str) and error_raw:
         raise _auth_error(
-            _format_oauth_error(body),
+            _format_oauth_error(body, error_raw),
             response,
             token_url,
         )
@@ -262,8 +263,7 @@ def _extract_access_token(
     return access_token_raw
 
 
-def _format_oauth_error(body: dict[str, object]) -> str:
-    error_code = body.get("error")
+def _format_oauth_error(body: dict[str, object], error_code: str) -> str:
     error_desc = body.get("error_description")
     message = f"OAuth error: {error_code}"
     if isinstance(error_desc, str) and error_desc:

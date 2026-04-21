@@ -9,6 +9,7 @@ from nextlabs_sdk._cli._component_types_cmd import component_types_app
 from nextlabs_sdk._cli._components_cmd import components_app
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._dashboard_cmd import dashboard_app
+from nextlabs_sdk._cli._defaults import CLOUDAZ_DEFAULT_CLIENT_ID
 from nextlabs_sdk._cli._logging_setup import configure_cli_logging
 from nextlabs_sdk._cli._operators_cmd import operators_app
 from nextlabs_sdk._cli._output_format import OutputFormat
@@ -62,7 +63,7 @@ def main(
         help="CloudAz password",
     ),
     client_id: str = typer.Option(
-        "ControlCenterOIDCClient",
+        CLOUDAZ_DEFAULT_CLIENT_ID,
         envvar="NEXTLABS_CLIENT_ID",
         help="CloudAz OIDC client ID",
     ),
