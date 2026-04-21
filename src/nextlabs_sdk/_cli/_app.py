@@ -64,7 +64,13 @@ def main(
     client_id: str = typer.Option(
         "ControlCenterOIDCClient",
         envvar="NEXTLABS_CLIENT_ID",
-        help="OIDC client ID",
+        help="CloudAz OIDC client ID",
+    ),
+    pdp_client_id: str | None = typer.Option(
+        None,
+        "--pdp-client-id",
+        envvar="NEXTLABS_PDP_CLIENT_ID",
+        help="PDP-specific client ID (used when --pdp-auth=pdp).",
     ),
     client_secret: str | None = typer.Option(
         None,
@@ -148,6 +154,7 @@ def main(
         cache_dir=cache_dir,
         verbose=verbose,
         pdp_auth=pdp_auth,
+        pdp_client_id=pdp_client_id,
     )
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
