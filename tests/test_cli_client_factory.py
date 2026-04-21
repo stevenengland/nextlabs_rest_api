@@ -703,3 +703,24 @@ def test_make_pdp_client_cloudaz_flavor_from_cache(
 
     assert captured["base_url"] == "https://pdp.example"
     assert captured["auth_base_url"] == "https://cloudaz.example"
+
+
+def test_make_cloudaz_client_rejects_active_pdp_account(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Active PDP account must not bleed into CloudAz clients (#59 review)."""
+    _seed_active_pdp(tmp_path)
+    ctx = _make_ctx(
+        base_url=None,
+        username=None,
+        password=None,
+        client_id="c",
+        client_secret=None,
+        pdp_url=None,
+        cache_dir=str(tmp_path),
+    )
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+
+    with pytest.raises(typer.BadParameter, match="PDP account"):
+        _client_factory.make_cloudaz_client(ctx)

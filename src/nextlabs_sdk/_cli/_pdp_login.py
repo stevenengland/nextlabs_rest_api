@@ -21,8 +21,13 @@ from nextlabs_sdk._cli._account_resolver import (
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
+from nextlabs_sdk._json_response import decode_json_object, require_int, require_str
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
-from nextlabs_sdk.exceptions import AuthenticationError
+from nextlabs_sdk.exceptions import (
+    AuthenticationError,
+    RequestTimeoutError,
+    TransportError,
+)
 
 _HTTP_OK = 200
 _KIND_PDP = "pdp"
@@ -135,17 +140,32 @@ def _mint_client_credentials_token(
     verify_ssl: bool,
     timeout: float,
 ) -> _TokenPayload:
-    response = httpx.post(
-        token_url,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        timeout=timeout,
-        verify=verify_ssl,
-    )
+    try:
+        response = httpx.post(
+            token_url,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=timeout,
+            verify=verify_ssl,
+        )
+    except (httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+        detail = str(exc) or exc.__class__.__name__
+        raise RequestTimeoutError(
+            f"Request timed out: {detail}",
+            request_method="POST",
+            request_url=token_url,
+        ) from exc
+    except httpx.RequestError as exc:
+        detail = str(exc) or exc.__class__.__name__
+        raise TransportError(
+            f"Connection error: {detail}",
+            request_method="POST",
+            request_url=token_url,
+        ) from exc
     if response.status_code != _HTTP_OK:
         raise AuthenticationError(
             f"Token acquisition failed: HTTP {response.status_code}",
@@ -154,12 +174,32 @@ def _mint_client_credentials_token(
             request_method="POST",
             request_url=token_url,
         )
-    body = response.json()
+    body = decode_json_object(
+        response,
+        error_cls=AuthenticationError,
+        context=" in token response",
+    )
+    access_token = require_str(
+        body,
+        "access_token",
+        error_cls=AuthenticationError,
+        context=" in token response",
+    )
+    expires_in = require_int(
+        body,
+        "expires_in",
+        error_cls=AuthenticationError,
+        context=" in token response",
+    )
+    token_type_raw = body.get("token_type", "bearer")
+    token_type = token_type_raw if isinstance(token_type_raw, str) else "bearer"
+    scope_raw = body.get("scope")
+    scope = scope_raw if isinstance(scope_raw, str) else None
     return _TokenPayload(
-        access_token=body["access_token"],
-        expires_in=int(body["expires_in"]),
-        token_type=body.get("token_type", "bearer"),
-        scope=body.get("scope"),
+        access_token=access_token,
+        expires_in=expires_in,
+        token_type=token_type,
+        scope=scope,
     )
 
 

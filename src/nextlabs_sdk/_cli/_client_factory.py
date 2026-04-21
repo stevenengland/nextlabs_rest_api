@@ -32,6 +32,11 @@ _PASSWORD_REQUIRED = f"--password or NEXTLABS_PASSWORD is required (or {_LOGIN_H
 _PDP_URL_HELP = "PDP API host serving /dpc/authorization/*"
 _CLOUDAZ_ENDPOINT = "/cas/token on the CloudAz host"
 _PDP_ENDPOINT = "/dpc/oauth on the PDP host"
+_ACTIVE_IS_PDP = (
+    "Active account is a PDP account; CloudAz commands need a CloudAz account. "
+    "Run `nextlabs auth use <username>@<url>` to switch, or pass --base-url and "
+    "--username explicitly."
+)
 
 
 def _client_secret_required(flavor: PdpAuthSource) -> str:
@@ -143,6 +148,8 @@ def _build_static_token_client(ctx: CliContext) -> CloudAzClient:
 def _resolve_or_raise(ctx: CliContext) -> ResolvedAccount:
     account = resolve_account(ctx)
     if account is not None:
+        if account.kind != "cloudaz":
+            raise typer.BadParameter(_ACTIVE_IS_PDP)
         return account
     if not ctx.base_url:
         raise typer.BadParameter(_BASE_URL_REQUIRED)
