@@ -102,10 +102,10 @@ def _seed_cache(tmp_path: object, *keys: str):
         cache.save(key, tok)
 
 
-_ALPHA_KEY = (
-    "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient"
+_ALPHA_KEY = "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient|cloudaz"
+_BETA_KEY = (
+    "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient|cloudaz"
 )
-_BETA_KEY = "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient"
 
 
 def test_login_prompts_for_password_when_missing(login_ctx):
@@ -250,7 +250,7 @@ def test_login_persists_verify_preference_default_true(login_ctx):
     from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 
     store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
-    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
     assert entry is not None
     assert entry.verify_ssl is True
 
@@ -279,7 +279,7 @@ def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
     from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 
     store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
-    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
     assert entry is not None
     assert entry.verify_ssl is False
 
@@ -306,7 +306,7 @@ def test_logout_deletes_persisted_preference(
     )
     prefs_path = f"{tmp_path}/account_prefs.json"
     prefs_store = AccountPreferencesStore(path=prefs_path)
-    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient"
+    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient|cloudaz"
     prefs_store.save(prefs_key, AccountPreferences(verify_ssl=False))
 
     result = runner.invoke(app, ["auth", "logout"])
@@ -325,7 +325,7 @@ def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     cache.save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",
@@ -404,7 +404,7 @@ def test_status_expired_exits_with_details(
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",
@@ -470,7 +470,7 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",

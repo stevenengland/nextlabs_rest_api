@@ -88,6 +88,7 @@ def _set_active(cli_ctx: CliContext, account: AccountIdentifier) -> None:
             base_url=account.base_url,
             username=account.username,
             client_id=account.client_id,
+            kind=account.kind,
         ),
     )
 
@@ -107,6 +108,7 @@ def _resolve_active_target(cli_ctx: CliContext) -> AccountIdentifier:
         base_url=pointer.base_url,
         username=pointer.username,
         client_id=pointer.client_id,
+        kind=pointer.kind,
     )
 
 
@@ -118,6 +120,7 @@ def _is_active(cli_ctx: CliContext, account: AccountIdentifier) -> bool:
         pointer.base_url == account.base_url
         and pointer.username == account.username
         and pointer.client_id == account.client_id
+        and pointer.kind == account.kind
     )
 
 
@@ -266,7 +269,7 @@ def login(ctx: typer.Context) -> None:
 
 
 def _prefs_key(account: AccountIdentifier) -> str:
-    return f"{account.base_url}|{account.username}|{account.client_id}"
+    return f"{account.base_url}|{account.username}|{account.client_id}|{account.kind}"
 
 
 def _save_prefs(cli_ctx: CliContext, account: AccountIdentifier) -> None:

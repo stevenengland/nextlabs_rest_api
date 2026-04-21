@@ -13,7 +13,7 @@ from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
     build_file_cache,
     build_prefs_store,
-    prefs_key_for,
+    load_account_prefs,
     resolve_account,
 )
 from nextlabs_sdk._cli._cache_key import cache_key_for
@@ -103,7 +103,7 @@ def _persisted_verify(
     prefs: AccountPreferencesStore,
     account: ResolvedAccount,
 ) -> bool | None:
-    entry = prefs.load(prefs_key_for(account))
+    entry = load_account_prefs(prefs, account)
     return None if entry is None else entry.verify_ssl
 
 
