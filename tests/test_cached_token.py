@@ -35,6 +35,7 @@ def _make_token(**overrides: Any) -> CachedToken:
         pytest.param(
             {"refresh_expires_at": 1_700_003_600.0}, id="with-refresh-expires"
         ),
+        pytest.param({"id_token": "id-jwt"}, id="with-id-token"),
     ],
 )
 def test_roundtrip_to_dict_and_back(overrides):
@@ -54,6 +55,15 @@ def test_from_dict_tolerates_missing_optional_fields():
     assert restored.refresh_token is None
     assert restored.scope is None
     assert restored.refresh_expires_at is None
+    assert restored.id_token is None
+
+
+def test_to_dict_includes_id_token():
+    token = _make_token(id_token="id-jwt-value")
+
+    payload = token.to_dict()
+
+    assert payload["id_token"] == "id-jwt-value"
 
 
 @pytest.mark.parametrize(

@@ -202,9 +202,21 @@ def _handle_refresh_failure(
 class CloudAzAuth(httpx.Auth):
     """OIDC password grant auth for the CloudAz Console API.
 
+    The OIDC token endpoint returns both ``access_token`` and
+    ``id_token``; per the CloudAz documentation, the ``id_token`` is the
+    value sent in the ``Authorization: Bearer …`` header. ``CloudAzAuth``
+    uses ``id_token`` as the bearer credential and keeps ``refresh_token``
+    for silent re-auth. When a token response omits ``id_token``
+    (non-conforming server) the SDK logs a warning and falls back to
+    ``access_token`` for transport continuity.
+
     Supports an optional pluggable :class:`TokenCache` backend. Expiry is
     tracked as absolute UTC epoch seconds so that cached tokens survive
-    process restarts.
+    process restarts. Cache entries written by older SDK versions that
+    predate ``id_token`` support are restored without the bearer in
+    memory, so the next call silently refreshes and repopulates the
+    cache — a usable ``refresh_token`` is preserved to avoid an
+    interactive re-login.
 
     When ``refresh_token_lifetime`` is provided, the SDK records the
     refresh token's absolute expiry at every successful token
@@ -235,7 +247,8 @@ class CloudAzAuth(httpx.Auth):
         self._lock = threading.Lock()
         self.refresh_token_lifetime: int | None = None
 
-        self._token: str | None = None
+        self._id_token: str | None = None
+        self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._refresh_expires_at: float | None = None
         self._expires_at: float = _INITIAL_EXPIRY_AT
@@ -244,11 +257,12 @@ class CloudAzAuth(httpx.Auth):
         if cached is not None:
             self._refresh_token = cached.refresh_token
             self._refresh_expires_at = cached.refresh_expires_at
-            if not cached.is_expired(
+            if cached.id_token is not None and not cached.is_expired(
                 now=time.time(),
                 safety_margin=_EXPIRY_SAFETY_MARGIN,
             ):
-                self._token = cached.access_token
+                self._id_token = cached.id_token
+                self._access_token = cached.access_token
                 self._expires_at = cached.expires_at
 
     def auth_flow(
@@ -258,12 +272,12 @@ class CloudAzAuth(httpx.Auth):
         if not self._has_valid_token():
             yield from self._reauthenticate()
 
-        request.headers["Authorization"] = f"Bearer {self._token}"
+        request.headers["Authorization"] = f"Bearer {self._id_token}"
         response = yield request
 
         if response.status_code == _UNAUTHORIZED_STATUS or _is_spa_redirect(response):
             yield from self._reauthenticate()
-            request.headers["Authorization"] = f"Bearer {self._token}"
+            request.headers["Authorization"] = f"Bearer {self._id_token}"
             retried = yield request
             if _is_spa_redirect(retried):
                 raise AuthenticationError(
@@ -333,7 +347,7 @@ class CloudAzAuth(httpx.Auth):
 
     def _has_valid_token(self) -> bool:
         with self._lock:
-            return self._token is not None and time.time() < self._expires_at
+            return self._id_token is not None and time.time() < self._expires_at
 
     def _reauthenticate(self) -> Generator[httpx.Request, httpx.Response, None]:
         decision = self._refresh_decision()
@@ -457,6 +471,16 @@ class CloudAzAuth(httpx.Auth):
             error_cls=AuthenticationError,
             context=" in token response",
         )
+        id_token_raw = body.get("id_token")
+        if isinstance(id_token_raw, str):
+            id_token = id_token_raw
+        else:
+            logger.warning(
+                "cloudaz auth: token response missing id_token;"
+                " falling back to access_token. The server is not"
+                " conforming to the CloudAz OIDC contract.",
+            )
+            id_token = access_token
         refresh_token_raw = body.get("refresh_token")
         refresh_token = (
             refresh_token_raw
@@ -474,7 +498,8 @@ class CloudAzAuth(httpx.Auth):
         )
 
         with self._lock:
-            self._token = access_token
+            self._id_token = id_token
+            self._access_token = access_token
             self._refresh_token = refresh_token
             self._expires_at = expires_at
             self._refresh_expires_at = refresh_expires_at
@@ -487,6 +512,7 @@ class CloudAzAuth(httpx.Auth):
                 expires_at=expires_at,
                 token_type=token_type,
                 scope=scope,
+                id_token=id_token,
                 refresh_expires_at=refresh_expires_at,
             ),
         )

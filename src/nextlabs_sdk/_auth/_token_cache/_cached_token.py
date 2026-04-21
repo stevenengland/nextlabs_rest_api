@@ -43,11 +43,17 @@ class CachedToken:
     """A persisted OIDC token.
 
     Attributes:
-        access_token: The OAuth2 access_token used as the bearer credential.
+        access_token: The OAuth2 access_token returned by the token
+            endpoint. Retained for diagnostics and refresh flows;
+            CloudAz requests now authenticate with ``id_token``.
         refresh_token: Optional refresh_token for silent re-auth.
         expires_at: Absolute UTC epoch seconds at which the token expires.
         token_type: OAuth token type (typically ``"bearer"``).
         scope: Optional OAuth scope string.
+        id_token: OIDC ``id_token`` sent as the bearer credential on
+            CloudAz API requests. ``None`` on cache entries written by
+            older SDK versions; callers should treat such entries as
+            expired and trigger a refresh.
         refresh_expires_at: Absolute UTC epoch seconds at which the
             refresh token is considered expired, or ``None`` when the
             SDK has no information (reactive mode).
@@ -58,6 +64,7 @@ class CachedToken:
     expires_at: float
     token_type: str
     scope: str | None
+    id_token: str | None = None
     refresh_expires_at: float | None = None
 
     def is_expired(
@@ -79,6 +86,7 @@ class CachedToken:
             "expires_at": self.expires_at,
             "token_type": self.token_type,
             "scope": self.scope,
+            "id_token": self.id_token,
             "refresh_expires_at": self.refresh_expires_at,
         }
 
@@ -99,6 +107,7 @@ class CachedToken:
             raise TypeError("expires_at must be a number")
         token_type = _require(payload, "token_type", str)
         scope = _optional(payload, "scope", str)
+        id_token = _optional(payload, "id_token", str)
         refresh_expires_at_raw = payload.get("refresh_expires_at")
         refresh_expires_at = _coerce_refresh_expires_at(refresh_expires_at_raw)
 
@@ -106,6 +115,7 @@ class CachedToken:
         assert refresh_token is None or isinstance(refresh_token, str)
         assert isinstance(token_type, str)
         assert scope is None or isinstance(scope, str)
+        assert id_token is None or isinstance(id_token, str)
 
         return cls(
             access_token=access_token,
@@ -113,5 +123,6 @@ class CachedToken:
             expires_at=float(expires_at_raw),
             token_type=token_type,
             scope=scope,
+            id_token=id_token,
             refresh_expires_at=refresh_expires_at,
         )
