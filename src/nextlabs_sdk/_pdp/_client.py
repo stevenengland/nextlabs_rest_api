@@ -11,6 +11,7 @@ from nextlabs_sdk._pdp._enums import ContentType
 from nextlabs_sdk._pdp._request_models import EvalRequest, PermissionsRequest
 from nextlabs_sdk._pdp._response_decode import decode_pdp_response
 from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
+from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import raise_for_status
 
 _PDP_ENDPOINT = "/dpc/authorization/pdp"
@@ -20,17 +21,22 @@ _CONTENT_TYPE = "Content-Type"
 class PdpClient:
     """Synchronous client for the NextLabs PDP REST API."""
 
-    def __init__(
+    def __init__(  # noqa: WPS211
         self,
         *,
         base_url: str,
         client_id: str,
         client_secret: str,
+        auth_base_url: str | None = None,
         token_url: str | None = None,
         http_config: HttpConfig | None = None,
     ) -> None:
         config = http_config or HttpConfig()
-        effective_token_url = token_url or f"{base_url}/cas/token"
+        effective_token_url = resolve_pdp_token_url(
+            base_url=base_url,
+            auth_base_url=auth_base_url,
+            token_url=token_url,
+        )
         auth = PdpAuth(
             token_url=effective_token_url,
             client_id=client_id,
