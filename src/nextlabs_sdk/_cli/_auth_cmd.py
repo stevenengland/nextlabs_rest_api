@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-import time
 from dataclasses import replace
 from typing import Annotated
 
@@ -11,9 +10,8 @@ from rich.console import Console
 from rich.table import Table
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
-from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli import _client_factory, _pdp_login
 from nextlabs_sdk._cli._account_menu import (
     AccountIdentifier,
     cache_key_for,
@@ -26,10 +24,12 @@ from nextlabs_sdk._cli._account_resolver import (
     build_file_cache,
     build_prefs_store,
 )
+from nextlabs_sdk._cli._account_status_label import account_status_and_refreshable
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._output import print_success
+
 
 auth_app = typer.Typer(help="Authentication commands")
 
@@ -71,8 +71,8 @@ def _resolve_kind(type_arg: str | None) -> str:
 
 
 def _login_pdp(cli_ctx: CliContext) -> None:
-    """Register a PDP account (client-credentials flow). Stub — Task 5."""
-    raise NotImplementedError("PDP login not yet implemented")
+    """Thin delegator so tests can patch the PDP login flow."""
+    _pdp_login.login_pdp(cli_ctx)
 
 
 def _apply_menu_defaults(
@@ -152,46 +152,12 @@ def _is_active(cli_ctx: CliContext, account: AccountIdentifier) -> bool:
     )
 
 
-def _refresh_decision_for_entry(entry: CachedToken) -> RefreshDecision:
-    return decide(
-        refresh_token=entry.refresh_token,
-        refresh_expires_at=entry.refresh_expires_at,
-        now=time.time(),
-    )
-
-
-def _refreshable_label(entry: CachedToken) -> str:
-    decision = _refresh_decision_for_entry(entry)
-    if decision is RefreshDecision.USE_REFRESH:
-        return "yes"
-    if decision is RefreshDecision.KNOWN_EXPIRED:
-        return "no (expired)"
-    return "no"
-
-
-def _account_status_label(entry: CachedToken | None) -> str:
-    if entry is None:
-        return "no cached token"
-    qualifier = "expired" if entry.is_expired() else "valid"
-    parts = [f"{qualifier} (expires {format_expiry(entry.expires_at)}"]
-    if entry.refresh_expires_at is not None:
-        parts.append(f"; refresh expires {format_expiry(entry.refresh_expires_at)}")
-    parts.append(")")
-    return "".join(parts)
-
-
-def _account_refreshable_label(entry: CachedToken | None) -> str:
-    if entry is None:
-        return _STATUS_NONE
-    return _refreshable_label(entry)
-
-
 def _account_status_and_refreshable(
     cli_ctx: CliContext,
     account: AccountIdentifier,
 ) -> tuple[str, str]:
     entry = build_file_cache(cli_ctx).load(cache_key_for(account))
-    return _account_status_label(entry), _account_refreshable_label(entry)
+    return account_status_and_refreshable(entry)
 
 
 def _render_accounts_table(
@@ -350,7 +316,7 @@ def _build_status_table(
         ("Status", status_text),
         ("Expires", format_expiry(entry.expires_at)),
         ("Refresh expires", refresh_text),
-        ("Refreshable", _refreshable_label(entry)),
+        ("Refreshable", account_status_and_refreshable(entry)[1]),
     )
     table = Table(title=_STATUS_TITLE, show_header=False)
     table.add_column("Field")
