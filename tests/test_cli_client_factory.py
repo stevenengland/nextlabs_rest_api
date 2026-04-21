@@ -15,6 +15,7 @@ from nextlabs_sdk._cli._account_resolver import ResolvedAccount
 from nextlabs_sdk._cli._cache_key import cache_key_for
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
+from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
 from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._pdp._client import PdpClient
 
@@ -28,6 +29,8 @@ def _make_ctx(
     client_secret: str | None = "secret",
     verify: bool | None = None,
     cache_dir: str | None = None,
+    pdp_url: str | None = "https://pdp.example.com",
+    pdp_auth: PdpAuthSource | None = None,
 ) -> CliContext:
     return CliContext(
         base_url=base_url,
@@ -35,11 +38,12 @@ def _make_ctx(
         password=password,
         client_id=client_id,
         client_secret=client_secret,
-        pdp_url=None,
+        pdp_url=pdp_url,
         output_format=OutputFormat.TABLE,
         verify=verify,
         timeout=30.0,
         cache_dir=cache_dir,
+        pdp_auth=pdp_auth,
     )
 
 
@@ -66,19 +70,34 @@ def _make_ctx(
         ),
         pytest.param(
             _client_factory.make_pdp_client,
-            {"base_url": None},
-            "base-url",
-            id="pdp-base-url",
-        ),
-        pytest.param(
-            _client_factory.make_pdp_client,
             {"client_secret": None},
             "client-secret",
             id="pdp-client-secret",
         ),
+        pytest.param(
+            _client_factory.make_pdp_client,
+            {"pdp_url": None},
+            "pdp-url",
+            id="pdp-pdp-url",
+        ),
+        pytest.param(
+            _client_factory.make_pdp_client,
+            {"base_url": None, "pdp_url": None},
+            "pdp-url",
+            id="pdp-pdp-url-default-flavor-pdp",
+        ),
+        pytest.param(
+            _client_factory.make_pdp_client,
+            {"base_url": None, "pdp_auth": PdpAuthSource.CLOUDAZ},
+            "base-url",
+            id="pdp-cloudaz-flavor-needs-base-url",
+        ),
     ],
 )
-def test_factory_raises_when_required_field_missing(factory, kwargs, match):
+def test_factory_raises_when_required_field_missing(
+    factory, kwargs, match, monkeypatch
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
     with pytest.raises(typer.BadParameter, match=match):
         factory(_make_ctx(**kwargs))
 
@@ -436,3 +455,131 @@ def test_empty_password_falls_back_to_cached_refresh_token(
     _client_factory.make_cloudaz_client(ctx)
 
     assert captured["password"] is None
+
+
+# ─── PDP auth flavor (--pdp-auth) ──────────────────────────────────────────
+
+
+def _capture_pdp_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    captured: dict[str, object] = {}
+
+    def _capture(*_args: object, **kwargs: object) -> PdpClient:
+        captured.update(kwargs)
+        return cast(PdpClient, object())
+
+    monkeypatch.setattr(_client_factory, "PdpClient", _capture)
+    return captured
+
+
+def test_pdp_default_flavor_is_cloudaz_when_base_url_set(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = _capture_pdp_kwargs(monkeypatch)
+    _client_factory.make_pdp_client(_make_ctx())
+    assert captured["base_url"] == "https://pdp.example.com"
+    assert captured["auth_base_url"] == "https://example.com"
+
+
+def test_pdp_default_flavor_is_pdp_when_base_url_missing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = _capture_pdp_kwargs(monkeypatch)
+    _client_factory.make_pdp_client(_make_ctx(base_url=None))
+    assert captured["base_url"] == "https://pdp.example.com"
+    assert captured["auth_base_url"] is None
+
+
+def test_pdp_explicit_flavor_pdp_overrides_default(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = _capture_pdp_kwargs(monkeypatch)
+    _client_factory.make_pdp_client(_make_ctx(pdp_auth=PdpAuthSource.PDP))
+    assert captured["auth_base_url"] is None
+
+
+def test_pdp_explicit_flavor_cloudaz_requires_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    with pytest.raises(typer.BadParameter, match="/cas/token"):
+        _client_factory.make_pdp_client(
+            _make_ctx(base_url=None, pdp_auth=PdpAuthSource.CLOUDAZ),
+        )
+
+
+def test_pdp_flavor_pdp_missing_pdp_url_mentions_dpc_oauth(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    with pytest.raises(typer.BadParameter, match="/dpc/oauth"):
+        _client_factory.make_pdp_client(
+            _make_ctx(base_url=None, pdp_url=None),
+        )
+
+
+def test_pdp_flavor_cloudaz_missing_client_secret_mentions_cas_token(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    with pytest.raises(typer.BadParameter, match="/cas/token"):
+        _client_factory.make_pdp_client(_make_ctx(client_secret=None))
+
+
+def test_pdp_flavor_pdp_missing_client_secret_mentions_dpc_oauth(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    with pytest.raises(typer.BadParameter, match="/dpc/oauth"):
+        _client_factory.make_pdp_client(
+            _make_ctx(base_url=None, client_secret=None),
+        )
+
+
+def test_pdp_prompts_for_pdp_url_in_tty(monkeypatch: pytest.MonkeyPatch):
+    captured = _capture_pdp_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    prompts: list[str] = []
+
+    def _fake_prompt(text: str, **_: object) -> str:
+        prompts.append(text)
+        return "https://prompted-pdp.example.com"
+
+    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+
+    _client_factory.make_pdp_client(_make_ctx(pdp_url=None))
+
+    assert captured["base_url"] == "https://prompted-pdp.example.com"
+    assert any("PDP" in p for p in prompts)
+
+
+def test_pdp_prompts_for_base_url_in_tty_when_cloudaz_flavor(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured = _capture_pdp_kwargs(monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    prompts: list[str] = []
+
+    def _fake_prompt(text: str, **_: object) -> str:
+        prompts.append(text)
+        return "https://prompted-cloudaz.example.com"
+
+    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+
+    _client_factory.make_pdp_client(
+        _make_ctx(base_url=None, pdp_auth=PdpAuthSource.CLOUDAZ),
+    )
+
+    assert captured["auth_base_url"] == "https://prompted-cloudaz.example.com"
+    assert any("CloudAz" in p for p in prompts)
+
+
+def test_pdp_explicit_flavor_pdp_reaches_factory_via_cli(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """--pdp-auth pdp propagates into CliContext and make_pdp_client."""
+    captured = _capture_pdp_kwargs(monkeypatch)
+    ctx = _make_ctx(pdp_auth=PdpAuthSource.PDP)
+    _client_factory.make_pdp_client(ctx)
+    # With --pdp-auth pdp, base_url is ignored even when set.
+    assert captured["auth_base_url"] is None
+    assert captured["base_url"] == "https://pdp.example.com"

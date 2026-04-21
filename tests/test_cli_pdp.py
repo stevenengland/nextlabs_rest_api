@@ -27,6 +27,8 @@ runner = CliRunner()
 _GLOBAL_OPTS = (
     "--base-url",
     "https://example.com",
+    "--pdp-url",
+    "https://pdp.example.com",
     "--client-secret",
     "my-secret",
 )
@@ -188,6 +190,8 @@ def test_pdp_eval_missing_credentials() -> None:
         [
             "--base-url",
             "https://example.com",
+            "--pdp-url",
+            "https://pdp.example.com",
             "pdp",
             "eval",
             "--subject",
