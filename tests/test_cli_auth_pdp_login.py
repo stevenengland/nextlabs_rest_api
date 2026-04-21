@@ -733,3 +733,116 @@ def test_switching_active_account_between_kinds(
     active_after_forward = active_store.load()
     assert active_after_forward is not None
     assert active_after_forward.kind == "pdp"
+
+
+def _install_pdp_ssl_retry_prompter(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    isatty: bool,
+    confirm: bool = True,
+) -> None:
+    from nextlabs_sdk._cli import _pdp_login
+    from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
+
+    def _factory() -> SslRetryPrompter:
+        return SslRetryPrompter(
+            isatty=lambda: isatty,
+            confirm=lambda _text, *, default=False: confirm,
+        )
+
+    monkeypatch.setattr(_pdp_login, "_SSL_RETRY_PROMPTER_FACTORY", _factory)
+
+
+def test_pdp_login_ssl_failure_retries_and_persists_verify_ssl_false(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ssl
+
+    _isolate_cache(tmp_path, monkeypatch)
+    calls_verify: list[object] = []
+
+    resp = _TokenResp(
+        {"access_token": "AT", "expires_in": 3600, "token_type": "bearer"},
+    )
+
+    def _fake_post(*_args: object, **kwargs: object) -> object:
+        calls_verify.append(kwargs.get("verify"))
+        if len(calls_verify) == 1:
+            cause = ssl.SSLCertVerificationError("verify failed")
+            wrapped = httpx.ConnectError("verify failed")
+            wrapped.__cause__ = cause
+            raise wrapped
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "ccid",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls_verify == [True, False]
+
+    prefs = AccountPreferencesStore(
+        path=tmp_path / "account_prefs.json",
+    ).load("https://pdp.example||ccid|pdp")
+    assert prefs is not None
+    assert prefs.verify_ssl is False
+    assert prefs.pdp_url == "https://pdp.example"
+    assert prefs.pdp_auth_source == "pdp"
+
+
+def test_pdp_login_non_tty_does_not_prompt_on_ssl_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import ssl
+
+    _isolate_cache(tmp_path, monkeypatch)
+
+    def _fake_post(*_args: object, **_kwargs: object) -> object:
+        cause = ssl.SSLCertVerificationError("verify failed")
+        wrapped = httpx.ConnectError("verify failed")
+        wrapped.__cause__ = cause
+        raise wrapped
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=False, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "ccid",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 1
+    normalized = strip_ansi(result.output)
+    assert "Connection error" in normalized or "SSL" in normalized
