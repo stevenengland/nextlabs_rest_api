@@ -284,6 +284,161 @@ def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
     assert entry.verify_ssl is False
 
 
+def _wrap_ssl_transport_error() -> "Exception":
+    import ssl
+
+    from nextlabs_sdk.exceptions import TransportError
+
+    cause = ssl.SSLCertVerificationError("certificate verify failed")
+    wrapped = TransportError("Connection error")
+    wrapped.__cause__ = cause
+    return wrapped
+
+
+def _patch_ssl_prompter(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    isatty: bool = True,
+    confirm: bool = True,
+) -> list[tuple[str, bool]]:
+    from nextlabs_sdk._cli import _auth_cmd
+    from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
+
+    confirms: list[tuple[str, bool]] = []
+
+    def _factory() -> SslRetryPrompter:
+        def _confirm_fn(text: str, *, default: bool = False) -> bool:
+            confirms.append((text, default))
+            return confirm
+
+        return SslRetryPrompter(
+            isatty=lambda: isatty,
+            confirm=_confirm_fn,
+        )
+
+    monkeypatch.setattr(_auth_cmd, "_SSL_RETRY_PROMPTER_FACTORY", _factory)
+    return confirms
+
+
+def _install_cloudaz_ssl_failing_factory(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    succeed_on_retry: bool,
+) -> list[bool | None]:
+    call_verify: list[bool | None] = []
+
+    def _fake_make(ctx: CliContext) -> CloudAzClient:
+        call_verify.append(ctx.verify)
+        client = mock(CloudAzClient)
+        if len(call_verify) == 1:
+            when(client).authenticate().thenRaise(_wrap_ssl_transport_error())
+        elif succeed_on_retry:
+            when(client).authenticate().thenReturn(None)
+        else:
+            when(client).authenticate().thenRaise(_wrap_ssl_transport_error())
+        return cast(CloudAzClient, client)
+
+    monkeypatch.setattr(_client_factory, "make_cloudaz_client", _fake_make)
+    return call_verify
+
+
+def test_cloudaz_login_ssl_failure_retries_with_no_verify_and_persists(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    _isolate_cache(tmp_path, monkeypatch)
+    call_verify = _install_cloudaz_ssl_failing_factory(
+        monkeypatch,
+        succeed_on_retry=True,
+    )
+    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert call_verify == [None, False]
+    assert len(confirms) == 1
+    store = AccountPreferencesStore(path=f"{tmp_path}/account_prefs.json")
+    prefs = store.load(
+        "https://example.com|admin|ControlCenterOIDCClient|cloudaz",
+    )
+    assert prefs is not None
+    assert prefs.verify_ssl is False
+
+
+def test_cloudaz_login_ssl_failure_on_decline_exits_one(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _install_cloudaz_ssl_failing_factory(monkeypatch, succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert len(confirms) == 1
+
+
+def test_cloudaz_login_with_explicit_verify_true_skips_ssl_prompt(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _install_cloudaz_ssl_failing_factory(monkeypatch, succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--verify",
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert confirms == []
+
+
 def test_logout_deletes_persisted_preference(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,

@@ -29,6 +29,7 @@ from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._output import print_success
+from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
 
 
 auth_app = typer.Typer(help="Authentication commands")
@@ -54,6 +55,12 @@ _LOGIN_TYPE_OPTION = typer.Option(
 _KIND_CLOUDAZ = "cloudaz"
 _KIND_PDP = "pdp"
 _VALID_LOGIN_KINDS = (_KIND_CLOUDAZ, _KIND_PDP)
+
+_SSL_RETRY_PROMPTER_FACTORY = SslRetryPrompter
+
+
+def _cloudaz_login_attempt(ctx: CliContext) -> None:
+    _client_factory.make_cloudaz_client(ctx).authenticate()
 
 
 def _resolve_kind(type_arg: str | None) -> str:
@@ -281,15 +288,19 @@ def login(
         _login_pdp(cli_ctx)
         return
     resolved = _resolve_login_context(cli_ctx)
-    client = _client_factory.make_cloudaz_client(resolved)
-    client.authenticate()
-    account = AccountIdentifier(
-        base_url=resolved.base_url or "",
-        username=resolved.username or "",
-        client_id=resolved.client_id,
+
+    used_ctx = _SSL_RETRY_PROMPTER_FACTORY().run_with_ssl_retry(
+        attempt=_cloudaz_login_attempt,
+        cli_ctx=resolved,
+        target_url=resolved.base_url or "",
     )
-    _set_active(resolved, account)
-    _save_prefs(resolved, account)
+    account = AccountIdentifier(
+        base_url=used_ctx.base_url or "",
+        username=used_ctx.username or "",
+        client_id=used_ctx.client_id,
+    )
+    _set_active(used_ctx, account)
+    _save_prefs(used_ctx, account)
     print_success("Login successful; token cached")
 
 
