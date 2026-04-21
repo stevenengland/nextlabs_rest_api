@@ -495,6 +495,93 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
     assert "expired" in result.output
 
 
+_PDP_HOST = "https://pdp.example"
+_PDP_KEY = f"{_PDP_HOST}||pdp-client|pdp"
+
+
+def _seed_pdp_cache(tmp_path: object) -> None:
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        _PDP_KEY,
+        CachedToken(
+            access_token="pdp-token",
+            refresh_token=None,
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            client_secret="S",
+        ),
+    )
+
+
+def test_accounts_lists_pdp_row(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "accounts"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Kind" in result.output
+    assert "pdp" in result.output.lower()
+    assert "pdp.example" in result.output
+
+
+def test_use_selector_accepts_pdp_host_syntax(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "use", f"[pdp]@{_PDP_HOST}"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    active = ActiveAccountStore(path=f"{tmp_path}/active_account.json").load()
+    assert active is not None
+    assert active.kind == "pdp"
+    assert active.base_url == _PDP_HOST
+
+
+def test_logout_pdp_clears_all(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url=_PDP_HOST,
+            username="",
+            client_id="pdp-client",
+            kind="pdp",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    assert FileTokenCache(path=f"{tmp_path}/tokens.json").load(_PDP_KEY) is None
+    assert ActiveAccountStore(path=f"{tmp_path}/active_account.json").load() is None
+
+
 def test_status_all_has_refreshable_column(
     tmp_path: object,
     monkeypatch: pytest.MonkeyPatch,

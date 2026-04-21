@@ -166,7 +166,7 @@ def _render_accounts_table(
     *,
     include_status: bool,
 ) -> None:
-    headers = ["#", "Active", "Username", "Base URL", "Client ID"]
+    headers = ["#", "Active", "Kind", "Username", "Base URL", "Client ID"]
     if include_status:
         headers.extend(("Status", "Refreshable"))
     table = Table(title=_ACCOUNTS_TITLE)
@@ -177,6 +177,7 @@ def _render_accounts_table(
         row = [
             str(idx),
             marker,
+            account.kind,
             account.username,
             account.base_url,
             account.client_id,
@@ -206,12 +207,35 @@ def _select_by_user_at_url(
     entries: list[AccountIdentifier],
     selector: str,
 ) -> AccountIdentifier:
-    username, _, base_url = selector.partition("@")
+    prefix, _, base_url = selector.partition("@")
+    kind = _kind_from_prefix(prefix)
+    username = prefix if kind is None else ""
     for entry in entries:
-        if entry.username == username and entry.base_url == base_url:
+        if _matches_entry(entry, kind, username, base_url):
             return entry
     typer.echo(f"No cached account matches `{selector}`.")
     raise _EXIT_FAILURE
+
+
+def _kind_from_prefix(prefix: str) -> str | None:
+    if prefix == "[pdp]":
+        return "pdp"
+    if prefix == "[cloudaz]":
+        return "cloudaz"
+    return None
+
+
+def _matches_entry(
+    entry: AccountIdentifier,
+    kind: str | None,
+    username: str,
+    base_url: str,
+) -> bool:
+    if entry.base_url != base_url:
+        return False
+    if kind is not None:
+        return entry.kind == kind
+    return entry.username == username
 
 
 def _pick_account(
@@ -389,4 +413,10 @@ def use(
         raise _EXIT_FAILURE
     target = _pick_account(entries, selector)
     _set_active(cli_ctx, target)
-    print_success(f"Active account: {target.username} @ {target.base_url}")
+    print_success(f"Active account: {_account_display_label(target)}")
+
+
+def _account_display_label(account: AccountIdentifier) -> str:
+    if account.kind == "pdp":
+        return f"[pdp] @ {account.base_url}"
+    return f"{account.username} @ {account.base_url}"
