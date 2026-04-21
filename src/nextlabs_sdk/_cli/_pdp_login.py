@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import httpx
 import typer
@@ -22,6 +22,7 @@ from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
 from nextlabs_sdk._cli._pdp_client_id import resolve_pdp_client_id
+from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
 from nextlabs_sdk._json_response import decode_json_object, require_int
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import (
@@ -35,9 +36,69 @@ _KIND_PDP = "pdp"
 _PDP_TOKEN_ENDPOINT = "/dpc/oauth"
 _CLOUDAZ_TOKEN_ENDPOINT = "/cas/token"
 
+_SSL_RETRY_PROMPTER_FACTORY = SslRetryPrompter
+
+
+class _PdpLoginAttempt:
+    """Collect ``_PersistedLogin`` records from each attempt.
+
+    The PDP login helper re-uses the same callable across the initial
+    attempt and the optional SSL-retry attempt. The prompter returns the
+    :class:`CliContext` that actually succeeded; the record produced by
+    that successful attempt is captured here and persisted afterwards.
+    """
+
+    def __init__(self) -> None:
+        self.records: list[_PersistedLogin] = []
+
+    def __call__(self, ctx: CliContext) -> None:
+        self.records.append(_attempt_login(ctx))
+
 
 def login_pdp(cli_ctx: CliContext) -> None:
     """Register a PDP account via OAuth2 client-credentials."""
+    resolved_ctx = _resolve_login_inputs(cli_ctx)
+    attempt = _PdpLoginAttempt()
+    used_ctx = _SSL_RETRY_PROMPTER_FACTORY().run_with_ssl_retry(
+        attempt=attempt,
+        cli_ctx=resolved_ctx,
+        target_url=_target_url_for_prompt(resolved_ctx),
+    )
+    _persist_login(used_ctx, attempt.records[-1])
+    print_success("PDP login successful; credentials cached")
+
+
+def _resolve_login_inputs(cli_ctx: CliContext) -> CliContext:
+    """Gather every interactive input once, up-front.
+
+    Returns a :class:`CliContext` where every value the token-minting
+    step needs is already populated, so the SSL-retry flow can re-invoke
+    the attempt without re-prompting the user for anything except the
+    retry confirmation itself.
+    """
+    flavor = _resolve_flavor(cli_ctx)
+    pdp_url = _resolve_pdp_url(cli_ctx, flavor)
+    auth_base_url = _resolve_auth_base_url(cli_ctx, flavor)
+    client_id = resolve_pdp_client_id(cli_ctx, flavor)
+    client_secret = _resolve_client_secret(cli_ctx, flavor)
+    return replace(
+        cli_ctx,
+        base_url=auth_base_url if auth_base_url else cli_ctx.base_url,
+        pdp_url=pdp_url,
+        pdp_client_id=client_id,
+        client_secret=client_secret,
+    )
+
+
+def _target_url_for_prompt(cli_ctx: CliContext) -> str:
+    if cli_ctx.pdp_url:
+        return cli_ctx.pdp_url
+    if cli_ctx.base_url:
+        return cli_ctx.base_url
+    return ""
+
+
+def _attempt_login(cli_ctx: CliContext) -> _PersistedLogin:
     flavor = _resolve_flavor(cli_ctx)
     pdp_url = _resolve_pdp_url(cli_ctx, flavor)
     auth_base_url = _resolve_auth_base_url(cli_ctx, flavor)
@@ -64,18 +125,14 @@ def login_pdp(cli_ctx: CliContext) -> None:
         client_id=client_id,
         kind=_KIND_PDP,
     )
-    _persist_login(
-        cli_ctx,
-        _PersistedLogin(
-            account=account,
-            payload=payload,
-            client_secret=client_secret,
-            pdp_url=pdp_url,
-            flavor=flavor,
-            verify_ssl=verify_ssl,
-        ),
+    return _PersistedLogin(
+        account=account,
+        payload=payload,
+        client_secret=client_secret,
+        pdp_url=pdp_url,
+        flavor=flavor,
+        verify_ssl=verify_ssl,
     )
-    print_success("PDP login successful; credentials cached")
 
 
 def _resolve_flavor(cli_ctx: CliContext) -> PdpAuthSource:

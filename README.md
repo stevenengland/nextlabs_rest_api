@@ -456,6 +456,16 @@ Top-level CLI flags worth knowing: `--no-verify` (skip TLS verification —
 dev only), `-v` / `-vv` (verbose; `-vv` logs every HTTP request and
 response body), `--token` (one-shot bearer override).
 
+When you run `nextlabs auth login` (both `--type cloudaz` and
+`--type pdp`) on an interactive terminal and the server presents a
+certificate that cannot be verified, the CLI offers a one-shot retry
+with SSL verification disabled (default: **No**). Accepting persists
+`verify_ssl=False` for that account so subsequent commands reuse the
+same choice. The prompt is skipped entirely when you passed `--verify`
+or `--no-verify` on the command line, or when stdin is not a TTY — the
+original error propagates unchanged so scripts and pipelines stay
+deterministic.
+
 ---
 
 ## Project layout
