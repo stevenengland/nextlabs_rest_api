@@ -285,6 +285,139 @@ def test_login_pdp_token_error_surfaces(
     )
 
 
+def test_login_pdp_uses_pdp_client_id_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    resp = _TokenResp({"access_token": "AT", "expires_in": 3600})
+    captured_data: list[dict[str, str]] = []
+
+    def _fake_post(
+        url: str,
+        *,
+        data: dict[str, str],
+        **_kwargs: object,
+    ) -> _TokenResp:
+        captured_data.append(dict(data))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--pdp-client-id",
+            "pdp-only-id",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_data == [
+        {
+            "grant_type": "client_credentials",
+            "client_id": "pdp-only-id",
+            "client_secret": "S3cret",
+        },
+    ]
+
+    entry = FileTokenCache(path=tmp_path / "tokens.json").load(
+        "https://pdp.example||pdp-only-id|pdp",
+    )
+    assert entry is not None
+    assert entry.access_token == "AT"
+
+
+def _isatty_false_for_pdp_login() -> bool:
+    return False
+
+
+def test_login_pdp_rejects_missing_client_id_non_tty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_false_for_pdp_login)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "pdp-client-id" in result.output.lower()
+
+
+def test_login_pdp_cloudaz_flavor_uses_client_id_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    resp = _TokenResp({"access_token": "AT", "expires_in": 3600})
+    captured_data: list[dict[str, str]] = []
+
+    def _fake_post(
+        url: str,
+        *,
+        data: dict[str, str],
+        **_kwargs: object,
+    ) -> _TokenResp:
+        captured_data.append(dict(data))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://cloudaz.example",
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "cloudaz-oidc-client",
+            "--client-secret",
+            "S",
+            "--pdp-auth",
+            "cloudaz",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured_data == [
+        {
+            "grant_type": "client_credentials",
+            "client_id": "cloudaz-oidc-client",
+            "client_secret": "S",
+        },
+    ]
+
+
 # ─────────────────────── Recommended regression tests ──────────────────────
 
 

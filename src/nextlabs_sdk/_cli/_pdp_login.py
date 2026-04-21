@@ -21,6 +21,7 @@ from nextlabs_sdk._cli._account_resolver import (
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
+from nextlabs_sdk._cli._pdp_client_id import resolve_pdp_client_id
 from nextlabs_sdk._json_response import decode_json_object, require_int, require_str
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import (
@@ -40,6 +41,7 @@ def login_pdp(cli_ctx: CliContext) -> None:
     flavor = _resolve_flavor(cli_ctx)
     pdp_url = _resolve_pdp_url(cli_ctx, flavor)
     auth_base_url = _resolve_auth_base_url(cli_ctx, flavor)
+    client_id = resolve_pdp_client_id(cli_ctx, flavor)
     client_secret = _resolve_client_secret(cli_ctx, flavor)
 
     token_url = resolve_pdp_token_url(
@@ -50,7 +52,7 @@ def login_pdp(cli_ctx: CliContext) -> None:
     verify_ssl = True if cli_ctx.verify is None else cli_ctx.verify
     payload = _mint_client_credentials_token(
         token_url=token_url,
-        client_id=cli_ctx.client_id,
+        client_id=client_id,
         client_secret=client_secret,
         verify_ssl=verify_ssl,
         timeout=cli_ctx.timeout,
@@ -59,7 +61,7 @@ def login_pdp(cli_ctx: CliContext) -> None:
     account = AccountIdentifier(
         base_url=auth_base_url or pdp_url,
         username="",
-        client_id=cli_ctx.client_id,
+        client_id=client_id,
         kind=_KIND_PDP,
     )
     _persist_login(
