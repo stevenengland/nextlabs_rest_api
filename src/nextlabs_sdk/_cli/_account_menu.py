@@ -17,6 +17,7 @@ class AccountIdentifier:
     base_url: str
     username: str
     client_id: str
+    kind: str = "cloudaz"
 
 
 def parse_cache_key(key: str) -> AccountIdentifier | None:
@@ -24,11 +25,12 @@ def parse_cache_key(key: str) -> AccountIdentifier | None:
     parsed = _parse_cache_key(key)
     if parsed is None:
         return None
-    base_url, username, client_id = parsed
+    base_url, username, client_id, kind = parsed
     return AccountIdentifier(
         base_url=base_url,
         username=username,
         client_id=client_id,
+        kind=kind,
     )
 
 
@@ -54,7 +56,8 @@ def select_account(
     """
     typer.echo("Cached accounts:")
     for idx, account in enumerate(accounts, start=1):
-        typer.echo(f"  {idx}) {account.username} @ {account.base_url}")
+        label = _account_label(account)
+        typer.echo(f"  {idx}) {label}")
     if add_new_label:
         add_new_idx = len(accounts) + 1
         typer.echo(f"  {add_new_idx}) {add_new_label}")
@@ -69,3 +72,9 @@ def select_account(
     if add_new_label and choice == len(accounts) + 1:
         return None
     return accounts[choice - 1]
+
+
+def _account_label(account: AccountIdentifier) -> str:
+    if account.kind == "pdp":
+        return f"[pdp] @ {account.base_url}"
+    return f"{account.username} @ {account.base_url}"

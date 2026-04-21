@@ -135,3 +135,99 @@ def test_cache_dir_from_ctx_is_honoured(tmp_path: Path) -> None:
 def test_build_file_cache_respects_cache_dir(tmp_path: Path) -> None:
     cache = build_file_cache(_ctx(cache_dir=str(tmp_path)))
     assert cache.path == tmp_path / "tokens.json"
+
+
+def test_resolved_account_carries_kind_from_active_pointer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate(tmp_path, monkeypatch)
+    build_active_store(_ctx()).save(
+        ActiveAccount(
+            base_url="https://pdp.example",
+            username="",
+            client_id="c",
+            kind="pdp",
+        ),
+    )
+
+    resolved = resolve_account(_ctx())
+
+    assert resolved is not None
+    assert resolved.kind == "pdp"
+    assert resolved.username == ""
+
+
+def test_explicit_flags_default_to_cloudaz_kind(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate(tmp_path, monkeypatch)
+    resolved = resolve_account(
+        _ctx(base_url="https://x", username="u"),
+    )
+    assert resolved is not None
+    assert resolved.kind == "cloudaz"
+
+
+def test_prefs_key_for_includes_kind() -> None:
+    from nextlabs_sdk._cli._account_resolver import ResolvedAccount, prefs_key_for
+
+    account = ResolvedAccount(
+        base_url="https://x",
+        username="u",
+        client_id="c",
+        kind="pdp",
+    )
+    assert prefs_key_for(account) == "https://x|u|c|pdp"
+
+
+def test_load_account_prefs_reads_legacy_three_segment_cloudaz_entry(
+    tmp_path: Path,
+) -> None:
+    from nextlabs_sdk._cli._account_preferences import AccountPreferences
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+    from nextlabs_sdk._cli._account_resolver import (
+        ResolvedAccount,
+        load_account_prefs,
+    )
+
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    store.save("https://x|u|c", AccountPreferences(verify_ssl=False))
+    account = ResolvedAccount(
+        base_url="https://x",
+        username="u",
+        client_id="c",
+        kind="cloudaz",
+    )
+
+    loaded = load_account_prefs(store, account)
+
+    assert loaded is not None
+    assert loaded.verify_ssl is False
+
+
+def test_load_account_prefs_prefers_new_four_segment_entry(
+    tmp_path: Path,
+) -> None:
+    from nextlabs_sdk._cli._account_preferences import AccountPreferences
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+    from nextlabs_sdk._cli._account_resolver import (
+        ResolvedAccount,
+        load_account_prefs,
+    )
+
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    store.save("https://x|u|c", AccountPreferences(verify_ssl=False))
+    store.save("https://x|u|c|cloudaz", AccountPreferences(verify_ssl=True))
+    account = ResolvedAccount(
+        base_url="https://x",
+        username="u",
+        client_id="c",
+        kind="cloudaz",
+    )
+
+    loaded = load_account_prefs(store, account)
+
+    assert loaded is not None
+    assert loaded.verify_ssl is True

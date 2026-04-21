@@ -9,7 +9,7 @@ from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 
 def _base_dict() -> dict[str, Any]:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "access_token": "id",
         "expires_at": 1_700_000_000.0,
         "token_type": "bearer",
@@ -36,6 +36,7 @@ def _make_token(**overrides: Any) -> CachedToken:
             {"refresh_expires_at": 1_700_003_600.0}, id="with-refresh-expires"
         ),
         pytest.param({"id_token": "id-jwt"}, id="with-id-token"),
+        pytest.param({"client_secret": "shh"}, id="with-client-secret"),
     ],
 )
 def test_roundtrip_to_dict_and_back(overrides):
@@ -56,6 +57,7 @@ def test_from_dict_tolerates_missing_optional_fields():
     assert restored.scope is None
     assert restored.refresh_expires_at is None
     assert restored.id_token is None
+    assert restored.client_secret is None
 
 
 def test_to_dict_includes_id_token():
@@ -71,6 +73,7 @@ def test_to_dict_includes_id_token():
     [
         pytest.param({}, id="missing"),
         pytest.param({"schema_version": 1}, id="older"),
+        pytest.param({"schema_version": 2}, id="v2"),
     ],
 )
 def test_from_dict_rejects_invalid_schema_version(schema_version_patch):

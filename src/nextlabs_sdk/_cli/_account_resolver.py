@@ -7,6 +7,7 @@ from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
 )
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._context import CliContext
 
@@ -18,6 +19,7 @@ class ResolvedAccount:
     base_url: str
     username: str
     client_id: str
+    kind: str = "cloudaz"
 
 
 def build_active_store(ctx: CliContext) -> ActiveAccountStore:
@@ -41,7 +43,34 @@ def build_prefs_store(ctx: CliContext) -> AccountPreferencesStore:
 
 
 def prefs_key_for(account: ResolvedAccount) -> str:
+    return f"{account.base_url}|{account.username}|{account.client_id}|{account.kind}"
+
+
+def _legacy_prefs_key_for(account: ResolvedAccount) -> str | None:
+    """Legacy 3-segment prefs key for CloudAz accounts (pre-#58)."""
+    if account.kind != "cloudaz":
+        return None
     return f"{account.base_url}|{account.username}|{account.client_id}"
+
+
+def load_account_prefs(
+    store: AccountPreferencesStore,
+    account: ResolvedAccount,
+) -> AccountPreferences | None:
+    """Load prefs for ``account``, falling back to the legacy 3-segment key.
+
+    Pre-#58 CloudAz installs wrote prefs under a 3-segment key
+    (``<base_url>|<username>|<client_id>``). New writes use the 4-segment
+    key; this helper lets existing users upgrade without losing their
+    persisted ``verify_ssl`` preference.
+    """
+    entry = store.load(prefs_key_for(account))
+    if entry is not None:
+        return entry
+    legacy = _legacy_prefs_key_for(account)
+    if legacy is None:
+        return None
+    return store.load(legacy)
 
 
 def resolve_account(ctx: CliContext) -> ResolvedAccount | None:
@@ -53,10 +82,12 @@ def resolve_account(ctx: CliContext) -> ResolvedAccount | None:
     3. ``None`` when nothing is available — caller surfaces guidance.
 
     When the resolver falls back to the active-account pointer, the
-    pointer's ``client_id`` is used so that non-default client IDs chosen
-    at login time keep working without re-passing ``--client-id`` on every
-    command. When both ``base_url`` and ``username`` are explicit, the
-    resolver returns ``ctx.client_id`` directly.
+    pointer's ``client_id`` and ``kind`` are used so that non-default
+    values chosen at login time keep working without re-passing
+    ``--client-id`` on every command. When both ``base_url`` and
+    ``username`` are explicit, the resolver returns ``ctx.client_id``
+    directly with the default ``kind="cloudaz"`` (explicit CloudAz
+    flags never resolve to a PDP account).
 
     This function does **not** consider ``ctx.token``; callers that honour
     pre-issued tokens should bypass the resolver entirely.
@@ -79,4 +110,5 @@ def resolve_account(ctx: CliContext) -> ResolvedAccount | None:
         base_url=base_url or pointer.base_url,
         username=username or pointer.username,
         client_id=pointer.client_id,
+        kind=pointer.kind,
     )

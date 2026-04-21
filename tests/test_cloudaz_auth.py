@@ -18,7 +18,7 @@ from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 
 TOKEN_URL = "https://cloudaz.example.com/cas/oidc/accessToken"
 API_URL = "https://cloudaz.example.com/api"
-_DERIVED_KEY = f"{TOKEN_URL}|admin|ControlCenterOIDCClient"
+_DERIVED_KEY = f"{TOKEN_URL}|admin|ControlCenterOIDCClient|cloudaz"
 
 
 def _make_auth(

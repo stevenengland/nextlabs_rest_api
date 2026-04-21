@@ -102,10 +102,10 @@ def _seed_cache(tmp_path: object, *keys: str):
         cache.save(key, tok)
 
 
-_ALPHA_KEY = (
-    "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient"
+_ALPHA_KEY = "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient|cloudaz"
+_BETA_KEY = (
+    "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient|cloudaz"
 )
-_BETA_KEY = "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient"
 
 
 def test_login_prompts_for_password_when_missing(login_ctx):
@@ -250,7 +250,7 @@ def test_login_persists_verify_preference_default_true(login_ctx):
     from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 
     store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
-    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
     assert entry is not None
     assert entry.verify_ssl is True
 
@@ -279,7 +279,7 @@ def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
     from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 
     store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
-    entry = store.load("https://example.com|admin|ControlCenterOIDCClient")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
     assert entry is not None
     assert entry.verify_ssl is False
 
@@ -306,7 +306,7 @@ def test_logout_deletes_persisted_preference(
     )
     prefs_path = f"{tmp_path}/account_prefs.json"
     prefs_store = AccountPreferencesStore(path=prefs_path)
-    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient"
+    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient|cloudaz"
     prefs_store.save(prefs_key, AccountPreferences(verify_ssl=False))
 
     result = runner.invoke(app, ["auth", "logout"])
@@ -325,7 +325,7 @@ def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     cache.save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",
@@ -404,7 +404,7 @@ def test_status_expired_exits_with_details(
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",
@@ -470,7 +470,7 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
-        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient",
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
         CachedToken(
             access_token="t",
             refresh_token="rt",
@@ -493,6 +493,93 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
     assert result.exit_code == 0, result.output
     assert "Refreshable" in result.output
     assert "expired" in result.output
+
+
+_PDP_HOST = "https://pdp.example"
+_PDP_KEY = f"{_PDP_HOST}||pdp-client|pdp"
+
+
+def _seed_pdp_cache(tmp_path: object) -> None:
+    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        _PDP_KEY,
+        CachedToken(
+            access_token="pdp-token",
+            refresh_token=None,
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            client_secret="S",
+        ),
+    )
+
+
+def test_accounts_lists_pdp_row(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "accounts"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Kind" in result.output
+    assert "pdp" in result.output.lower()
+    assert "pdp.example" in result.output
+
+
+def test_use_selector_accepts_pdp_host_syntax(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "use", f"[pdp]@{_PDP_HOST}"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    active = ActiveAccountStore(path=f"{tmp_path}/active_account.json").load()
+    assert active is not None
+    assert active.kind == "pdp"
+    assert active.base_url == _PDP_HOST
+
+
+def test_logout_pdp_clears_all(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url=_PDP_HOST,
+            username="",
+            client_id="pdp-client",
+            kind="pdp",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+
+    assert FileTokenCache(path=f"{tmp_path}/tokens.json").load(_PDP_KEY) is None
+    assert ActiveAccountStore(path=f"{tmp_path}/active_account.json").load() is None
 
 
 def test_status_all_has_refreshable_column(

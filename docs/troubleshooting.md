@@ -42,6 +42,30 @@ and retries the command transparently. In non-interactive contexts
 `nextlabs auth login` again. Run `nextlabs auth status` to confirm
 the new cached entry is `Refreshable: yes`.
 
+## PDP commands keep prompting for `--client-secret` / `--pdp-url`
+
+**Symptom:** every `nextlabs pdp …` call needs `--client-secret`,
+`--pdp-url`, and `--pdp-auth` again, even after a successful run.
+
+**Cause:** PDP commands use OAuth *client-credentials*, not
+username/password. Until the PDP credentials are registered in the
+local cache, the CLI has nowhere to recover them from.
+
+**Fix:** register the account once with `auth login --type pdp`.
+
+```bash
+nextlabs auth login --type pdp \
+  --pdp-url https://pdp.example --client-id my-client \
+  --client-secret "$SECRET" --pdp-auth pdp
+```
+
+The CLI mints a token, caches the `client_secret` alongside it, and
+persists `pdp_url` + `pdp_auth` as account preferences. Subsequent
+`nextlabs pdp …` invocations reuse all three transparently. Rotate
+the secret by re-running `auth login --type pdp` with the new value;
+clear the entry with `nextlabs auth logout` (after
+`nextlabs auth use "[pdp]@<pdp-url>"` if it is not already active).
+
 ## SSL verification failures against an internal CloudAz instance
 
 **Symptom:**

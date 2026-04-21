@@ -97,6 +97,40 @@ def test_save_is_atomic_no_stale_tmp_files(tmp_path: Path) -> None:
     assert leftovers == []
 
 
+def test_kind_defaults_to_cloudaz_on_legacy_payload(tmp_path: Path) -> None:
+    legacy: dict[str, object] = {
+        "base_url": "https://x",
+        "username": "u",
+        "client_id": "c",
+    }
+    loaded = ActiveAccount.from_dict(legacy)
+    assert loaded.kind == "cloudaz"
+
+
+def test_kind_roundtrip_pdp(tmp_path: Path) -> None:
+    store = ActiveAccountStore(path=tmp_path / "active.json")
+    acct = ActiveAccount(
+        base_url="https://pdp.example",
+        username="",
+        client_id="c",
+        kind="pdp",
+    )
+    store.save(acct)
+    assert store.load() == acct
+
+
+def test_from_dict_rejects_unknown_kind() -> None:
+    with pytest.raises(ValueError, match="kind"):
+        ActiveAccount.from_dict(
+            {
+                "base_url": "https://x",
+                "username": "u",
+                "client_id": "c",
+                "kind": "mystery",
+            },
+        )
+
+
 @pytest.mark.parametrize(
     "set_env,unset_env,expected_suffix",
     [

@@ -43,3 +43,34 @@ def test_from_dict_rejects_non_bool_verify_ssl(value: object):
         AccountPreferences.from_dict(
             {"schema_version": 1, "verify_ssl": value},
         )
+
+
+def test_roundtrip_with_pdp_fields():
+    prefs = AccountPreferences(
+        verify_ssl=True,
+        pdp_url="https://pdp.example.com",
+        pdp_auth_source="pdp",
+    )
+    assert AccountPreferences.from_dict(prefs.to_dict()) == prefs
+
+
+def test_from_dict_tolerates_missing_pdp_fields():
+    restored = AccountPreferences.from_dict(
+        {"schema_version": 1, "verify_ssl": True},
+    )
+    assert restored.pdp_url is None
+    assert restored.pdp_auth_source is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        pytest.param("pdp_url", id="pdp_url"),
+        pytest.param("pdp_auth_source", id="pdp_auth_source"),
+    ],
+)
+def test_from_dict_rejects_non_string_pdp_field(field: str):
+    with pytest.raises(TypeError, match=field):
+        AccountPreferences.from_dict(
+            {"schema_version": 1, "verify_ssl": True, field: 42},
+        )
