@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import replace
 from typing import Annotated
 
+import click
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -45,6 +47,32 @@ _STATUS_ALL_OPTION = typer.Option(
 _USE_SELECTOR_ARGUMENT = typer.Argument(
     help="1-based index, or username@base_url. Omit for an interactive menu.",
 )
+_LOGIN_TYPE_OPTION = typer.Option(
+    "--type",
+    help="Account type to register: 'cloudaz' (default) or 'pdp'.",
+)
+_KIND_CLOUDAZ = "cloudaz"
+_KIND_PDP = "pdp"
+_VALID_LOGIN_KINDS = (_KIND_CLOUDAZ, _KIND_PDP)
+
+
+def _resolve_kind(type_arg: str | None) -> str:
+    if type_arg in _VALID_LOGIN_KINDS:
+        return type_arg
+    if type_arg is None:
+        if sys.stdin.isatty():
+            return typer.prompt(
+                "Account type",
+                type=click.Choice(list(_VALID_LOGIN_KINDS)),
+                default=_KIND_CLOUDAZ,
+            )
+        return _KIND_CLOUDAZ
+    raise typer.BadParameter("--type must be 'cloudaz' or 'pdp'")
+
+
+def _login_pdp(cli_ctx: CliContext) -> None:
+    """Register a PDP account (client-credentials flow). Stub — Task 5."""
+    raise NotImplementedError("PDP login not yet implemented")
 
 
 def _apply_menu_defaults(
@@ -252,9 +280,16 @@ def test_auth(ctx: typer.Context) -> None:
 
 @auth_app.command(name="login")
 @cli_error_handler
-def login(ctx: typer.Context) -> None:
+def login(
+    ctx: typer.Context,
+    type_: Annotated[str | None, _LOGIN_TYPE_OPTION] = None,
+) -> None:
     """Acquire a token, persist it, and mark this account as active."""
     cli_ctx: CliContext = ctx.obj
+    kind = _resolve_kind(type_)
+    if kind == _KIND_PDP:
+        _login_pdp(cli_ctx)
+        return
     resolved = _resolve_login_context(cli_ctx)
     client = _client_factory.make_cloudaz_client(resolved)
     client.authenticate()
