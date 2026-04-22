@@ -64,7 +64,11 @@ def pdp_stubs(seeded_wiremock: str) -> str:
         "request": {
             "method": "POST",
             "urlPath": _PDP_ENDPOINT,
-            "headers": {"Content-Type": {"contains": "application/json"}},
+            "headers": {
+                "Content-Type": {"contains": "application/json"},
+                "Service": {"equalTo": "EVAL"},
+                "Version": {"equalTo": "1.0"},
+            },
         },
         "response": {
             "status": 200,
@@ -77,7 +81,11 @@ def pdp_stubs(seeded_wiremock: str) -> str:
         "request": {
             "method": "POST",
             "urlPath": _PDP_ENDPOINT,
-            "headers": {"Content-Type": {"contains": "application/xml"}},
+            "headers": {
+                "Content-Type": {"contains": "application/xml"},
+                "Service": {"equalTo": "EVAL"},
+                "Version": {"equalTo": "1.0"},
+            },
         },
         "response": {
             "status": 200,

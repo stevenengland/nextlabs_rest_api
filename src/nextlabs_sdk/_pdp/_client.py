@@ -8,6 +8,11 @@ from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk._pdp import _json_serializer as json_ser
 from nextlabs_sdk._pdp import _xml_serializer as xml_ser
 from nextlabs_sdk._pdp._enums import ContentType
+from nextlabs_sdk._pdp._headers import (
+    DEFAULT_SERVICE,
+    DEFAULT_VERSION,
+    build_pdp_headers,
+)
 from nextlabs_sdk._pdp._request_models import EvalRequest, PermissionsRequest
 from nextlabs_sdk._pdp._response_decode import decode_pdp_response
 from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
@@ -15,7 +20,6 @@ from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import NextLabsError, raise_for_status
 
 _PDP_ENDPOINT = "/dpc/authorization/pdp"
-_CONTENT_TYPE = "Content-Type"
 
 
 def _require_json_content_type(content_type: ContentType, *, method: str) -> None:
@@ -38,6 +42,8 @@ class PdpClient:
         auth_base_url: str | None = None,
         token_url: str | None = None,
         http_config: HttpConfig | None = None,
+        service: str = DEFAULT_SERVICE,
+        version: str = DEFAULT_VERSION,
     ) -> None:
         config = http_config or HttpConfig()
         effective_token_url = resolve_pdp_token_url(
@@ -55,6 +61,8 @@ class PdpClient:
             auth=auth,
             http_config=config,
         )
+        self._service = service
+        self._version = version
 
     def evaluate(
         self,
@@ -67,7 +75,9 @@ class PdpClient:
             response = self._client.post(
                 _PDP_ENDPOINT,
                 content=body_bytes,
-                headers={_CONTENT_TYPE: content_type.value},
+                headers=build_pdp_headers(
+                    content_type, service=self._service, version=self._version
+                ),
             )
             raise_for_status(response)
             return xml_ser.deserialize_eval_response(response.content)
@@ -76,7 +86,9 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={_CONTENT_TYPE: content_type.value},
+            headers=build_pdp_headers(
+                content_type, service=self._service, version=self._version
+            ),
         )
         raise_for_status(response)
         return decode_pdp_response(
@@ -96,7 +108,9 @@ class PdpClient:
             response = self._client.post(
                 _PDP_ENDPOINT,
                 content=body_bytes,
-                headers={_CONTENT_TYPE: content_type.value},
+                headers=build_pdp_headers(
+                    content_type, service=self._service, version=self._version
+                ),
             )
             raise_for_status(response)
             return xml_ser.deserialize_permissions_response(response.content)
@@ -105,7 +119,9 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={_CONTENT_TYPE: content_type.value},
+            headers=build_pdp_headers(
+                content_type, service=self._service, version=self._version
+            ),
         )
         raise_for_status(response)
         return decode_pdp_response(
@@ -125,7 +141,9 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={_CONTENT_TYPE: content_type.value},
+            headers=build_pdp_headers(
+                content_type, service=self._service, version=self._version
+            ),
         )
         raise_for_status(response)
         return decode_pdp_response(
@@ -145,7 +163,9 @@ class PdpClient:
         response = self._client.post(
             _PDP_ENDPOINT,
             json=body,
-            headers={_CONTENT_TYPE: content_type.value},
+            headers=build_pdp_headers(
+                content_type, service=self._service, version=self._version
+            ),
         )
         raise_for_status(response)
         return decode_pdp_response(
