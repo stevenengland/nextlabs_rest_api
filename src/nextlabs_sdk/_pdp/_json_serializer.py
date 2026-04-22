@@ -245,7 +245,25 @@ def _parse_status(raw: dict[str, object]) -> Status:
         code_value = str(status_code_raw.get("Value", ""))
     message_raw = raw.get("StatusMessage", "")
     message = str(message_raw) if message_raw else ""
-    return Status(code=code_value, message=message)
+    detail = _stringify_status_detail(raw.get("StatusDetail"))
+    return Status(code=code_value, message=message, detail=detail)
+
+
+def _stringify_status_detail(raw: object) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        return ", ".join(_stringify_status_detail(entry) for entry in raw if entry)
+    if isinstance(raw, dict):
+        parts: list[str] = []
+        for child in raw.values():
+            piece = _stringify_status_detail(child)
+            if piece:
+                parts.append(piece)
+        return ", ".join(parts)
+    return str(raw)
 
 
 def _parse_obligations(

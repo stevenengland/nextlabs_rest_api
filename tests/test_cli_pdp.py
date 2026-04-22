@@ -151,6 +151,64 @@ def test_pdp_eval_with_policy_refs() -> None:
     assert "AllowITAccess" in result.output
 
 
+def _eval_response_with_status(
+    decision: Decision, code: str, message: str, detail: str
+) -> EvalResponse:
+    return EvalResponse(
+        eval_results=[
+            EvalResult(
+                decision=decision,
+                status=Status(code=code, message=message, detail=detail),
+            ),
+        ],
+    )
+
+
+def test_pdp_eval_renders_status_detail_when_present() -> None:
+    mock_client = _stub_client()
+    response = _eval_response_with_status(
+        decision=Decision.INDETERMINATE,
+        code="urn:oasis:names:tc:xacml:1.0:status:missing-attribute",
+        message="One or more required params are missing",
+        detail="Service, Version",
+    )
+    when(mock_client).evaluate(...).thenReturn(response)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
+
+    assert result.exit_code == 0
+    assert "One or more required params are missing" in result.output
+    assert "Detail:" in result.output
+    assert "Service, Version" in result.output
+
+
+def test_pdp_eval_omits_detail_line_when_empty() -> None:
+    mock_client = _stub_client()
+    when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
+
+    assert result.exit_code == 0
+    assert "Detail:" not in result.output
+
+
+def test_pdp_eval_renders_status_with_bracket_chars_literally() -> None:
+    mock_client = _stub_client()
+    response = _eval_response_with_status(
+        decision=Decision.INDETERMINATE,
+        code="missing-attribute",
+        message="missing [Service] attribute",
+        detail="[policy:secret] Service, Version",
+    )
+    when(mock_client).evaluate(...).thenReturn(response)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
+
+    assert result.exit_code == 0
+    assert "[Service]" in result.output
+    assert "[policy:secret]" in result.output
+
+
 @pytest.mark.parametrize(
     "extra_args",
     [

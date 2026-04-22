@@ -10,6 +10,7 @@ class Status(BaseModel):
 
     code: str
     message: str = ""
+    detail: str = ""
 
 
 class ObligationAttribute(BaseModel):

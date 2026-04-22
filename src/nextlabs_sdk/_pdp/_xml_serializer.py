@@ -232,7 +232,15 @@ def _parse_status_xml(result_el: ET.Element) -> Status:
     if code_el is not None:
         code = code_el.get("Value", "") or ""
     message = status_el.findtext(_ns("StatusMessage"), "")
-    return Status(code=code, message=message)
+    detail = _read_status_detail(status_el)
+    return Status(code=code, message=message, detail=detail)
+
+
+def _read_status_detail(status_el: ET.Element) -> str:
+    detail_el = status_el.find(_ns("StatusDetail"))
+    if detail_el is None:
+        return ""
+    return "".join(detail_el.itertext()).strip()
 
 
 def _parse_obligations_xml(result_el: ET.Element) -> list[Obligation]:
