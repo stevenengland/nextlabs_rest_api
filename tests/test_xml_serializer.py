@@ -147,6 +147,41 @@ def test_xml_deserialize_with_obligations():
     assert response.first_result.obligations[0].attributes[0].attr_value == "warn"
 
 
+def test_xml_deserialize_with_status_detail():
+    xml_data = (
+        f'<Response xmlns="{XACML_NS}">'
+        f"<Result>"
+        f"<Decision>Indeterminate</Decision>"
+        f"<Status>"
+        f'<StatusCode Value="urn:oasis:names:tc:xacml:1.0:status:missing-attribute"/>'
+        f"<StatusMessage>One or more required params are missing</StatusMessage>"
+        f"<StatusDetail>Service, Version</StatusDetail>"
+        f"</Status>"
+        f"</Result>"
+        f"</Response>"
+    ).encode()
+
+    response = deserialize_eval_response(xml_data)
+
+    assert response.first_result.decision == Decision.INDETERMINATE
+    assert response.first_result.status.detail == "Service, Version"
+
+
+def test_xml_deserialize_without_status_detail_defaults_empty():
+    xml_data = (
+        f'<Response xmlns="{XACML_NS}">'
+        f"<Result>"
+        f"<Decision>Permit</Decision>"
+        f'<Status><StatusCode Value="ok"/></Status>'
+        f"</Result>"
+        f"</Response>"
+    ).encode()
+
+    response = deserialize_eval_response(xml_data)
+
+    assert response.first_result.status.detail == ""
+
+
 def test_xml_deserialize_permissions_response():
     def _result(decision: str, action: str) -> str:
         return (

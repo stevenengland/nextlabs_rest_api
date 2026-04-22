@@ -309,6 +309,63 @@ def test_deserialize_with_status_message():
 
     assert response.first_result.decision == Decision.INDETERMINATE
     assert response.first_result.status.message == "Policy evaluation error"
+    assert response.first_result.status.detail == ""
+
+
+def test_deserialize_with_status_detail_string():
+    body = {
+        "Response": [
+            {
+                "Decision": "Indeterminate",
+                "Status": {
+                    "StatusCode": {
+                        "Value": "urn:oasis:names:tc:xacml:1.0:status:missing-attribute",
+                    },
+                    "StatusMessage": "One or more required params are missing",
+                    "StatusDetail": "Service, Version",
+                },
+            },
+        ],
+    }
+
+    response = deserialize_eval_response(cast(dict[str, object], body))
+
+    assert response.first_result.status.detail == "Service, Version"
+
+
+def test_deserialize_with_status_detail_dict():
+    body = {
+        "Response": [
+            {
+                "Decision": "Indeterminate",
+                "Status": {
+                    "StatusCode": {"Value": "missing-attribute"},
+                    "StatusDetail": {"MissingAttributeDetail": ["Service", "Version"]},
+                },
+            },
+        ],
+    }
+
+    response = deserialize_eval_response(cast(dict[str, object], body))
+
+    detail = response.first_result.status.detail
+    assert "Service" in detail
+    assert "Version" in detail
+
+
+def test_deserialize_without_status_detail_defaults_empty():
+    body = {
+        "Response": [
+            {
+                "Decision": "Permit",
+                "Status": {"StatusCode": {"Value": "ok"}},
+            },
+        ],
+    }
+
+    response = deserialize_eval_response(cast(dict[str, object], body))
+
+    assert response.first_result.status.detail == ""
 
 
 def test_deserialize_permissions_response():

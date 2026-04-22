@@ -19,9 +19,20 @@ def test_status_code_only_and_with_message():
     s1 = Status(code="urn:oasis:names:tc:xacml:1.0:status:ok")
     assert s1.code == "urn:oasis:names:tc:xacml:1.0:status:ok"
     assert s1.message == ""
+    assert s1.detail == ""
 
     s2 = Status(code="ok", message="Success")
     assert s2.message == "Success"
+    assert s2.detail == ""
+
+
+def test_status_with_detail():
+    s = Status(
+        code="urn:oasis:names:tc:xacml:1.0:status:missing-attribute",
+        message="One or more required params are missing",
+        detail="Service, Version",
+    )
+    assert s.detail == "Service, Version"
 
 
 def test_obligation_attribute_fields():
