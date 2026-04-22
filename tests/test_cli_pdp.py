@@ -581,6 +581,8 @@ def test_pdp_explain_surfaces_pdp_status_error(tmp_path: Any) -> None:
 
 
 def test_pdp_explain_verbose_pdp_status_error_shows_xacml_code(tmp_path: Any) -> None:
+    from strip_ansi import strip_ansi
+
     from nextlabs_sdk.exceptions import PdpStatusError
 
     urn = "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
@@ -598,8 +600,14 @@ def test_pdp_explain_verbose_pdp_status_error_shows_xacml_code(tmp_path: Any) ->
     )
 
     path = _write_eval_payload(tmp_path)
-    result = runner.invoke(app, [*_GLOBAL_OPTS, "-v", *_explain_args(path)])
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "-v", *_explain_args(path)],
+        terminal_width=240,
+    )
 
     assert result.exit_code == 1
     assert "PDP rejected the request" in result.output
-    assert urn in result.stderr
+    stderr_plain = strip_ansi(result.stderr)
+    assert urn in stderr_plain
+    assert "envelope" in stderr_plain
