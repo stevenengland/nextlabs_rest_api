@@ -102,18 +102,18 @@ def test_load_raw_xacml_auto_detect(tmp_path: Path) -> None:
 def test_load_force_xacml_rejects_structured(tmp_path: Path) -> None:
     path = _write(tmp_path, "struct.json", json.dumps(_structured_eval()))
     with pytest.raises(PdpPayloadError, match="Raw XACML payload missing"):
-        load_eval_payload(path, PayloadFormat.XACML_JSON)
+        load_eval_payload(path, payload_format=PayloadFormat.XACML_JSON)
 
 
 def test_load_force_json_on_yaml_raises(tmp_path: Path) -> None:
     path = _write(tmp_path, "bad.yaml", "subject:\n  id: x\n")
     with pytest.raises(PdpPayloadError, match="Invalid JSON"):
-        load_eval_payload(path, PayloadFormat.JSON)
+        load_eval_payload(path, payload_format=PayloadFormat.JSON)
 
 
 def test_load_force_yaml_on_json_ok(tmp_path: Path) -> None:
     path = _write(tmp_path, "ambiguous", json.dumps(_structured_eval()))
-    loaded = load_eval_payload(path, PayloadFormat.YAML)
+    loaded = load_eval_payload(path, payload_format=PayloadFormat.YAML)
     assert loaded.kind == "structured"
 
 
@@ -157,7 +157,7 @@ def test_load_from_invalid_bytes_source() -> None:
 
 def test_load_raw_xacml_force_accepts_xacml(tmp_path: Path) -> None:
     path = _write(tmp_path, "x.json", json.dumps(_raw_xacml()))
-    loaded = load_eval_payload(path, PayloadFormat.XACML_JSON)
+    loaded = load_eval_payload(path, payload_format=PayloadFormat.XACML_JSON)
     assert loaded.kind == "raw_xacml"
 
 
@@ -174,7 +174,7 @@ def test_load_yaml_missing_pyyaml(
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(PdpPayloadError, match="YAML support requires PyYAML"):
-        load_eval_payload(path, PayloadFormat.YAML)
+        load_eval_payload(path, payload_format=PayloadFormat.YAML)
 
 
 def test_loaded_payload_structured_factory() -> None:
@@ -195,13 +195,13 @@ def test_loaded_payload_raw_xacml_factory() -> None:
 def test_invalid_yaml_raises(tmp_path: Path) -> None:
     path = _write(tmp_path, "broken.yaml", "key: [unclosed\n")
     with pytest.raises(PdpPayloadError, match="Invalid YAML"):
-        load_eval_payload(path, PayloadFormat.YAML)
+        load_eval_payload(path, payload_format=PayloadFormat.YAML)
 
 
 def test_yaml_non_object_root(tmp_path: Path) -> None:
     path = _write(tmp_path, "list.yaml", "- 1\n- 2\n")
     with pytest.raises(PdpPayloadError, match="YAML payload root must be an object"):
-        load_eval_payload(path, PayloadFormat.YAML)
+        load_eval_payload(path, payload_format=PayloadFormat.YAML)
 
 
 def test_xacml_force_missing_category_list(tmp_path: Path) -> None:
@@ -211,4 +211,4 @@ def test_xacml_force_missing_category_list(tmp_path: Path) -> None:
         json.dumps({"Request": {"Category": "oops"}}),
     )
     with pytest.raises(PdpPayloadError, match="'Request.Category' must be a list"):
-        load_eval_payload(path, PayloadFormat.XACML_JSON)
+        load_eval_payload(path, payload_format=PayloadFormat.XACML_JSON)

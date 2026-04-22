@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Protocol
 
 import typer
 
@@ -153,14 +153,23 @@ def _build_environment(flags: FlagInputs) -> Environment | None:
     return Environment(attributes=parse_key_value_attrs(flags.env_attrs))
 
 
+class _PayloadLoader(Protocol):
+    def __call__(
+        self,
+        source: Path,
+        *,
+        payload_format: PayloadFormat,
+    ) -> LoadedPayload: ...
+
+
 def run_payload_loader(
-    loader: Callable[[Path, PayloadFormat], LoadedPayload],
+    loader: _PayloadLoader,
     path: Path,
     payload_format: PayloadFormat,
 ) -> LoadedPayload:
     """Invoke ``loader`` translating :class:`PdpPayloadError` into CLI exit."""
     try:
-        return loader(path, payload_format)
+        return loader(path, payload_format=payload_format)
     except PdpPayloadError as exc:
         print_error(str(exc))
         raise typer.Exit(code=1) from None

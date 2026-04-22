@@ -21,6 +21,7 @@ PayloadSource = Path | str | bytes
 
 def load_eval_payload(
     source: PayloadSource,
+    *,
     payload_format: PayloadFormat = PayloadFormat.AUTO,
 ) -> LoadedPayload:
     """Load a payload and validate structured entries against ``EvalRequest``."""
@@ -29,6 +30,7 @@ def load_eval_payload(
 
 def load_permissions_payload(
     source: PayloadSource,
+    *,
     payload_format: PayloadFormat = PayloadFormat.AUTO,
 ) -> LoadedPayload:
     """Load a payload and validate structured entries against ``PermissionsRequest``."""
@@ -78,6 +80,10 @@ def _read_path(path: Path) -> str:
         raise PdpPayloadError(f"Payload file not found: {path}")
     try:
         return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise PdpPayloadError(
+            f"Payload file is not valid UTF-8: {path}: {exc}",
+        ) from None
     except OSError as exc:
         raise PdpPayloadError(f"Could not read payload file {path}: {exc}") from None
 

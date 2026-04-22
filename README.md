@@ -449,12 +449,14 @@ Structured JSON (validated against `EvalRequest` / `PermissionsRequest`):
 
 ```bash
 nextlabs pdp eval --payload ./request.json
+nextlabs pdp permissions --payload ./permissions-request.json
 ```
 
 Structured YAML (requires the optional extra — `pip install 'nextlabs-sdk[yaml]'`):
 
 ```bash
 nextlabs pdp eval --payload ./request.yaml
+nextlabs pdp permissions --payload ./permissions-request.yaml
 ```
 
 Raw XACML JSON (top-level `{"Request": {"Category": [...]}}`) is
@@ -462,6 +464,7 @@ auto-detected by shape and forwarded verbatim to the PDP:
 
 ```bash
 nextlabs pdp eval --payload ./xacml.json
+nextlabs pdp permissions --payload ./xacml.json
 ```
 
 Format auto-detection can be overridden with `--payload-format` (one of

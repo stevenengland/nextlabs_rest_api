@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._pdp import (
+    ContentType,
     Decision,
     EvalResponse,
     EvalResult,
@@ -132,7 +133,7 @@ def test_eval_payload_raw_xacml_dispatches_evaluate_raw(tmp_path: Path) -> None:
     result = runner.invoke(app, [*_GLOBAL_OPTS, "pdp", "eval", "--payload", str(path)])
 
     assert result.exit_code == 0, result.output
-    verify(mock_client).evaluate_raw(_raw_xacml())
+    verify(mock_client).evaluate_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
 def test_eval_payload_conflicts_with_flags(tmp_path: Path) -> None:
@@ -192,7 +193,7 @@ def test_eval_payload_format_override_xacml(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    verify(mock_client).evaluate_raw(_raw_xacml())
+    verify(mock_client).evaluate_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
 def test_eval_payload_format_xacml_rejects_structured(tmp_path: Path) -> None:
@@ -271,7 +272,7 @@ def test_permissions_payload_raw_xacml(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0, result.output
-    verify(mock_client).permissions_raw(_raw_xacml())
+    verify(mock_client).permissions_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
 def test_permissions_payload_conflicts_with_flags(tmp_path: Path) -> None:
@@ -293,3 +294,30 @@ def test_permissions_payload_conflicts_with_flags(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "--payload cannot be combined" in result.output
+
+
+def test_eval_raw_payload_forwards_xml_content_type(tmp_path: Path) -> None:
+    """When --content-type xml + raw payload, content_type must reach the client."""
+    from nextlabs_sdk.exceptions import NextLabsError
+
+    mock_client = _stub_client()
+    when(mock_client).evaluate_raw(...).thenRaise(
+        NextLabsError("evaluate_raw() only supports ContentType.JSON"),
+    )
+    path = _write(tmp_path, "x.json", json.dumps(_raw_xacml()))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "pdp",
+            "eval",
+            "--payload",
+            str(path),
+            "--content-type",
+            "xml",
+        ],
+    )
+
+    assert result.exit_code != 0
+    verify(mock_client).evaluate_raw(_raw_xacml(), content_type=ContentType.XML)

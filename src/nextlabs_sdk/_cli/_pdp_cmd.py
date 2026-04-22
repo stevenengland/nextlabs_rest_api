@@ -152,7 +152,7 @@ def _dispatch_eval_payload(
 ) -> EvalResponse:
     if loaded.kind == "raw_xacml":
         assert loaded.body is not None
-        return client.evaluate_raw(loaded.body)
+        return client.evaluate_raw(loaded.body, content_type=content_type)
     assert isinstance(loaded.request, EvalRequest)
     return client.evaluate(loaded.request, content_type=content_type)
 
@@ -164,7 +164,7 @@ def _dispatch_permissions_payload(
 ) -> PermissionsResponse:
     if loaded.kind == "raw_xacml":
         assert loaded.body is not None
-        return client.permissions_raw(loaded.body)
+        return client.permissions_raw(loaded.body, content_type=content_type)
     assert isinstance(loaded.request, PermissionsRequest)
     return client.permissions(loaded.request, content_type=content_type)
 
