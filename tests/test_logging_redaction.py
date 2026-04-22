@@ -126,6 +126,49 @@ def test_truncate_over_limit_annotated():
     assert "50 bytes total" in out
 
 
+def test_truncate_none_limit_returns_text_unchanged():
+    huge = "x" * 10_000
+
+    assert truncate(huge, limit=None) == huge
+
+
+def test_json_body_pretty_printed_with_indent():
+    body = json.dumps({"a": 1, "nested": {"b": 2}}).encode()
+
+    out = redact_body("application/json", body)
+
+    assert "\n" in out
+    assert '  "a": 1' in out
+    assert '    "b": 2' in out
+
+
+def test_json_body_pretty_printed_still_redacts():
+    body = json.dumps({"client_secret": "shh"}).encode()
+
+    out = redact_body("application/json", body)
+
+    assert "\n" in out
+    assert "shh" not in out
+    assert '"client_secret": "***"' in out
+
+
+def test_form_body_stays_single_line_after_pretty_change():
+    body = b"grant_type=password&username=u&password=secret"
+
+    out = redact_body("application/x-www-form-urlencoded", body)
+
+    assert "\n" not in out
+    assert "secret" not in out
+
+
+def test_plain_text_body_unchanged_by_pretty_change():
+    body = b"plain text"
+
+    out = redact_body("text/plain", body)
+
+    assert out == "plain text"
+
+
 def test_format_request_line():
     request = httpx.Request("POST", "https://example.com/x")
 
