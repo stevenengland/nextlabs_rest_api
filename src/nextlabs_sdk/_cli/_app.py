@@ -135,7 +135,11 @@ def main(
         count=True,
         help=(
             "Increase verbosity. -v: show request context on errors; "
-            "-vv: trace every HTTP request/response."
+            "-vv: trace every HTTP request/response (JSON bodies are "
+            "pretty-printed, bodies capped at 2000 chars); -vvv: same "
+            "as -vv but log full bodies with no truncation. Set "
+            "NEXTLABS_LOG_BODY_LIMIT=<N> to override the cap (0 means "
+            "unlimited)."
         ),
     ),
 ) -> None:

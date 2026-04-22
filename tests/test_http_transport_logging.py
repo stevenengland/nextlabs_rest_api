@@ -74,6 +74,64 @@ def test_sync_logging_transport_redacts_authorization_header(
     assert "Bearer ***" in joined
 
 
+def test_sync_logging_transport_truncates_by_default(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from nextlabs_sdk import _logging
+
+    big = ("x" * 5000).encode()
+    request = httpx.Request(
+        "POST",
+        "https://api.example.com/x",
+        headers={"content-type": "text/plain"},
+        content=big,
+    )
+    response = httpx.Response(200, request=request, content=b"ok")
+    wrapped = mock(httpx.BaseTransport)
+    when(wrapped).handle_request(request).thenReturn(response)
+
+    _logging.set_effective_body_limit(2000)
+    transport = LoggingTransport(wrapped=wrapped)
+    try:
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            transport.handle_request(request)
+    finally:
+        _logging.set_effective_body_limit(2000)
+
+    joined = "\n".join(_capture_debug(caplog))
+    assert "truncated" in joined
+    assert "5000 bytes total" in joined
+
+
+def test_sync_logging_transport_honours_unlimited_holder(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from nextlabs_sdk import _logging
+
+    big = ("x" * 5000).encode()
+    request = httpx.Request(
+        "POST",
+        "https://api.example.com/x",
+        headers={"content-type": "text/plain"},
+        content=big,
+    )
+    response = httpx.Response(200, request=request, content=b"ok")
+    wrapped = mock(httpx.BaseTransport)
+    when(wrapped).handle_request(request).thenReturn(response)
+
+    _logging.set_effective_body_limit(None)
+    transport = LoggingTransport(wrapped=wrapped)
+    try:
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            transport.handle_request(request)
+    finally:
+        _logging.set_effective_body_limit(2000)
+
+    joined = "\n".join(_capture_debug(caplog))
+    assert "truncated" not in joined
+    assert "x" * 5000 in joined
+
+
 class _FakeAsync(httpx.AsyncBaseTransport):
     async def handle_async_request(
         self,

@@ -83,17 +83,30 @@ def _dispatch_redaction(content_type: str | None, text: str) -> str:
         parsed = json.loads(text)
     except ValueError:
         return text
-    return json.dumps(_redact_json(parsed))
+    return json.dumps(_redact_json(parsed), indent=2)
 
 
 def redact_body(content_type: str | None, body: bytes) -> str:
     return _body_preview(content_type, body)
 
 
-def truncate(text: str, limit: int = _DEFAULT_BODY_LIMIT) -> str:
-    if len(text) <= limit:
+def truncate(text: str, limit: int | None = _DEFAULT_BODY_LIMIT) -> str:
+    if limit is None or len(text) <= limit:
         return text
     return f"{text[:limit]}… (truncated, {len(text)} bytes total)"
+
+
+_effective_body_limit_holder: dict[str, int | None] = {"limit": _DEFAULT_BODY_LIMIT}
+
+
+def set_effective_body_limit(limit: int | None) -> None:
+    """Override the body limit used by the verbose HTTP trace."""
+    _effective_body_limit_holder["limit"] = limit
+
+
+def get_effective_body_limit() -> int | None:
+    """Return the currently active body limit (``None`` means unlimited)."""
+    return _effective_body_limit_holder["limit"]
 
 
 def format_request_line(request: httpx.Request) -> str:

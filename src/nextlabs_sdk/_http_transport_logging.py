@@ -8,6 +8,7 @@ import httpx
 from nextlabs_sdk._logging import (
     format_request_line,
     format_response_line,
+    get_effective_body_limit,
     logger,
     redact_body,
     redact_headers,
@@ -20,14 +21,14 @@ def _log_request_safely(request: httpx.Request) -> None:
         logger.debug(format_request_line(request))
         logger.debug("    headers: %s", redact_headers(request.headers))
         body = redact_body(request.headers.get("content-type"), request.content)
-        logger.debug("    body:    %s", truncate(body))
+        logger.debug("    body:    %s", truncate(body, get_effective_body_limit()))
 
 
 def _log_response_safely(response: httpx.Response, elapsed: float) -> None:
     with contextlib.suppress(Exception):
         logger.debug(format_response_line(response, elapsed))
         body = redact_body(response.headers.get("content-type"), response.content)
-        logger.debug("    body:    %s", truncate(body))
+        logger.debug("    body:    %s", truncate(body, get_effective_body_limit()))
 
 
 def _log_failure_safely(elapsed: float) -> None:
