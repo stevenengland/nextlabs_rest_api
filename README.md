@@ -437,6 +437,40 @@ empty username; target them explicitly with
 `nextlabs auth logout` clears the cached token, preferences, and active
 pointer for the selected account.
 
+### PDP request payload files
+
+Both `nextlabs pdp eval` and `nextlabs pdp permissions` accept a
+`--payload PATH` option that loads the request body from a JSON, YAML,
+or raw XACML JSON file instead of assembling it from individual flags.
+`--payload` is mutually exclusive with any request-shaping flag
+(`--subject`, `--resource`, `--action`, `--subject-attr`, …).
+
+Structured JSON (validated against `EvalRequest` / `PermissionsRequest`):
+
+```bash
+nextlabs pdp eval --payload ./request.json
+nextlabs pdp permissions --payload ./permissions-request.json
+```
+
+Structured YAML (requires the optional extra — `pip install 'nextlabs-sdk[yaml]'`):
+
+```bash
+nextlabs pdp eval --payload ./request.yaml
+nextlabs pdp permissions --payload ./permissions-request.yaml
+```
+
+Raw XACML JSON (top-level `{"Request": {"Category": [...]}}`) is
+auto-detected by shape and forwarded verbatim to the PDP:
+
+```bash
+nextlabs pdp eval --payload ./xacml.json
+nextlabs pdp permissions --payload ./xacml.json
+```
+
+Format auto-detection can be overridden with `--payload-format` (one of
+`auto`, `json`, `yaml`, `xacml`). `--payload-format xacml` forces the
+raw-XACML passthrough and rejects files whose shape does not match.
+
 **Environment variables**
 
 | Variable                   | Purpose                                                       |

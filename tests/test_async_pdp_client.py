@@ -274,3 +274,84 @@ def test_async_pdp_client_explicit_token_url_overrides_auth_base_url(
     )
 
     assert captured["auth"]._token_url == "https://override.example.com/oauth"
+
+
+def _raw_xacml_body() -> dict[str, Any]:
+    return {
+        "Request": {
+            "Category": [
+                {
+                    "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
+                    "Attribute": [
+                        {
+                            "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
+                            "Value": "VIEW",
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def test_async_evaluate_raw_posts_body_verbatim() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    ).thenReturn(_permit_response())
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        response = await pdp.evaluate_raw(_raw_xacml_body())
+        assert response.first_result.decision == Decision.PERMIT
+
+    _run_async(run())
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    )
+
+
+def test_async_permissions_raw_posts_body_verbatim() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    ).thenReturn(_permissions_response())
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        response = await pdp.permissions_raw(_raw_xacml_body())
+        assert len(response.allowed) == 1
+
+    _run_async(run())
+
+
+def test_async_evaluate_raw_rejects_xml_content_type() -> None:
+    from nextlabs_sdk.exceptions import NextLabsError
+
+    _stub_transport()
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        with pytest.raises(NextLabsError, match="evaluate_raw.*only supports"):
+            await pdp.evaluate_raw(_raw_xacml_body(), content_type=ContentType.XML)
+
+    _run_async(run())
+
+
+def test_async_permissions_raw_rejects_xml_content_type() -> None:
+    from nextlabs_sdk.exceptions import NextLabsError
+
+    _stub_transport()
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        with pytest.raises(NextLabsError, match="permissions_raw.*only supports"):
+            await pdp.permissions_raw(_raw_xacml_body(), content_type=ContentType.XML)
+
+    _run_async(run())

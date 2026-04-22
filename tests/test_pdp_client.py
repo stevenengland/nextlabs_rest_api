@@ -18,7 +18,7 @@ from nextlabs_sdk._pdp._request_models import (
     Resource,
     Subject,
 )
-from nextlabs_sdk.exceptions import ApiError, ValidationError
+from nextlabs_sdk.exceptions import ApiError, NextLabsError, ValidationError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
@@ -322,3 +322,68 @@ def test_pdp_client_explicit_token_url_overrides_auth_base_url(
     )
 
     assert captured["auth"]._token_url == "https://override.example.com/oauth"
+
+
+def _raw_xacml_body() -> dict[str, Any]:
+    return {
+        "Request": {
+            "Category": [
+                {
+                    "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
+                    "Attribute": [
+                        {
+                            "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
+                            "Value": "VIEW",
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def test_evaluate_raw_posts_body_verbatim() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    ).thenReturn(_make_permit_response())
+
+    response = _make_pdp().evaluate_raw(_raw_xacml_body())
+
+    assert response.first_result.decision == Decision.PERMIT
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    )
+
+
+def test_permissions_raw_posts_body_verbatim() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=_raw_xacml_body(),
+        headers={"Content-Type": "application/json"},
+    ).thenReturn(_make_permissions_response())
+
+    response = _make_pdp().permissions_raw(_raw_xacml_body())
+
+    assert len(response.allowed) == 1
+
+
+def test_evaluate_raw_rejects_xml_content_type() -> None:
+    _stub_transport()
+    with pytest.raises(
+        NextLabsError, match="evaluate_raw.*only supports ContentType.JSON"
+    ):
+        _make_pdp().evaluate_raw(_raw_xacml_body(), content_type=ContentType.XML)
+
+
+def test_permissions_raw_rejects_xml_content_type() -> None:
+    _stub_transport()
+    with pytest.raises(
+        NextLabsError, match="permissions_raw.*only supports ContentType.JSON"
+    ):
+        _make_pdp().permissions_raw(_raw_xacml_body(), content_type=ContentType.XML)

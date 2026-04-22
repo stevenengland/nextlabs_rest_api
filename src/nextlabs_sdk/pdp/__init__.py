@@ -5,6 +5,14 @@ Re-exports the curated PDP API from the internal ``_pdp`` package.
 
 from nextlabs_sdk._pdp._async_client import AsyncPdpClient as AsyncPdpClient
 from nextlabs_sdk._pdp._client import PdpClient as PdpClient
+from nextlabs_sdk._pdp._payload._format import LoadedPayload as LoadedPayload
+from nextlabs_sdk._pdp._payload._format import PayloadFormat as PayloadFormat
+from nextlabs_sdk._pdp._payload._loader import (
+    load_eval_payload as load_eval_payload,
+)
+from nextlabs_sdk._pdp._payload._loader import (
+    load_permissions_payload as load_permissions_payload,
+)
 from nextlabs_sdk._pdp._enums import ContentType as ContentType
 from nextlabs_sdk._pdp._enums import Decision as Decision
 from nextlabs_sdk._pdp._enums import ResourceDimension as ResourceDimension
