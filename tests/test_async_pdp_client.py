@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import MappingProxyType
 from typing import Any, Awaitable, TypeVar
 
 import httpx
@@ -23,6 +24,21 @@ from nextlabs_sdk.exceptions import ApiError
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
 
+JSON_HEADERS = MappingProxyType(
+    {
+        "Content-Type": "application/json",
+        "Service": "EVAL",
+        "Version": "1.0",
+    }
+)
+XML_HEADERS = MappingProxyType(
+    {
+        "Content-Type": "application/xml",
+        "Service": "EVAL",
+        "Version": "1.0",
+    }
+)
+
 T = TypeVar("T")
 
 
@@ -44,8 +60,14 @@ def _stub_transport() -> Any:
     return mock_client
 
 
-def _make_pdp() -> AsyncPdpClient:
-    return AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
+def _make_pdp(**kwargs: Any) -> AsyncPdpClient:
+    defaults: dict[str, Any] = {
+        "base_url": BASE_URL,
+        "client_id": "c",
+        "client_secret": "s",
+    }
+    defaults.update(kwargs)
+    return AsyncPdpClient(**defaults)
 
 
 def _permit_response() -> httpx.Response:
@@ -165,7 +187,7 @@ def test_async_evaluate_with_xml():
     when(mock_client).post(
         PDP_ENDPOINT,
         content=any_value(bytes),
-        headers={"Content-Type": "application/xml"},
+        headers=XML_HEADERS,
     ).thenReturn(
         httpx.Response(200, content=xml_response.encode(), request=_make_request()),
     )
@@ -299,7 +321,7 @@ def test_async_evaluate_raw_posts_body_verbatim() -> None:
     when(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     ).thenReturn(_permit_response())
     pdp = _make_pdp()
 
@@ -311,7 +333,7 @@ def test_async_evaluate_raw_posts_body_verbatim() -> None:
     verify(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     )
 
 
@@ -320,7 +342,7 @@ def test_async_permissions_raw_posts_body_verbatim() -> None:
     when(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     ).thenReturn(_permissions_response())
     pdp = _make_pdp()
 
@@ -355,3 +377,53 @@ def test_async_permissions_raw_rejects_xml_content_type() -> None:
             await pdp.permissions_raw(_raw_xacml_body(), content_type=ContentType.XML)
 
     _run_async(run())
+
+
+def test_async_permissions_sends_service_and_version_headers() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=JSON_HEADERS,
+    ).thenReturn(_permissions_response())
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        request = PermissionsRequest(
+            subject=Subject(id="u"),
+            resource=Resource(id="r", type="t"),
+            application=Application(id="a"),
+        )
+        await pdp.permissions(request)
+
+    _run_async(run())
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=JSON_HEADERS,
+    )
+
+
+def test_async_custom_service_and_version_headers_propagate() -> None:
+    mock_client = _stub_transport()
+    custom_headers = {
+        "Content-Type": "application/json",
+        "Service": "CUSTOM",
+        "Version": "2.0",
+    }
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=custom_headers,
+    ).thenReturn(_permit_response())
+    pdp = _make_pdp(service="CUSTOM", version="2.0")
+
+    async def run() -> None:
+        await pdp.evaluate(_eval_request())
+
+    _run_async(run())
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=custom_headers,
+    )

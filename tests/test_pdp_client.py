@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Any, cast
 
 import httpx
@@ -22,6 +23,21 @@ from nextlabs_sdk.exceptions import ApiError, NextLabsError, ValidationError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
+
+JSON_HEADERS = MappingProxyType(
+    {
+        "Content-Type": "application/json",
+        "Service": "EVAL",
+        "Version": "1.0",
+    }
+)
+XML_HEADERS = MappingProxyType(
+    {
+        "Content-Type": "application/xml",
+        "Service": "EVAL",
+        "Version": "1.0",
+    }
+)
 
 
 def _make_request() -> httpx.Request:
@@ -147,7 +163,7 @@ def test_evaluate_sets_json_content_type_header():
     when(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     ).thenReturn(_make_permit_response())
 
     _make_pdp().evaluate(_make_eval_request(), content_type=ContentType.JSON)
@@ -155,7 +171,7 @@ def test_evaluate_sets_json_content_type_header():
     verify(mock_client).post(
         PDP_ENDPOINT,
         json=any_value(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     )
 
 
@@ -211,7 +227,7 @@ def test_evaluate_with_xml_content_type():
     when(mock_client).post(
         PDP_ENDPOINT,
         content=any_value(bytes),
-        headers={"Content-Type": "application/xml"},
+        headers=XML_HEADERS,
     ).thenReturn(
         httpx.Response(
             200, content=xml_response_body.encode(), request=_make_request()
@@ -347,7 +363,7 @@ def test_evaluate_raw_posts_body_verbatim() -> None:
     when(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     ).thenReturn(_make_permit_response())
 
     response = _make_pdp().evaluate_raw(_raw_xacml_body())
@@ -356,7 +372,7 @@ def test_evaluate_raw_posts_body_verbatim() -> None:
     verify(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     )
 
 
@@ -365,7 +381,7 @@ def test_permissions_raw_posts_body_verbatim() -> None:
     when(mock_client).post(
         PDP_ENDPOINT,
         json=_raw_xacml_body(),
-        headers={"Content-Type": "application/json"},
+        headers=JSON_HEADERS,
     ).thenReturn(_make_permissions_response())
 
     response = _make_pdp().permissions_raw(_raw_xacml_body())
@@ -387,3 +403,42 @@ def test_permissions_raw_rejects_xml_content_type() -> None:
         NextLabsError, match="permissions_raw.*only supports ContentType.JSON"
     ):
         _make_pdp().permissions_raw(_raw_xacml_body(), content_type=ContentType.XML)
+
+
+def test_permissions_sends_service_and_version_headers() -> None:
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=JSON_HEADERS,
+    ).thenReturn(_make_permissions_response())
+
+    _make_pdp().permissions(_make_permissions_request())
+
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=JSON_HEADERS,
+    )
+
+
+def test_custom_service_and_version_headers_propagate() -> None:
+    mock_client = _stub_transport()
+    custom_headers = {
+        "Content-Type": "application/json",
+        "Service": "CUSTOM",
+        "Version": "2.0",
+    }
+    when(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=custom_headers,
+    ).thenReturn(_make_permit_response())
+
+    _make_pdp(service="CUSTOM", version="2.0").evaluate(_make_eval_request())
+
+    verify(mock_client).post(
+        PDP_ENDPOINT,
+        json=any_value(),
+        headers=custom_headers,
+    )
