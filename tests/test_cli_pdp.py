@@ -192,6 +192,23 @@ def test_pdp_eval_omits_detail_line_when_empty() -> None:
     assert "Detail:" not in result.output
 
 
+def test_pdp_eval_renders_status_with_bracket_chars_literally() -> None:
+    mock_client = _stub_client()
+    response = _eval_response_with_status(
+        decision=Decision.INDETERMINATE,
+        code="missing-attribute",
+        message="missing [Service] attribute",
+        detail="[policy:secret] Service, Version",
+    )
+    when(mock_client).evaluate(...).thenReturn(response)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
+
+    assert result.exit_code == 0
+    assert "[Service]" in result.output
+    assert "[policy:secret]" in result.output
+
+
 @pytest.mark.parametrize(
     "extra_args",
     [
