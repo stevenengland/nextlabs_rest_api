@@ -23,6 +23,7 @@ from nextlabs_sdk.exceptions import ApiError, NextLabsError, ValidationError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
+PERMISSIONS_ENDPOINT = "/dpc/authorization/pdppermissions"
 
 JSON_HEADERS = MappingProxyType(
     {
@@ -64,30 +65,29 @@ def _make_permit_response() -> httpx.Response:
 
 
 def _make_permissions_response() -> httpx.Response:
-    def _category(action: str) -> dict[str, Any]:
-        return {
-            "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-            "Attribute": [
-                {
-                    "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                    "Value": action,
-                },
-            ],
-        }
-
     return httpx.Response(
         200,
         json={
+            "Status": {"StatusCode": {"Value": "ok"}},
             "Response": [
                 {
-                    "Decision": "Permit",
-                    "Status": {"StatusCode": {"Value": "ok"}},
-                    "Category": [_category("VIEW")],
-                },
-                {
-                    "Decision": "Deny",
-                    "Status": {"StatusCode": {"Value": "ok"}},
-                    "Category": [_category("DELETE")],
+                    "ActionsAndObligations": {
+                        "allow": [
+                            {
+                                "Action": "VIEW",
+                                "MatchingPolicies": ["ROOT/VIEW Policy"],
+                                "Obligations": [],
+                            },
+                        ],
+                        "deny": [
+                            {
+                                "Action": "DELETE",
+                                "MatchingPolicies": ["ROOT/DELETE Policy"],
+                                "Obligations": [],
+                            },
+                        ],
+                        "dontcare": [],
+                    },
                 },
             ],
         },
@@ -178,7 +178,7 @@ def test_evaluate_sets_json_content_type_header():
 def test_permissions_returns_grouped_actions():
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=any_value(),
     ).thenReturn(_make_permissions_response())
@@ -187,8 +187,26 @@ def test_permissions_returns_grouped_actions():
 
     assert len(response.allowed) == 1
     assert response.allowed[0].name == "VIEW"
+    assert response.allowed[0].policy_refs[0].id == "ROOT/VIEW Policy"
     assert len(response.denied) == 1
     assert response.denied[0].name == "DELETE"
+
+
+def test_permissions_posts_to_permissions_endpoint():
+    mock_client = _stub_transport()
+    when(mock_client).post(
+        PERMISSIONS_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(_make_permissions_response())
+
+    _make_pdp().permissions(_make_permissions_request())
+
+    verify(mock_client).post(
+        PERMISSIONS_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    )
 
 
 def test_client_uses_custom_http_config():
@@ -280,7 +298,7 @@ def test_evaluate_error_dispatch(response, expected_exc, match):
 def test_permissions_raises_api_error_on_non_json_response():
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=any_value(),
     ).thenReturn(httpx.Response(200, content=b"x", request=_make_request()))
@@ -379,7 +397,7 @@ def test_evaluate_raw_posts_body_verbatim() -> None:
 def test_permissions_raw_posts_body_verbatim() -> None:
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=_raw_xacml_body(),
         headers=JSON_HEADERS,
     ).thenReturn(_make_permissions_response())
@@ -408,7 +426,7 @@ def test_permissions_raw_rejects_xml_content_type() -> None:
 def test_permissions_sends_service_and_version_headers() -> None:
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=JSON_HEADERS,
     ).thenReturn(_make_permissions_response())
@@ -416,7 +434,7 @@ def test_permissions_sends_service_and_version_headers() -> None:
     _make_pdp().permissions(_make_permissions_request())
 
     verify(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=JSON_HEADERS,
     )

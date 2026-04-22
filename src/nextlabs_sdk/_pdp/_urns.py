@@ -22,6 +22,8 @@ APPLICATION_PREFIX = "urn:nextlabs:names:evalsvc:1.0:application:"
 
 ENVIRONMENT_PREFIX = "urn:oasis:names:tc:xacml:3.0:environment:"
 
+RECORD_MATCHING_POLICIES_ATTR = "nextlabs-record-matching-policies-in-result"
+
 STRING_DATATYPE = "http://www.w3.org/2001/XMLSchema#string"
 INTEGER_DATATYPE = "http://www.w3.org/2001/XMLSchema#integer"
 DOUBLE_DATATYPE = "http://www.w3.org/2001/XMLSchema#double"

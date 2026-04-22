@@ -105,6 +105,42 @@ def test_xml_serialize_permissions_no_action():
     assert ACTION_CATEGORY not in category_ids
 
 
+def test_xml_serialize_permissions_with_record_matching_policies():
+    request = PermissionsRequest(
+        subject=Subject(id="u"),
+        resource=Resource(id="r", type="t"),
+        application=Application(id="app"),
+        record_matching_policies=True,
+    )
+    root = _parse_xml(serialize_permissions_request(request))
+
+    env_el = _find_env_attributes(root)
+    record_attr = _find_attribute_by_id(
+        env_el, "nextlabs-record-matching-policies-in-result"
+    )
+    assert record_attr.get("IncludeInResult") == "false"
+    value_el = record_attr.find(_ns("AttributeValue"))
+    assert value_el is not None
+    assert value_el.text == "true"
+    assert value_el.get("DataType") == "http://www.w3.org/2001/XMLSchema#string"
+
+
+def _find_env_attributes(root: ET.Element) -> ET.Element:
+    for attrs_el in root.findall(_ns("Attributes")):
+        if attrs_el.attrib["Category"] == (
+            "urn:oasis:names:tc:xacml:3.0:attribute-category:environment"
+        ):
+            return attrs_el
+    raise AssertionError("Environment Attributes element not found")
+
+
+def _find_attribute_by_id(parent: ET.Element, attr_id: str) -> ET.Element:
+    for attr_el in parent.findall(_ns("Attribute")):
+        if attr_el.get("AttributeId") == attr_id:
+            return attr_el
+    raise AssertionError(f"Attribute {attr_id} not found")
+
+
 def test_xml_deserialize_permit_response():
     xml_data = (
         f'<Response xmlns="{XACML_NS}">'

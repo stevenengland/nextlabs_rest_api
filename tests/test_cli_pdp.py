@@ -407,3 +407,149 @@ def test_pdp_permissions_json_format_returns_parseable_json() -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.output)
     assert parsed["allowed"][0]["name"] == "VIEW"
+
+
+# --- pdp explain ---
+
+
+def _write_eval_payload(tmp_path: Any) -> Any:
+    payload = (
+        '{"subject":{"id":"u"},"action":{"id":"VIEW"},'
+        '"resource":{"id":"r","type":"doc"},"application":{"id":"app"}}'
+    )
+    path = tmp_path / "eval.json"
+    path.write_text(payload, encoding="utf-8")
+    return path
+
+
+def _explain_args(payload_path: Any) -> tuple[str, ...]:
+    return ("pdp", "explain", "--payload", str(payload_path))
+
+
+def test_pdp_explain_renders_allowed_with_policies(tmp_path: Any) -> None:
+    mock_client = _stub_client()
+    response = _perm_response(
+        allowed=[
+            ActionPermission(
+                name="VIEW",
+                policy_refs=[PolicyRef(id="ROOT/VIEW Policy")],
+            ),
+        ],
+        denied=[
+            ActionPermission(
+                name="DELETE",
+                policy_refs=[PolicyRef(id="ROOT/DELETE Policy")],
+            ),
+        ],
+    )
+    when(mock_client).permissions(...).thenReturn(response)
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_explain_args(path)])
+
+    assert result.exit_code == 0
+    assert "Allowed" in result.output
+    assert "VIEW" in result.output
+    assert "ROOT/VIEW Policy" in result.output
+    assert "Denied" in result.output
+    assert "DELETE" in result.output
+
+
+def test_pdp_explain_sets_record_matching_policies_and_drops_action(
+    tmp_path: Any,
+) -> None:
+    mock_client = _stub_client()
+    captured: dict[str, Any] = {}
+
+    def _capture(request: Any, *, content_type: Any) -> PermissionsResponse:
+        captured["request"] = request
+        captured["content_type"] = content_type
+        return _perm_response()
+
+    when(mock_client).permissions(...).thenAnswer(_capture)
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_explain_args(path)])
+
+    assert result.exit_code == 0
+    request = captured["request"]
+    assert request.record_matching_policies is True
+    assert not hasattr(request, "action")
+
+
+def test_pdp_explain_action_filter_prints_matching_bucket(tmp_path: Any) -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[ActionPermission(name="VIEW")],
+            denied=[ActionPermission(name="DELETE")],
+        ),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, *_explain_args(path), "--action", "DELETE"],
+    )
+
+    assert result.exit_code == 0
+    assert "Denied" in result.output
+    assert "DELETE" in result.output
+    assert "VIEW" not in result.output
+
+
+def test_pdp_explain_action_filter_missing_action_still_succeeds(
+    tmp_path: Any,
+) -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(allowed=[ActionPermission(name="VIEW")]),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, *_explain_args(path), "--action", "OPEN"],
+    )
+
+    assert result.exit_code == 0
+    assert "OPEN" in result.output
+    assert "not found" in result.output
+
+
+def test_pdp_explain_empty_hint_when_no_matching_policies(tmp_path: Any) -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(allowed=[ActionPermission(name="VIEW")]),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_explain_args(path)])
+
+    assert result.exit_code == 0
+    assert "record_matching_policies" in result.output
+
+
+def test_pdp_explain_json_output(tmp_path: Any) -> None:
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenReturn(
+        _perm_response(
+            allowed=[
+                ActionPermission(
+                    name="VIEW",
+                    policy_refs=[PolicyRef(id="P1")],
+                ),
+            ],
+        ),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "json", *_explain_args(path)],
+    )
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["allowed"][0]["name"] == "VIEW"
+    assert parsed["allowed"][0]["policy_refs"][0]["id"] == "P1"

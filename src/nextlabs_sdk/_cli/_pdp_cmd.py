@@ -25,18 +25,22 @@ from nextlabs_sdk._cli._pdp_payload_helpers import (
     run_payload_loader,
 )
 from nextlabs_sdk._pdp import (
+    ActionPermission,
     ContentType,
     Decision,
     EvalRequest,
     EvalResponse,
     Obligation,
     PermissionsRequest,
+)
+from nextlabs_sdk._pdp import (
     PermissionsResponse,
     PolicyRef,
 )
 from nextlabs_sdk._pdp._client import PdpClient
-from nextlabs_sdk._pdp._payload._format import LoadedPayload, PayloadFormat
-from nextlabs_sdk._pdp._payload._loader import (
+from nextlabs_sdk._pdp._payload import (
+    LoadedPayload,
+    PayloadFormat,
     load_eval_payload,
     load_permissions_payload,
 )
@@ -374,3 +378,170 @@ def permissions(
 
 register_detail_renderer(EvalResponse, _render_eval_detail)
 register_detail_renderer(PermissionsResponse, _render_permissions_detail)
+
+
+_EXPLAIN_EMPTY_HINT = (
+    "No matching policies returned. If you expected policy names, verify that "
+    "record_matching_policies support is enabled on your PDP deployment."
+)
+
+
+@pdp_app.command()
+@cli_error_handler
+def explain(
+    ctx: typer.Context,
+    payload_path: Annotated[
+        Path,
+        typer.Option(
+            "--payload",
+            help="Path to a YAML / JSON / raw XACML JSON request file.",
+        ),
+    ],
+    payload_format: Annotated[
+        PayloadFormat,
+        typer.Option(
+            "--payload-format",
+            help="Force payload format (auto, yaml, json, xacml).",
+            case_sensitive=False,
+        ),
+    ] = PayloadFormat.AUTO,
+    action_filter: Annotated[
+        str | None,
+        typer.Option(
+            "--action",
+            help="Only show the result for this action name.",
+        ),
+    ] = None,
+    wire_format: Annotated[
+        str, typer.Option("--content-type", help="Wire format (json or xml)")
+    ] = "json",
+) -> None:
+    """Explain which policies produced the PDP decision for each action."""
+    cli_ctx: CliContext = ctx.obj
+    content_type = _resolve_content_type(wire_format)
+    client = _client_factory.make_pdp_client(cli_ctx)
+    loaded = run_payload_loader(load_eval_payload, payload_path, payload_format)
+    assert isinstance(loaded, LoadedPayload)
+    response = _run_explain(client, loaded, content_type=content_type)
+    _emit_explain(response, cli_ctx.output_format, action_filter=action_filter)
+
+
+def _run_explain(
+    client: PdpClient,
+    loaded: LoadedPayload,
+    *,
+    content_type: ContentType,
+) -> PermissionsResponse:
+    if loaded.kind == "raw_xacml":
+        assert loaded.body is not None
+        return client.permissions_raw(
+            _as_permissions_body(loaded.body),
+            content_type=content_type,
+        )
+    assert isinstance(loaded.request, (EvalRequest, PermissionsRequest))
+    request = _as_permissions_request(loaded.request)
+    return client.permissions(request, content_type=content_type)
+
+
+def _as_permissions_request(
+    source: EvalRequest | PermissionsRequest,
+) -> PermissionsRequest:
+    return PermissionsRequest(
+        subject=source.subject,
+        resource=source.resource,
+        application=source.application,
+        environment=source.environment,
+        return_policy_ids=source.return_policy_ids,
+        record_matching_policies=True,
+    )
+
+
+def _as_permissions_body(body: dict[str, object]) -> dict[str, object]:
+    return body
+
+
+def _emit_explain(
+    response: PermissionsResponse,
+    output_format: OutputFormat,
+    *,
+    action_filter: str | None,
+) -> None:
+    if output_format is OutputFormat.JSON:
+        render_json(response)
+        return
+    console = Console()
+    if action_filter is None:
+        _render_explain_all(response, console)
+    else:
+        _render_explain_action(response, action_filter, console)
+    if _has_no_matching_policies(response):
+        console.print(f"\n[yellow]{_EXPLAIN_EMPTY_HINT}[/yellow]")
+
+
+def _render_explain_all(response: PermissionsResponse, console: Console) -> None:
+    sections = [
+        ("Allowed", response.allowed),
+        ("Denied", response.denied),
+        ("Don't Care", response.dont_care),
+    ]
+    any_shown = False
+    for label, actions in sections:
+        if not actions:
+            continue
+        any_shown = True
+        console.print(f"\n{label} ({len(actions)}):")
+        console.print(_build_explain_table(actions))
+    if not any_shown:
+        console.print("No action permissions returned.")
+
+
+def _render_explain_action(
+    response: PermissionsResponse,
+    action_name: str,
+    console: Console,
+) -> None:
+    for label, actions in (
+        ("Allowed", response.allowed),
+        ("Denied", response.denied),
+        ("Don't Care", response.dont_care),
+    ):
+        match = next((act for act in actions if act.name == action_name), None)
+        if match is None:
+            continue
+        console.print(f"Action [bold]{action_name}[/bold]: {label}")
+        console.print(_build_explain_table([match]))
+        return
+    console.print(f"Action [bold]{action_name}[/bold] not found in response.")
+
+
+def _build_explain_table(actions: Sequence[ActionPermission]) -> Table:
+    table = Table()
+    table.add_column("Action")
+    table.add_column("Matching policies")
+    table.add_column("Obligations")
+    for action in actions:
+        policies = "\n".join(ref.id for ref in action.policy_refs) or "-"
+        obligations = _format_obligations_cell(action.obligations)
+        table.add_row(action.name, policies, obligations)
+    return table
+
+
+def _format_obligations_cell(obligations: Sequence[Obligation]) -> str:
+    if not obligations:
+        return "-"
+    return "\n".join(_format_obligation(obl) for obl in obligations)
+
+
+def _format_obligation(obl: Obligation) -> str:
+    if not obl.attributes:
+        return obl.id
+    pairs = ", ".join(f"{attr.id}={attr.attr_value}" for attr in obl.attributes)
+    return f"{obl.id}: {pairs}"
+
+
+def _has_no_matching_policies(response: PermissionsResponse) -> bool:
+    for bucket in (response.allowed, response.denied, response.dont_care):
+        for action in bucket:
+            if action.policy_refs:
+                return False
+    return True
