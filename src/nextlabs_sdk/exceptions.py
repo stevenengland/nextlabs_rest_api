@@ -85,6 +85,37 @@ class PdpPayloadError(NextLabsError):
     """Raised for invalid or unreadable PDP request payload files."""
 
 
+class PdpStatusError(ApiError):
+    """Raised when the PDP returns a non-ok XACML Status on HTTP 200.
+
+    Inherits from :class:`ApiError` so existing callers that catch
+    ``ApiError`` continue to work.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        xacml_status_code: str,
+        xacml_status_message: str = "",
+        status_code: int | None = None,
+        response_body: str | None = None,
+        request_method: str | None = None,
+        request_url: str | None = None,
+    ) -> None:
+        super().__init__(
+            message,
+            status_code=status_code,
+            response_body=response_body,
+            request_method=request_method,
+            request_url=request_url,
+            envelope_status_code=xacml_status_code,
+            envelope_message=xacml_status_message or message,
+        )
+        self.xacml_status_code = xacml_status_code
+        self.xacml_status_message = xacml_status_message
+
+
 class RateLimitError(ApiError):
     """HTTP 429 after retries exhausted."""
 

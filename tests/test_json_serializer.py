@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import httpx
+import pytest
+
 from nextlabs_sdk._pdp._enums import Decision, ResourceDimension
 from nextlabs_sdk._pdp._json_serializer import (
     deserialize_eval_response,
@@ -19,6 +22,14 @@ from nextlabs_sdk._pdp._request_models import (
     Subject,
 )
 from nextlabs_sdk._pdp import _urns as urns
+from nextlabs_sdk.exceptions import PdpStatusError
+
+_OK_URN = "urn:oasis:names:tc:xacml:1.0:status:ok"
+
+
+def _fake_response() -> httpx.Response:
+    request = httpx.Request("POST", "https://pdp.example/dpc/authorization/pdp")
+    return httpx.Response(200, request=request, json={})
 
 
 def _find_category(body: Any, category_id: str) -> dict[str, object]:
@@ -262,7 +273,9 @@ def test_deserialize_permit_eval_response():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    response = deserialize_eval_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert len(response.eval_results) == 1
     assert response.first_result.decision == Decision.PERMIT
@@ -291,7 +304,9 @@ def test_deserialize_deny_with_obligations():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    response = deserialize_eval_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert response.first_result.decision == Decision.DENY
     assert len(response.first_result.obligations) == 1
@@ -305,7 +320,7 @@ def test_deserialize_with_policy_refs():
         "Response": [
             {
                 "Decision": "Permit",
-                "Status": {"StatusCode": {"Value": "ok"}},
+                "Status": {"StatusCode": {"Value": _OK_URN}},
                 "PolicyIdentifierList": {
                     "PolicyIdReference": [
                         {"Id": "allow-view", "Version": "1.0"},
@@ -316,7 +331,9 @@ def test_deserialize_with_policy_refs():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    response = deserialize_eval_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert len(response.first_result.policy_refs) == 2
     assert response.first_result.policy_refs[0].id == "allow-view"
@@ -324,7 +341,7 @@ def test_deserialize_with_policy_refs():
     assert response.first_result.policy_refs[1].id == "allow-edit"
 
 
-def test_deserialize_with_status_message():
+def test_deserialize_raises_on_per_result_non_ok_status_with_message():
     body = {
         "Response": [
             {
@@ -337,14 +354,15 @@ def test_deserialize_with_status_message():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_eval_response(_fake_response(), cast(dict[str, object], body))
 
-    assert response.first_result.decision == Decision.INDETERMINATE
-    assert response.first_result.status.message == "Policy evaluation error"
-    assert response.first_result.status.detail == ""
+    assert excinfo.value.xacml_status_code == "processing-error"
+    assert excinfo.value.xacml_status_message == "Policy evaluation error"
+    assert excinfo.value.message == "Policy evaluation error"
 
 
-def test_deserialize_with_status_detail_string():
+def test_deserialize_raises_on_missing_attribute_status_urn():
     body = {
         "Response": [
             {
@@ -360,12 +378,16 @@ def test_deserialize_with_status_detail_string():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_eval_response(_fake_response(), cast(dict[str, object], body))
 
-    assert response.first_result.status.detail == "Service, Version"
+    assert excinfo.value.xacml_status_code == (
+        "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
+    )
+    assert "missing" in excinfo.value.message
 
 
-def test_deserialize_with_status_detail_dict():
+def test_deserialize_raises_on_short_non_ok_status_code():
     body = {
         "Response": [
             {
@@ -378,11 +400,10 @@ def test_deserialize_with_status_detail_dict():
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_eval_response(_fake_response(), cast(dict[str, object], body))
 
-    detail = response.first_result.status.detail
-    assert "Service" in detail
-    assert "Version" in detail
+    assert excinfo.value.xacml_status_code == "missing-attribute"
 
 
 def test_deserialize_without_status_detail_defaults_empty():
@@ -390,19 +411,21 @@ def test_deserialize_without_status_detail_defaults_empty():
         "Response": [
             {
                 "Decision": "Permit",
-                "Status": {"StatusCode": {"Value": "ok"}},
+                "Status": {"StatusCode": {"Value": _OK_URN}},
             },
         ],
     }
 
-    response = deserialize_eval_response(cast(dict[str, object], body))
+    response = deserialize_eval_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert response.first_result.status.detail == ""
 
 
 def test_deserialize_permissions_response():
     body = {
-        "Status": {"StatusCode": {"Value": "ok"}},
+        "Status": {"StatusCode": {"Value": _OK_URN}},
         "Response": [
             {
                 "ActionsAndObligations": {
@@ -448,7 +471,9 @@ def test_deserialize_permissions_response():
         ],
     }
 
-    response = deserialize_permissions_response(cast(dict[str, object], body))
+    response = deserialize_permissions_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert [p.name for p in response.allowed] == ["OPEN", "SEND"]
     assert response.allowed[0].policy_refs[0].id == "ROOT/OPEN Policy"
@@ -464,9 +489,11 @@ def test_deserialize_permissions_response():
 
 
 def test_deserialize_permissions_response_tolerates_missing_actions_and_obligations():
-    body = {"Status": {"StatusCode": {"Value": "ok"}}, "Response": [{}]}
+    body = {"Status": {"StatusCode": {"Value": _OK_URN}}, "Response": [{}]}
 
-    response = deserialize_permissions_response(cast(dict[str, object], body))
+    response = deserialize_permissions_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert response.allowed == []
     assert response.denied == []
@@ -474,8 +501,110 @@ def test_deserialize_permissions_response_tolerates_missing_actions_and_obligati
 
 
 def test_deserialize_permissions_response_tolerates_missing_response_key():
-    body: dict[str, Any] = {"Status": {"StatusCode": {"Value": "ok"}}}
+    body: dict[str, Any] = {"Status": {"StatusCode": {"Value": _OK_URN}}}
 
-    response = deserialize_permissions_response(cast(dict[str, object], body))
+    response = deserialize_permissions_response(
+        _fake_response(), cast(dict[str, object], body)
+    )
 
     assert response.allowed == []
+
+
+_MISSING_ATTR_URN = "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
+
+
+def test_deserialize_permissions_response_raises_on_top_level_non_ok_status():
+    body = {
+        "Status": {
+            "StatusMessage": (
+                "Invalid Request :: One or more mandatory attributes are missing"
+            ),
+            "StatusCode": {"Value": _MISSING_ATTR_URN},
+        },
+        "Response": [
+            {
+                "Status": {
+                    "StatusMessage": (
+                        "Invalid Request :: One or more mandatory attributes are missing"
+                    ),
+                    "StatusCode": {"Value": _MISSING_ATTR_URN},
+                },
+                "ActionsAndObligations": {"allow": [], "deny": [], "dontcare": []},
+            },
+        ],
+    }
+
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_permissions_response(
+            _fake_response(),
+            cast(dict[str, object], body),
+        )
+
+    assert excinfo.value.xacml_status_code == _MISSING_ATTR_URN
+    assert "mandatory attributes are missing" in excinfo.value.xacml_status_message
+    assert "mandatory attributes are missing" in excinfo.value.message
+
+
+def test_deserialize_eval_response_raises_on_top_level_non_ok_status_without_decision():
+    body = {
+        "Status": {
+            "StatusMessage": "Invalid Request :: missing attrs",
+            "StatusCode": {"Value": _MISSING_ATTR_URN},
+        },
+        "Response": [
+            {
+                "Status": {
+                    "StatusMessage": "Invalid Request :: missing attrs",
+                    "StatusCode": {"Value": _MISSING_ATTR_URN},
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_eval_response(_fake_response(), cast(dict[str, object], body))
+
+    assert excinfo.value.xacml_status_code == _MISSING_ATTR_URN
+
+
+def test_deserialize_permissions_response_raises_on_per_result_only_non_ok_status():
+    body = {
+        "Response": [
+            {
+                "Status": {
+                    "StatusMessage": "missing attrs",
+                    "StatusCode": {"Value": _MISSING_ATTR_URN},
+                },
+                "ActionsAndObligations": {"allow": [], "deny": [], "dontcare": []},
+            },
+        ],
+    }
+
+    with pytest.raises(PdpStatusError):
+        deserialize_permissions_response(
+            _fake_response(),
+            cast(dict[str, object], body),
+        )
+
+
+def test_deserialize_carries_request_context_on_status_error():
+    body = {
+        "Status": {
+            "StatusMessage": "bad",
+            "StatusCode": {"Value": _MISSING_ATTR_URN},
+        },
+    }
+    request = httpx.Request(
+        "POST", "https://pdp.example/dpc/authorization/pdppermissions"
+    )
+    response = httpx.Response(200, request=request, json={})
+
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_permissions_response(response, cast(dict[str, object], body))
+
+    assert excinfo.value.status_code == 200
+    assert excinfo.value.request_method == "POST"
+    assert excinfo.value.request_url == (
+        "https://pdp.example/dpc/authorization/pdppermissions"
+    )
+    assert excinfo.value.envelope_status_code == _MISSING_ATTR_URN

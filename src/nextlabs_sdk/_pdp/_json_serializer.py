@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import httpx
+
 from nextlabs_sdk._pdp import _urns as urns
 from nextlabs_sdk._pdp._enums import Decision
 from nextlabs_sdk._pdp._request_models import (
@@ -21,6 +23,7 @@ from nextlabs_sdk._pdp._response_models import (
     PolicyRef,
     Status,
 )
+from nextlabs_sdk._pdp._status_check import raise_if_not_ok
 
 _CATEGORY_ID_KEY = "CategoryId"
 _ATTRIBUTE_KEY = "Attribute"
@@ -118,10 +121,15 @@ def _make_record_matching_attr() -> dict[str, object]:
     }
 
 
-def deserialize_eval_response(body: dict[str, object]) -> EvalResponse:
+def deserialize_eval_response(
+    response: httpx.Response,
+    body: dict[str, object],
+) -> EvalResponse:
+    _check_top_level_status(response, body)
     raw_results = body["Response"]
     parsed: list[EvalResult] = []
     if isinstance(raw_results, list):
+        _check_result_statuses(response, raw_results)
         parsed = [_parse_eval_result(entry) for entry in raw_results]
     return EvalResponse(eval_results=parsed)
 
@@ -130,8 +138,10 @@ _PermissionsBucket = tuple[str, list[ActionPermission]]
 
 
 def deserialize_permissions_response(
+    response: httpx.Response,
     body: dict[str, object],
 ) -> PermissionsResponse:
+    _check_top_level_status(response, body)
     allowed: list[ActionPermission] = []
     denied: list[ActionPermission] = []
     dont_care: list[ActionPermission] = []
@@ -142,12 +152,50 @@ def deserialize_permissions_response(
     ]
     raw_results = body.get("Response")
     if isinstance(raw_results, list):
+        _check_result_statuses(response, raw_results)
         _fill_permissions_buckets(raw_results, buckets)
     return PermissionsResponse(
         allowed=allowed,
         denied=denied,
         dont_care=dont_care,
     )
+
+
+def _check_top_level_status(
+    response: httpx.Response,
+    body: dict[str, object],
+) -> None:
+    status = body.get("Status")
+    if not isinstance(status, dict):
+        return
+    code, message = _extract_status_code_and_message(status)
+    raise_if_not_ok(response, code=code, message=message)
+
+
+def _check_result_statuses(
+    response: httpx.Response,
+    raw_results: list[object],
+) -> None:
+    for entry in raw_results:
+        if not isinstance(entry, dict):
+            continue
+        status = entry.get("Status")
+        if not isinstance(status, dict):
+            continue
+        code, message = _extract_status_code_and_message(status)
+        raise_if_not_ok(response, code=code, message=message)
+
+
+def _extract_status_code_and_message(
+    status: dict[str, object],
+) -> tuple[str, str]:
+    status_code_raw = status.get("StatusCode")
+    code = ""
+    if isinstance(status_code_raw, dict):
+        code = str(status_code_raw.get("Value", ""))
+    message_raw = status.get("StatusMessage", "")
+    message = str(message_raw) if message_raw else ""
+    return code, message
 
 
 def _fill_permissions_buckets(
