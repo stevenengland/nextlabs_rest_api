@@ -77,19 +77,45 @@ def serialize_permissions_request(
         _serialize_resource(request.resource),
         _serialize_application(request.application),
     ]
-    if request.environment is not None:
-        categories.append(_serialize_environment(request.environment))
-    response: dict[str, object] = {
+    environment_category = _serialize_permissions_environment(
+        request.environment,
+        record_matching_policies=request.record_matching_policies,
+    )
+    if environment_category is not None:
+        categories.append(environment_category)
+    return {
         "Request": {
             "ReturnPolicyIdList": request.return_policy_ids,
             "Category": categories,
         },
     }
-    if request.record_matching_policies:
-        request_dict = response["Request"]
-        if isinstance(request_dict, dict):
-            request_dict["RecordMatchingPolicies"] = True
-    return response
+
+
+def _serialize_permissions_environment(
+    environment: Environment | None,
+    *,
+    record_matching_policies: bool,
+) -> dict[str, object] | None:
+    if environment is None and not record_matching_policies:
+        return None
+    if environment is None:
+        category = _build_category(urns.ENVIRONMENT_CATEGORY, [])
+    else:
+        category = _serialize_environment(environment)
+    if record_matching_policies:
+        attributes = category[_ATTRIBUTE_KEY]
+        assert isinstance(attributes, list)
+        attributes.append(_make_record_matching_attr())
+    return category
+
+
+def _make_record_matching_attr() -> dict[str, object]:
+    return {
+        "AttributeId": urns.RECORD_MATCHING_POLICIES_ATTR,
+        _VALUE_KEY: "true",
+        "DataType": urns.STRING_DATATYPE,
+        "IncludeInResult": False,
+    }
 
 
 def deserialize_eval_response(body: dict[str, object]) -> EvalResponse:
@@ -100,44 +126,73 @@ def deserialize_eval_response(body: dict[str, object]) -> EvalResponse:
     return EvalResponse(eval_results=parsed)
 
 
+_PermissionsBucket = tuple[str, list[ActionPermission]]
+
+
 def deserialize_permissions_response(
     body: dict[str, object],
 ) -> PermissionsResponse:
     allowed: list[ActionPermission] = []
     denied: list[ActionPermission] = []
     dont_care: list[ActionPermission] = []
-
-    raw_results = body["Response"]
-    if not isinstance(raw_results, list):
-        return PermissionsResponse(
-            allowed=allowed,
-            denied=denied,
-            dont_care=dont_care,
-        )
-
-    for raw_result in raw_results:
-        if not isinstance(raw_result, dict):
-            continue
-        action_name = _extract_action_name(raw_result)
-        obligations = _parse_obligations(raw_result.get("Obligations", []))
-        policy_refs = _parse_policy_refs(raw_result)
-        permission = ActionPermission(
-            name=action_name,
-            obligations=obligations,
-            policy_refs=policy_refs,
-        )
-        decision = Decision(raw_result["Decision"])
-        if decision == Decision.PERMIT:
-            allowed.append(permission)
-        elif decision == Decision.DENY:
-            denied.append(permission)
-        else:
-            dont_care.append(permission)
-
+    buckets: list[_PermissionsBucket] = [
+        ("allow", allowed),
+        ("deny", denied),
+        ("dontcare", dont_care),
+    ]
+    raw_results = body.get("Response")
+    if isinstance(raw_results, list):
+        _fill_permissions_buckets(raw_results, buckets)
     return PermissionsResponse(
         allowed=allowed,
         denied=denied,
         dont_care=dont_care,
+    )
+
+
+def _fill_permissions_buckets(
+    raw_results: list[object],
+    buckets: list[_PermissionsBucket],
+) -> None:
+    for raw_result in raw_results:
+        grouped = _extract_grouped(raw_result)
+        if grouped is None:
+            continue
+        for key, target in buckets:
+            for entry in _iter_bucket_items(grouped.get(key)):
+                target.append(_parse_action_permission(entry))
+
+
+def _extract_grouped(raw_result: object) -> dict[str, object] | None:
+    if not isinstance(raw_result, dict):
+        return None
+    grouped = raw_result.get("ActionsAndObligations")
+    if not isinstance(grouped, dict):
+        return None
+    return grouped
+
+
+def _iter_bucket_items(raw: object) -> list[dict[str, object]]:
+    if not isinstance(raw, list):
+        return []
+    return [entry for entry in raw if isinstance(entry, dict)]
+
+
+def _parse_action_permission(entry: dict[str, object]) -> ActionPermission:
+    obligations_raw = entry.get("Obligations", [])
+    obligations = _parse_obligations(
+        obligations_raw if isinstance(obligations_raw, list) else [],
+    )
+    matching_raw = entry.get("MatchingPolicies", [])
+    policy_refs: list[PolicyRef] = []
+    if isinstance(matching_raw, list):
+        policy_refs = [
+            PolicyRef(id=str(pid)) for pid in matching_raw if isinstance(pid, str)
+        ]
+    return ActionPermission(
+        name=str(entry.get("Action", "")),
+        obligations=obligations,
+        policy_refs=policy_refs,
     )
 
 
@@ -276,13 +331,19 @@ def _parse_obligations(
         attrs = [
             ObligationAttribute(
                 id=str(assignment["AttributeId"]),
-                attr_value=str(assignment[_VALUE_KEY]),
+                attr_value=_stringify_assignment_value(assignment[_VALUE_KEY]),
             )
             for assignment in raw.get("AttributeAssignment", [])
             if isinstance(assignment, dict)
         ]
         obligations.append(Obligation(id=str(raw["Id"]), attributes=attrs))
     return obligations
+
+
+def _stringify_assignment_value(raw: object) -> str:
+    if isinstance(raw, list):
+        return ", ".join(str(element) for element in raw)
+    return str(raw)
 
 
 def _parse_policy_refs(raw: dict[str, object]) -> list[PolicyRef]:
@@ -303,25 +364,3 @@ def _parse_policy_refs(raw: dict[str, object]) -> list[PolicyRef]:
             ),
         )
     return refs
-
-
-def _extract_action_name(raw_result: dict[str, object]) -> str:
-    categories = raw_result.get("Category", [])
-    if not isinstance(categories, list):
-        return ""
-    for category in categories:
-        if not isinstance(category, dict):
-            continue
-        if category[_CATEGORY_ID_KEY] == urns.ACTION_CATEGORY:
-            return _find_action_id_in_category(category)
-    return ""
-
-
-def _find_action_id_in_category(category: dict[str, object]) -> str:
-    attributes = category.get(_ATTRIBUTE_KEY, [])
-    if not isinstance(attributes, list):
-        return ""
-    for attr in attributes:
-        if isinstance(attr, dict) and attr["AttributeId"] == urns.ACTION_ID:
-            return str(attr[_VALUE_KEY])
-    return ""

@@ -19,7 +19,8 @@ from nextlabs_sdk._pdp._response_models import EvalResponse, PermissionsResponse
 from nextlabs_sdk._pdp._token_url import resolve_pdp_token_url
 from nextlabs_sdk.exceptions import NextLabsError, raise_for_status
 
-_PDP_ENDPOINT = "/dpc/authorization/pdp"
+_PDP_EVAL_ENDPOINT = "/dpc/authorization/pdp"
+_PDP_PERMISSIONS_ENDPOINT = "/dpc/authorization/pdppermissions"
 
 
 def _require_json_content_type(content_type: ContentType, *, method: str) -> None:
@@ -73,7 +74,7 @@ class PdpClient:
         if content_type == ContentType.XML:
             body_bytes = xml_ser.serialize_eval_request(request)
             response = self._client.post(
-                _PDP_ENDPOINT,
+                _PDP_EVAL_ENDPOINT,
                 content=body_bytes,
                 headers=build_pdp_headers(
                     content_type, service=self._service, version=self._version
@@ -84,7 +85,7 @@ class PdpClient:
 
         body = json_ser.serialize_eval_request(request)
         response = self._client.post(
-            _PDP_ENDPOINT,
+            _PDP_EVAL_ENDPOINT,
             json=body,
             headers=build_pdp_headers(
                 content_type, service=self._service, version=self._version
@@ -106,7 +107,7 @@ class PdpClient:
         if content_type == ContentType.XML:
             body_bytes = xml_ser.serialize_permissions_request(request)
             response = self._client.post(
-                _PDP_ENDPOINT,
+                _PDP_PERMISSIONS_ENDPOINT,
                 content=body_bytes,
                 headers=build_pdp_headers(
                     content_type, service=self._service, version=self._version
@@ -117,7 +118,7 @@ class PdpClient:
 
         body = json_ser.serialize_permissions_request(request)
         response = self._client.post(
-            _PDP_ENDPOINT,
+            _PDP_PERMISSIONS_ENDPOINT,
             json=body,
             headers=build_pdp_headers(
                 content_type, service=self._service, version=self._version
@@ -139,7 +140,7 @@ class PdpClient:
         """POST a pre-built raw XACML JSON body to the PDP eval endpoint."""
         _require_json_content_type(content_type, method="evaluate_raw")
         response = self._client.post(
-            _PDP_ENDPOINT,
+            _PDP_EVAL_ENDPOINT,
             json=body,
             headers=build_pdp_headers(
                 content_type, service=self._service, version=self._version
@@ -161,7 +162,7 @@ class PdpClient:
         """POST a pre-built raw XACML JSON body to the PDP permissions endpoint."""
         _require_json_content_type(content_type, method="permissions_raw")
         response = self._client.post(
-            _PDP_ENDPOINT,
+            _PDP_PERMISSIONS_ENDPOINT,
             json=body,
             headers=build_pdp_headers(
                 content_type, service=self._service, version=self._version

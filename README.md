@@ -471,6 +471,38 @@ Format auto-detection can be overridden with `--payload-format` (one of
 `auto`, `json`, `yaml`, `xacml`). `--payload-format xacml` forces the
 raw-XACML passthrough and rejects files whose shape does not match.
 
+### `pdp explain` — which policies produced this decision?
+
+`nextlabs pdp explain --payload PATH` answers *why* the PDP reached a
+given decision by listing the matching policies for each action.
+Under the hood it calls the NextLabs **permissions** endpoint
+(`/dpc/authorization/pdppermissions`) with
+`record_matching_policies=true`, so responses group actions into
+`Allowed` / `Denied` / `Don't Care` buckets along with their matching
+policies and obligations.
+
+```bash
+# Start from the same payload you used for `pdp eval`
+nextlabs pdp explain --payload ./request.json
+
+# Narrow output to a single action
+nextlabs pdp explain --payload ./request.json --action DELETE
+
+# Machine-readable form
+nextlabs --output json pdp explain --payload ./request.json
+```
+
+Notes:
+
+- `pdp explain` reuses the `pdp eval` payload loader. Any `action`
+  supplied in the payload is ignored — the permissions endpoint returns
+  results for every action the policies cover.
+- The XACML `ReturnPolicyIdList="true"` flag has **no effect** on the
+  eval endpoint (`/dpc/authorization/pdp`); NextLabs PDP does not
+  populate `PolicyIdentifierList` there. Policy-identifier
+  introspection is only available via the permissions endpoint that
+  `pdp explain` uses.
+
 **Environment variables**
 
 | Variable                   | Purpose                                                       |

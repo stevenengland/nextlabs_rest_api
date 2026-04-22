@@ -27,6 +27,9 @@ from nextlabs_sdk._pdp._response_models import (
 )
 
 _XACML_NS = "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+_ATTRIBUTE_TAG = "Attribute"
+_ATTRIBUTE_VALUE_TAG = "AttributeValue"
+_ATTRIBUTE_ID_KEY = "AttributeId"
 
 
 def serialize_eval_request(request: EvalRequest) -> bytes:
@@ -45,9 +48,55 @@ def serialize_permissions_request(request: PermissionsRequest) -> bytes:
     _add_subject(root, request.subject)
     _add_resource(root, request.resource)
     _add_application(root, request.application)
-    if request.environment is not None:
-        _add_environment(root, request.environment)
+    _add_permissions_environment(
+        root,
+        request.environment,
+        record_matching_policies=request.record_matching_policies,
+    )
     return ET.tostring(root, encoding="unicode").encode("utf-8")
+
+
+def _add_permissions_environment(
+    parent: ET.Element,
+    environment: Environment | None,
+    *,
+    record_matching_policies: bool,
+) -> None:
+    if environment is None and not record_matching_policies:
+        return
+    attrs: list[AttrPair] = []
+    if environment is not None:
+        attrs.extend(
+            _collect_extra_attrs(environment.model_extra, urns.ENVIRONMENT_PREFIX),
+        )
+        attrs.extend(_collect_dict_attrs(environment.attributes))
+    attrs_el = ET.SubElement(parent, _ns("Attributes"))
+    attrs_el.set("Category", urns.ENVIRONMENT_CATEGORY)
+    for attr_id, attr_value in attrs:
+        _append_attribute(attrs_el, attr_id, attr_value)
+    if record_matching_policies:
+        _append_record_matching_attribute(attrs_el)
+
+
+def _append_attribute(
+    parent: ET.Element,
+    attr_id: str,
+    attr_value: AttrValue,
+) -> None:
+    attr_el = ET.SubElement(parent, _ns(_ATTRIBUTE_TAG))
+    attr_el.set(_ATTRIBUTE_ID_KEY, attr_id)
+    value_el = ET.SubElement(attr_el, _ns(_ATTRIBUTE_VALUE_TAG))
+    value_el.set("DataType", _infer_datatype(attr_value))
+    value_el.text = _serialize_value(attr_value)
+
+
+def _append_record_matching_attribute(parent: ET.Element) -> None:
+    attr_el = ET.SubElement(parent, _ns(_ATTRIBUTE_TAG))
+    attr_el.set(_ATTRIBUTE_ID_KEY, urns.RECORD_MATCHING_POLICIES_ATTR)
+    attr_el.set("IncludeInResult", "false")
+    value_el = ET.SubElement(attr_el, _ns(_ATTRIBUTE_VALUE_TAG))
+    value_el.set("DataType", urns.STRING_DATATYPE)
+    value_el.text = "true"
 
 
 def deserialize_eval_response(body: bytes) -> EvalResponse:
@@ -110,11 +159,7 @@ def _add_attributes_element(
     attrs_el = ET.SubElement(parent, _ns("Attributes"))
     attrs_el.set("Category", category)
     for attr_id, attr_value in attrs:
-        attr_el = ET.SubElement(attrs_el, _ns("Attribute"))
-        attr_el.set("AttributeId", attr_id)
-        value_el = ET.SubElement(attr_el, _ns("AttributeValue"))
-        value_el.set("DataType", _infer_datatype(attr_value))
-        value_el.text = _serialize_value(attr_value)
+        _append_attribute(attrs_el, attr_id, attr_value)
 
 
 AttrValue = str | int | float | bool
@@ -252,7 +297,7 @@ def _parse_obligations_xml(result_el: ET.Element) -> list[Obligation]:
         obl_id = obl_el.get("ObligationId", "")
         attrs = [
             ObligationAttribute(
-                id=aa_el.get("AttributeId", ""),
+                id=aa_el.get(_ATTRIBUTE_ID_KEY, ""),
                 attr_value=(aa_el.text or "").strip(),
             )
             for aa_el in obl_el.findall(_ns("AttributeAssignment"))
@@ -280,9 +325,9 @@ def _find_action_value_el(result_el: ET.Element) -> ET.Element | None:
     for attrs_el in result_el.findall(_ns("Attributes")):
         if attrs_el.get("Category") != urns.ACTION_CATEGORY:
             continue
-        for attr_el in attrs_el.findall(_ns("Attribute")):
-            if attr_el.get("AttributeId") == urns.ACTION_ID:
-                return attr_el.find(_ns("AttributeValue"))
+        for attr_el in attrs_el.findall(_ns(_ATTRIBUTE_TAG)):
+            if attr_el.get(_ATTRIBUTE_ID_KEY) == urns.ACTION_ID:
+                return attr_el.find(_ns(_ATTRIBUTE_VALUE_TAG))
     return None
 
 

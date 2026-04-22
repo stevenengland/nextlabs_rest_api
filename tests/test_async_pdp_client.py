@@ -23,6 +23,7 @@ from nextlabs_sdk.exceptions import ApiError
 
 BASE_URL = "https://pdp.example.com"
 PDP_ENDPOINT = "/dpc/authorization/pdp"
+PERMISSIONS_ENDPOINT = "/dpc/authorization/pdppermissions"
 
 JSON_HEADERS = MappingProxyType(
     {
@@ -93,21 +94,20 @@ def _permissions_response() -> httpx.Response:
     return httpx.Response(
         200,
         json={
+            "Status": {"StatusCode": {"Value": "ok"}},
             "Response": [
                 {
-                    "Decision": "Permit",
-                    "Status": {"StatusCode": {"Value": "ok"}},
-                    "Category": [
-                        {
-                            "CategoryId": "urn:oasis:names:tc:xacml:3.0:attribute-category:action",
-                            "Attribute": [
-                                {
-                                    "AttributeId": "urn:oasis:names:tc:xacml:1.0:action:action-id",
-                                    "Value": "VIEW",
-                                },
-                            ],
-                        },
-                    ],
+                    "ActionsAndObligations": {
+                        "allow": [
+                            {
+                                "Action": "VIEW",
+                                "MatchingPolicies": ["ROOT/VIEW Policy"],
+                                "Obligations": [],
+                            },
+                        ],
+                        "deny": [],
+                        "dontcare": [],
+                    },
                 },
             ],
         },
@@ -132,6 +132,14 @@ def _stub_post_json(mock_client: Any, response: httpx.Response) -> None:
     ).thenReturn(response)
 
 
+def _stub_post_permissions(mock_client: Any, response: httpx.Response) -> None:
+    when(mock_client).post(
+        PERMISSIONS_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    ).thenReturn(response)
+
+
 def test_async_evaluate_returns_permit():
     mock_client = _stub_transport()
     _stub_post_json(mock_client, _permit_response())
@@ -146,7 +154,7 @@ def test_async_evaluate_returns_permit():
 
 def test_async_permissions_returns_grouped():
     mock_client = _stub_transport()
-    _stub_post_json(mock_client, _permissions_response())
+    _stub_post_permissions(mock_client, _permissions_response())
     pdp = _make_pdp()
 
     async def run() -> None:
@@ -158,8 +166,31 @@ def test_async_permissions_returns_grouped():
         response = await pdp.permissions(request)
         assert len(response.allowed) == 1
         assert response.allowed[0].name == "VIEW"
+        assert response.allowed[0].policy_refs[0].id == "ROOT/VIEW Policy"
 
     _run_async(run())
+
+
+def test_async_permissions_posts_to_permissions_endpoint():
+    mock_client = _stub_transport()
+    _stub_post_permissions(mock_client, _permissions_response())
+    pdp = _make_pdp()
+
+    async def run() -> None:
+        await pdp.permissions(
+            PermissionsRequest(
+                subject=Subject(id="u"),
+                resource=Resource(id="r", type="t"),
+                application=Application(id="a"),
+            ),
+        )
+
+    _run_async(run())
+    verify(mock_client).post(
+        PERMISSIONS_ENDPOINT,
+        json=any_value(),
+        headers=any_value(),
+    )
 
 
 def test_async_context_manager_closes():
@@ -216,25 +247,26 @@ def test_async_evaluate_raises_api_error_on_non_json_response():
     _run_async(run())
 
 
-def test_async_permissions_raises_api_error_on_unexpected_shape():
+def test_async_permissions_tolerates_missing_actions_and_obligations():
     mock_client = _stub_transport()
-    _stub_post_json(
+    _stub_post_permissions(
         mock_client,
         httpx.Response(200, json={"nope": True}, request=_make_request()),
     )
     pdp = _make_pdp()
 
     async def run() -> None:
-        with pytest.raises(ApiError) as exc_info:
-            await pdp.permissions(
-                PermissionsRequest(
-                    subject=Subject(id="u"),
-                    action=Action(id="VIEW"),
-                    resource=Resource(id="r", type="doc"),
-                    application=Application(id="app"),
-                ),
-            )
-        assert "Unexpected PDP response shape" in exc_info.value.message
+        response = await pdp.permissions(
+            PermissionsRequest(
+                subject=Subject(id="u"),
+                action=Action(id="VIEW"),
+                resource=Resource(id="r", type="doc"),
+                application=Application(id="app"),
+            ),
+        )
+        assert response.allowed == []
+        assert response.denied == []
+        assert response.dont_care == []
 
     _run_async(run())
 
@@ -340,7 +372,7 @@ def test_async_evaluate_raw_posts_body_verbatim() -> None:
 def test_async_permissions_raw_posts_body_verbatim() -> None:
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=_raw_xacml_body(),
         headers=JSON_HEADERS,
     ).thenReturn(_permissions_response())
@@ -382,7 +414,7 @@ def test_async_permissions_raw_rejects_xml_content_type() -> None:
 def test_async_permissions_sends_service_and_version_headers() -> None:
     mock_client = _stub_transport()
     when(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=JSON_HEADERS,
     ).thenReturn(_permissions_response())
@@ -398,7 +430,7 @@ def test_async_permissions_sends_service_and_version_headers() -> None:
 
     _run_async(run())
     verify(mock_client).post(
-        PDP_ENDPOINT,
+        PERMISSIONS_ENDPOINT,
         json=any_value(),
         headers=JSON_HEADERS,
     )

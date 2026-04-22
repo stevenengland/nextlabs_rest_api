@@ -206,7 +206,39 @@ def test_serialize_permissions_request_with_record_matching():
             record_matching_policies=True,
         ),
     )
-    assert body["Request"]["RecordMatchingPolicies"] is True
+    assert "RecordMatchingPolicies" not in body["Request"]
+    env_cat = _find_category(body, urns.ENVIRONMENT_CATEGORY)
+    record_attr = _find_attribute(env_cat, urns.RECORD_MATCHING_POLICIES_ATTR)
+    assert record_attr["Value"] == "true"
+    assert record_attr["DataType"] == urns.STRING_DATATYPE
+    assert record_attr["IncludeInResult"] is False
+
+
+def test_serialize_permissions_request_merges_record_matching_into_env():
+    body = _perm_body(
+        PermissionsRequest(
+            subject=Subject(id="u"),
+            resource=Resource(id="r", type="t"),
+            application=Application(id="app"),
+            environment=Environment(attributes={"tenant": "acme"}),
+            record_matching_policies=True,
+        ),
+    )
+    env_cat = _find_category(body, urns.ENVIRONMENT_CATEGORY)
+    assert _find_attribute(env_cat, "tenant")["Value"] == "acme"
+    assert _find_attribute(env_cat, urns.RECORD_MATCHING_POLICIES_ATTR)
+
+
+def test_serialize_permissions_request_no_env_when_disabled():
+    body = _perm_body(
+        PermissionsRequest(
+            subject=Subject(id="u"),
+            resource=Resource(id="r", type="t"),
+            application=Application(id="app"),
+        ),
+    )
+    category_ids = [c["CategoryId"] for c in body["Request"]["Category"]]
+    assert urns.ENVIRONMENT_CATEGORY not in category_ids
 
 
 def test_serialize_data_type_float():
@@ -369,37 +401,81 @@ def test_deserialize_without_status_detail_defaults_empty():
 
 
 def test_deserialize_permissions_response():
-    action_cat = "urn:oasis:names:tc:xacml:3.0:attribute-category:action"
-    action_id = "urn:oasis:names:tc:xacml:1.0:action:action-id"
-
-    def _entry(decision: str, value: str) -> dict[str, Any]:
-        entry: dict[str, Any] = {
-            "Decision": decision,
-            "Status": {"StatusCode": {"Value": "ok"}},
-            "Category": [
-                {
-                    "CategoryId": action_cat,
-                    "Attribute": [{"AttributeId": action_id, "Value": value}],
-                },
-            ],
-        }
-        if decision == "Permit":
-            entry["Obligations"] = []
-        return entry
-
     body = {
+        "Status": {"StatusCode": {"Value": "ok"}},
         "Response": [
-            _entry("Permit", "VIEW"),
-            _entry("Deny", "DELETE"),
-            _entry("NotApplicable", "ARCHIVE"),
+            {
+                "ActionsAndObligations": {
+                    "allow": [
+                        {
+                            "Action": "OPEN",
+                            "MatchingPolicies": ["ROOT/OPEN Policy"],
+                            "Obligations": [],
+                        },
+                        {
+                            "Action": "SEND",
+                            "MatchingPolicies": [
+                                "ROOT/OPEN Policy",
+                                "ROOT/SEND Policy",
+                            ],
+                            "Obligations": [
+                                {
+                                    "Id": "Obligation 1",
+                                    "AttributeAssignment": [
+                                        {
+                                            "AttributeId": "arg1",
+                                            "Value": ["val1"],
+                                            "DataType": (
+                                                "http://www.w3.org/2001/"
+                                                "XMLSchema#string"
+                                            ),
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                    "deny": [
+                        {
+                            "Action": "DELETE",
+                            "MatchingPolicies": ["ROOT/DELETE Policy"],
+                            "Obligations": [],
+                        },
+                    ],
+                    "dontcare": [],
+                },
+            },
         ],
     }
 
     response = deserialize_permissions_response(cast(dict[str, object], body))
 
-    assert len(response.allowed) == 1
-    assert response.allowed[0].name == "VIEW"
-    assert len(response.denied) == 1
-    assert response.denied[0].name == "DELETE"
-    assert len(response.dont_care) == 1
-    assert response.dont_care[0].name == "ARCHIVE"
+    assert [p.name for p in response.allowed] == ["OPEN", "SEND"]
+    assert response.allowed[0].policy_refs[0].id == "ROOT/OPEN Policy"
+    send = response.allowed[1]
+    assert [ref.id for ref in send.policy_refs] == [
+        "ROOT/OPEN Policy",
+        "ROOT/SEND Policy",
+    ]
+    assert send.obligations[0].id == "Obligation 1"
+    assert send.obligations[0].attributes[0].attr_value == "val1"
+    assert [p.name for p in response.denied] == ["DELETE"]
+    assert response.dont_care == []
+
+
+def test_deserialize_permissions_response_tolerates_missing_actions_and_obligations():
+    body = {"Status": {"StatusCode": {"Value": "ok"}}, "Response": [{}]}
+
+    response = deserialize_permissions_response(cast(dict[str, object], body))
+
+    assert response.allowed == []
+    assert response.denied == []
+    assert response.dont_care == []
+
+
+def test_deserialize_permissions_response_tolerates_missing_response_key():
+    body: dict[str, Any] = {"Status": {"StatusCode": {"Value": "ok"}}}
+
+    response = deserialize_permissions_response(cast(dict[str, object], body))
+
+    assert response.allowed == []
