@@ -553,3 +553,61 @@ def test_pdp_explain_json_output(tmp_path: Any) -> None:
     parsed = json.loads(result.output)
     assert parsed["allowed"][0]["name"] == "VIEW"
     assert parsed["allowed"][0]["policy_refs"][0]["id"] == "P1"
+
+
+def test_pdp_explain_surfaces_pdp_status_error(tmp_path: Any) -> None:
+    from nextlabs_sdk.exceptions import PdpStatusError
+
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenRaise(
+        PdpStatusError(
+            "Invalid Request :: One or more mandatory attributes are missing",
+            xacml_status_code=("urn:oasis:names:tc:xacml:1.0:status:missing-attribute"),
+            xacml_status_message=(
+                "Invalid Request :: One or more mandatory attributes are missing"
+            ),
+            status_code=200,
+            request_method="POST",
+            request_url="https://pdp.example.com/dpc/authorization/pdppermissions",
+        ),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(app, [*_GLOBAL_OPTS, *_explain_args(path)])
+
+    assert result.exit_code == 1
+    assert "PDP rejected the request" in result.output
+    assert "mandatory attributes" in result.output
+
+
+def test_pdp_explain_verbose_pdp_status_error_shows_xacml_code(tmp_path: Any) -> None:
+    from strip_ansi import strip_ansi
+
+    from nextlabs_sdk.exceptions import PdpStatusError
+
+    urn = "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
+    mock_client = _stub_client()
+    when(mock_client).permissions(...).thenRaise(
+        PdpStatusError(
+            "missing attrs",
+            xacml_status_code=urn,
+            xacml_status_message="missing attrs",
+            status_code=200,
+            request_method="POST",
+            request_url="https://pdp.example.com/dpc/authorization/pdppermissions",
+            response_body='{"Status":{}}',
+        ),
+    )
+
+    path = _write_eval_payload(tmp_path)
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "-v", *_explain_args(path)],
+        terminal_width=240,
+    )
+
+    assert result.exit_code == 1
+    assert "PDP rejected the request" in result.output
+    stderr_plain = strip_ansi(result.stderr)
+    assert urn in stderr_plain
+    assert "envelope" in stderr_plain

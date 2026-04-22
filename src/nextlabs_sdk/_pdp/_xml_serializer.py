@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+import httpx
 from defusedxml import ElementTree as DefusedET
 
 from nextlabs_sdk._pdp import _urns as urns
@@ -25,6 +26,7 @@ from nextlabs_sdk._pdp._response_models import (
     PolicyRef,
     Status,
 )
+from nextlabs_sdk._pdp._status_check import raise_if_not_ok
 
 _XACML_NS = "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
 _ATTRIBUTE_TAG = "Attribute"
@@ -99,19 +101,29 @@ def _append_record_matching_attribute(parent: ET.Element) -> None:
     value_el.text = "true"
 
 
-def deserialize_eval_response(body: bytes) -> EvalResponse:
+def deserialize_eval_response(
+    response: httpx.Response,
+    body: bytes,
+) -> EvalResponse:
     root = DefusedET.fromstring(body)
-    parsed = [_parse_result(result_el) for result_el in root.findall(_ns("Result"))]
+    result_els = root.findall(_ns("Result"))
+    _raise_on_non_ok_result(response, result_els)
+    parsed = [_parse_result(result_el) for result_el in result_els]
     return EvalResponse(eval_results=parsed)
 
 
-def deserialize_permissions_response(body: bytes) -> PermissionsResponse:
+def deserialize_permissions_response(
+    response: httpx.Response,
+    body: bytes,
+) -> PermissionsResponse:
     root = DefusedET.fromstring(body)
+    result_els = root.findall(_ns("Result"))
+    _raise_on_non_ok_result(response, result_els)
     allowed: list[ActionPermission] = []
     denied: list[ActionPermission] = []
     dont_care: list[ActionPermission] = []
 
-    for result_el in root.findall(_ns("Result")):
+    for result_el in result_els:
         action_name = _extract_action_name_xml(result_el)
         obligations = _parse_obligations_xml(result_el)
         policy_refs = _parse_policy_refs_xml(result_el)
@@ -135,6 +147,15 @@ def deserialize_permissions_response(body: bytes) -> PermissionsResponse:
         denied=denied,
         dont_care=dont_care,
     )
+
+
+def _raise_on_non_ok_result(
+    response: httpx.Response,
+    result_els: list[ET.Element],
+) -> None:
+    for result_el in result_els:
+        status = _parse_status_xml(result_el)
+        raise_if_not_ok(response, code=status.code, message=status.message)
 
 
 def _ns(tag: str) -> str:

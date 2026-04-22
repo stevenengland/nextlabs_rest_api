@@ -81,7 +81,7 @@ class AsyncPdpClient:
                 ),
             )
             raise_for_status(response)
-            return xml_ser.deserialize_eval_response(response.content)
+            return xml_ser.deserialize_eval_response(response, response.content)
 
         body = json_ser.serialize_eval_request(request)
         response = await self._client.post(
@@ -114,7 +114,7 @@ class AsyncPdpClient:
                 ),
             )
             raise_for_status(response)
-            return xml_ser.deserialize_permissions_response(response.content)
+            return xml_ser.deserialize_permissions_response(response, response.content)
 
         body = json_ser.serialize_permissions_request(request)
         response = await self._client.post(

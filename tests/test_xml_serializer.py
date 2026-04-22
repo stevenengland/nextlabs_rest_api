@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+import httpx
 import pytest
 
 from nextlabs_sdk._pdp._enums import Decision
@@ -27,8 +28,15 @@ from nextlabs_sdk._pdp._xml_serializer import (
     serialize_eval_request,
     serialize_permissions_request,
 )
+from nextlabs_sdk.exceptions import PdpStatusError
 
 XACML_NS = "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+_OK_URN = "urn:oasis:names:tc:xacml:1.0:status:ok"
+
+
+def _fake_response() -> httpx.Response:
+    request = httpx.Request("POST", "https://pdp.example/dpc/authorization/pdp")
+    return httpx.Response(200, request=request, content=b"")
 
 
 def _parse_xml(data: bytes) -> ET.Element:
@@ -152,7 +160,7 @@ def test_xml_deserialize_permit_response():
         f"</Response>"
     ).encode()
 
-    response = deserialize_eval_response(xml_data)
+    response = deserialize_eval_response(_fake_response(), xml_data)
 
     assert len(response.eval_results) == 1
     assert response.first_result.decision == Decision.PERMIT
@@ -175,7 +183,7 @@ def test_xml_deserialize_with_obligations():
         f"</Response>"
     ).encode()
 
-    response = deserialize_eval_response(xml_data)
+    response = deserialize_eval_response(_fake_response(), xml_data)
 
     assert response.first_result.decision == Decision.DENY
     assert len(response.first_result.obligations) == 1
@@ -183,7 +191,7 @@ def test_xml_deserialize_with_obligations():
     assert response.first_result.obligations[0].attributes[0].attr_value == "warn"
 
 
-def test_xml_deserialize_with_status_detail():
+def test_xml_deserialize_raises_on_non_ok_status_with_detail():
     xml_data = (
         f'<Response xmlns="{XACML_NS}">'
         f"<Result>"
@@ -197,10 +205,30 @@ def test_xml_deserialize_with_status_detail():
         f"</Response>"
     ).encode()
 
-    response = deserialize_eval_response(xml_data)
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_eval_response(_fake_response(), xml_data)
 
-    assert response.first_result.decision == Decision.INDETERMINATE
-    assert response.first_result.status.detail == "Service, Version"
+    assert excinfo.value.xacml_status_code == (
+        "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
+    )
+    assert "missing" in excinfo.value.xacml_status_message
+
+
+def test_xml_deserialize_raises_on_non_ok_permissions_result():
+    xml_data = (
+        f'<Response xmlns="{XACML_NS}">'
+        f"<Result>"
+        f"<Decision>Indeterminate</Decision>"
+        f'<Status><StatusCode Value="processing-error"/>'
+        f"<StatusMessage>broken</StatusMessage></Status>"
+        f"</Result>"
+        f"</Response>"
+    ).encode()
+
+    with pytest.raises(PdpStatusError) as excinfo:
+        deserialize_permissions_response(_fake_response(), xml_data)
+
+    assert excinfo.value.xacml_status_code == "processing-error"
 
 
 def test_xml_deserialize_without_status_detail_defaults_empty():
@@ -208,12 +236,12 @@ def test_xml_deserialize_without_status_detail_defaults_empty():
         f'<Response xmlns="{XACML_NS}">'
         f"<Result>"
         f"<Decision>Permit</Decision>"
-        f'<Status><StatusCode Value="ok"/></Status>'
+        f'<Status><StatusCode Value="{_OK_URN}"/></Status>'
         f"</Result>"
         f"</Response>"
     ).encode()
 
-    response = deserialize_eval_response(xml_data)
+    response = deserialize_eval_response(_fake_response(), xml_data)
 
     assert response.first_result.status.detail == ""
 
@@ -223,7 +251,7 @@ def test_xml_deserialize_permissions_response():
         return (
             f"<Result>"
             f"<Decision>{decision}</Decision>"
-            f'<Status><StatusCode Value="ok"/></Status>'
+            f'<Status><StatusCode Value="{_OK_URN}"/></Status>'
             f'<Attributes Category="{ACTION_CATEGORY}">'
             f'<Attribute AttributeId="{ACTION_ID}">'
             f"<AttributeValue>{action}</AttributeValue>"
@@ -238,7 +266,7 @@ def test_xml_deserialize_permissions_response():
         f"</Response>"
     ).encode()
 
-    response = deserialize_permissions_response(xml_data)
+    response = deserialize_permissions_response(_fake_response(), xml_data)
 
     assert len(response.allowed) == 1
     assert response.allowed[0].name == "VIEW"

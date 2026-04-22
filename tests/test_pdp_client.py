@@ -68,7 +68,9 @@ def _make_permissions_response() -> httpx.Response:
     return httpx.Response(
         200,
         json={
-            "Status": {"StatusCode": {"Value": "ok"}},
+            "Status": {
+                "StatusCode": {"Value": "urn:oasis:names:tc:xacml:1.0:status:ok"}
+            },
             "Response": [
                 {
                     "ActionsAndObligations": {

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import ParamSpec, TypeVar
 
+import click
 import typer
 from rich.console import Console
 
@@ -15,6 +16,7 @@ from nextlabs_sdk.exceptions import (
     AuthenticationError,
     NextLabsError,
     NotFoundError,
+    PdpStatusError,
     RefreshTokenExpiredError,
     RequestTimeoutError,
     TransportError,
@@ -33,6 +35,7 @@ _ERROR_PREFIXES: tuple[_ErrorPrefixPair, ...] = (
     (NotFoundError, "Not found"),
     (RequestTimeoutError, "Request timed out"),
     (TransportError, "Connection error"),
+    (PdpStatusError, "PDP rejected the request"),
 )
 
 
@@ -51,15 +54,24 @@ def _format_error_message(exc: BaseException) -> str:
     return f"Unexpected error: {exc}"
 
 
-def _extract_typer_context(args: tuple[object, ...]) -> typer.Context | None:
+def _extract_typer_context(
+    args: tuple[object, ...],
+    kwargs: dict[str, object] | None = None,
+) -> click.Context | None:
     for arg in args:
-        if isinstance(arg, typer.Context):
+        if isinstance(arg, click.Context):
             return arg
+    for ctx_value in (kwargs or {}).values():
+        if isinstance(ctx_value, click.Context):
+            return ctx_value
     return None
 
 
-def _extract_cli_context(args: tuple[object, ...]) -> CliContext | None:
-    ctx = _extract_typer_context(args)
+def _extract_cli_context(
+    args: tuple[object, ...],
+    kwargs: dict[str, object] | None = None,
+) -> CliContext | None:
+    ctx = _extract_typer_context(args, kwargs)
     if ctx is None or not isinstance(ctx.obj, CliContext):
         return None
     return ctx.obj
@@ -72,13 +84,16 @@ def _reauth_prompt_label(cli_ctx: CliContext) -> str:
     return f"Password for {target} (re-auth required)"
 
 
-def _prepare_reauth(args: tuple[object, ...]) -> bool:
+def _prepare_reauth(
+    args: tuple[object, ...],
+    kwargs: dict[str, object] | None = None,
+) -> bool:
     """Mutate the typer context with a freshly prompted password.
 
     Returns ``True`` if an inline re-auth retry should be attempted,
     ``False`` if the caller should let the original error propagate.
     """
-    typer_ctx = _extract_typer_context(args)
+    typer_ctx = _extract_typer_context(args, kwargs)
     if typer_ctx is None or not isinstance(typer_ctx.obj, CliContext):
         return False
     cli_ctx = typer_ctx.obj
@@ -115,10 +130,14 @@ def _print_verbose_context(exc: NextLabsError) -> None:
         stderr.print(f"  body:    {_format_body_preview(body, len(body))}")
 
 
-def _maybe_print_verbose(exc: BaseException, args: tuple[object, ...]) -> None:
+def _maybe_print_verbose(
+    exc: BaseException,
+    args: tuple[object, ...],
+    kwargs: dict[str, object] | None = None,
+) -> None:
     if not isinstance(exc, NextLabsError):
         return
-    cli_ctx = _extract_cli_context(args)
+    cli_ctx = _extract_cli_context(args, kwargs)
     if cli_ctx is None or cli_ctx.verbose < 1:
         return
     _print_verbose_context(exc)
@@ -127,9 +146,10 @@ def _maybe_print_verbose(exc: BaseException, args: tuple[object, ...]) -> None:
 def _handle_exception(
     exc: BaseException,
     args: tuple[object, ...],
+    kwargs: dict[str, object] | None = None,
 ) -> None:
     print_error(_format_error_message(exc))
-    _maybe_print_verbose(exc, args)
+    _maybe_print_verbose(exc, args, kwargs)
     raise typer.Exit(code=1) from exc
 
 
@@ -141,7 +161,7 @@ def _run_with_reauth(
     try:
         return func(*args, **kwargs)
     except RefreshTokenExpiredError:
-        if not _prepare_reauth(args):
+        if not _prepare_reauth(args, kwargs):
             raise
         return func(*args, **kwargs)
 
@@ -156,7 +176,7 @@ def cli_error_handler(
         except typer.Exit:
             raise
         except Exception as exc:
-            _handle_exception(exc, args)
+            _handle_exception(exc, args, kwargs)
             raise  # unreachable; _handle_exception always raises
 
     return wrapper

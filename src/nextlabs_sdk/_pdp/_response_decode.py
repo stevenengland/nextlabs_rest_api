@@ -5,14 +5,14 @@ from typing import Callable, TypeVar
 import httpx
 
 from nextlabs_sdk._json_response import decode_json
-from nextlabs_sdk.exceptions import ApiError
+from nextlabs_sdk.exceptions import ApiError, PdpStatusError
 
 T_Payload = TypeVar("T_Payload")
 
 
 def decode_pdp_response(
     response: httpx.Response,
-    deserializer: Callable[[dict[str, object]], T_Payload],
+    deserializer: Callable[[httpx.Response, dict[str, object]], T_Payload],
     *,
     what: str,
 ) -> T_Payload:
@@ -24,7 +24,9 @@ def decode_pdp_response(
             status_code=response.status_code,
         )
     try:
-        return deserializer(body)
+        return deserializer(response, body)
+    except PdpStatusError:
+        raise
     except (KeyError, TypeError, ValueError) as exc:
         raise ApiError(
             f"Unexpected PDP response shape while decoding {what}: {exc}",
