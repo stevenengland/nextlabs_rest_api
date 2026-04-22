@@ -80,9 +80,13 @@ def _render_eval_response(response: EvalResponse, console: Console) -> None:
     color = _DECISION_COLORS.get(evaluation.decision, "")
     console.print(f"Decision: [{color}]{evaluation.decision.value}[/{color}]")
     status_msg = evaluation.status.message or evaluation.status.code
-    console.print(f"Status:   {status_msg}", markup=False)
+    console.print(f"Status:   {status_msg}", markup=False, highlight=False)
     if evaluation.status.detail:
-        console.print(f"Detail:   {evaluation.status.detail}", markup=False)
+        console.print(
+            f"Detail:   {evaluation.status.detail}",
+            markup=False,
+            highlight=False,
+        )
     if evaluation.obligations:
         _print_obligations(console, evaluation.obligations)
     if evaluation.policy_refs:
