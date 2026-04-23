@@ -70,6 +70,8 @@ def _make_query() -> ActivityLogQuery:
         policy_decision="AD",
         sort_by="time",
         sort_order="ascending",
+        field_name="host_name",
+        field_value="cloudaz.nextlabs.solutions",
     )
 
 

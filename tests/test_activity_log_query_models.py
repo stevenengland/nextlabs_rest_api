@@ -10,23 +10,23 @@ from nextlabs_sdk._cloudaz._activity_log_query_models import (
 
 def _required() -> dict[str, object]:
     return {
-        "from_date": 1716825600000,
-        "to_date": 1717516799999,
         "policy_decision": "AD",
         "sort_by": "time",
         "sort_order": "ascending",
+        "field_name": "host_name",
+        "field_value": "cloudaz.nextlabs.solutions",
     }
 
 
 def test_activity_log_query_required_fields():
     query = ActivityLogQuery(**_required())  # type: ignore[arg-type]
-    assert query.from_date == 1716825600000
-    assert query.to_date == 1717516799999
     assert query.policy_decision == "AD"
     assert query.sort_by == "time"
     assert query.sort_order == "ascending"
-    assert query.field_name is None
-    assert query.field_value is None
+    assert query.field_name == "host_name"
+    assert query.field_value == "cloudaz.nextlabs.solutions"
+    assert query.from_date is None
+    assert query.to_date is None
     assert query.header is None
     assert query.page is None
     assert query.size is None
@@ -35,8 +35,8 @@ def test_activity_log_query_required_fields():
 def test_activity_log_query_serialization_aliases():
     query = ActivityLogQuery(
         **_required(),  # type: ignore[arg-type]
-        field_name="host_name",
-        field_value="cloudaz.nextlabs.solutions",
+        from_date=1716825600000,
+        to_date=1717516799999,
         header=["ROW_ID", "TIME", "USER_NAME"],
         page=0,
         size=10,
@@ -59,8 +59,25 @@ def test_activity_log_query_excludes_none_optional_fields():
         by_alias=True,
         exclude_none=True,
     )
-    for key in ("fieldName", "fieldValue", "header", "page", "size"):
+    for key in ("fromDate", "toDate", "header", "page", "size"):
         assert key not in dumped
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["policy_decision", "sort_by", "sort_order", "field_name", "field_value"],
+)
+def test_activity_log_query_rejects_missing_required(missing: str):
+    payload = _required()
+    payload.pop(missing)
+    with pytest.raises(Exception):
+        ActivityLogQuery(**payload)  # type: ignore[arg-type]
+
+
+def test_activity_log_query_accepts_missing_dates():
+    query = ActivityLogQuery(**_required())  # type: ignore[arg-type]
+    assert query.from_date is None
+    assert query.to_date is None
 
 
 def test_activity_log_attribute_model_validate_and_null():
