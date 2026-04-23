@@ -15,6 +15,7 @@ from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_error, render
 from nextlabs_sdk._cli._payload_loader import load_payload
+from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
 from nextlabs_sdk._cloudaz._audit_log_models import (
     AuditLogEntry,
     AuditLogQuery,
@@ -39,12 +40,22 @@ _USER_COLUMNS = (
 )
 
 
+_DATE_HELP = (
+    "Accepts epoch milliseconds (e.g. 1737014400000), ISO 8601 datetime "
+    "(e.g. 2024-01-15 or 2024-01-15T10:30:00+02:00, naive values treated "
+    "as UTC), or a relative offset from now (e.g. 30s, 5m, 2h, 3d, 1w)."
+)
+
+
 @audit_logs_app.command()
 @cli_error_handler
 def search(
     ctx: typer.Context,
-    start_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    end_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    start_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    end_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
     entity_type: Annotated[
         str | None, typer.Option(help="Filter by entity type")
     ] = None,
@@ -56,9 +67,11 @@ def search(
     """Search entity audit logs."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
+    start_ms = parse_time(start_date)
+    end_ms = now_epoch_ms() if end_date is None else parse_time(end_date)
     query = AuditLogQuery(
-        start_date=start_date,
-        end_date=end_date,
+        start_date=start_ms,
+        end_date=end_ms,
         entity_type=entity_type,
         action=action,
         page_size=page_size,

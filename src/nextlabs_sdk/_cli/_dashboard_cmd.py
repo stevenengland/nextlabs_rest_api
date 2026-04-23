@@ -11,9 +11,23 @@ from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, render
+from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
 from nextlabs_sdk._cloudaz._dashboard_models import PolicyActivity
 
 dashboard_app = typer.Typer(help="Reporter dashboard commands")
+
+_DATE_HELP = (
+    "Accepts epoch milliseconds (e.g. 1737014400000), ISO 8601 datetime "
+    "(e.g. 2024-01-15 or 2024-01-15T10:30:00+02:00, naive values treated "
+    "as UTC), or a relative offset from now (e.g. 30s, 5m, 2h, 3d, 1w)."
+)
+
+
+def _resolve_range(from_date: str, to_date: str | None) -> tuple[int, int]:
+    start_ms = parse_time(from_date)
+    end_ms = now_epoch_ms() if to_date is None else parse_time(to_date)
+    return start_ms, end_ms
+
 
 _ALERT_COLUMNS = (
     ColumnDef("Level", "level"),
@@ -48,13 +62,17 @@ _MONITOR_TAG_ALERT_COLUMNS = (
 @cli_error_handler
 def alerts(
     ctx: typer.Context,
-    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    from_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    to_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
 ) -> None:
     """Retrieve latest alerts."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
-    alerts_list = client.dashboard.latest_alerts(from_date, to_date)
+    start_ms, end_ms = _resolve_range(from_date, to_date)
+    alerts_list = client.dashboard.latest_alerts(start_ms, end_ms)
     render(cli_ctx, alerts_list, _ALERT_COLUMNS, title="Alerts")
 
 
@@ -62,14 +80,18 @@ def alerts(
 @cli_error_handler
 def top_users(
     ctx: typer.Context,
-    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    from_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    to_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
     decision: Annotated[str, typer.Option(help="Policy decision filter")] = "AD",
 ) -> None:
     """Retrieve top users by activity."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
-    users = client.dashboard.top_users(from_date, to_date, decision)
+    start_ms, end_ms = _resolve_range(from_date, to_date)
+    users = client.dashboard.top_users(start_ms, end_ms, decision)
     render(cli_ctx, users, _ACTIVITY_COLUMNS, title="Top Users")
 
 
@@ -77,14 +99,18 @@ def top_users(
 @cli_error_handler
 def top_resources(
     ctx: typer.Context,
-    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    from_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    to_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
     decision: Annotated[str, typer.Option(help="Policy decision filter")] = "AD",
 ) -> None:
     """Retrieve top resources by activity."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
-    resources = client.dashboard.top_resources(from_date, to_date, decision)
+    start_ms, end_ms = _resolve_range(from_date, to_date)
+    resources = client.dashboard.top_resources(start_ms, end_ms, decision)
     render(cli_ctx, resources, _ACTIVITY_COLUMNS, title="Top Resources")
 
 
@@ -92,14 +118,18 @@ def top_resources(
 @cli_error_handler
 def top_policies(
     ctx: typer.Context,
-    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    from_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    to_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
     decision: Annotated[str, typer.Option(help="Policy decision filter")] = "AD",
 ) -> None:
     """Retrieve top policies with daily trend data."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
-    policies = client.dashboard.top_policies(from_date, to_date, decision)
+    start_ms, end_ms = _resolve_range(from_date, to_date)
+    policies = client.dashboard.top_policies(start_ms, end_ms, decision)
     render(cli_ctx, policies, _TOP_POLICIES_COLUMNS, title="Top Policies")
 
 
@@ -107,8 +137,11 @@ def top_policies(
 @cli_error_handler
 def alerts_by_monitor_tags(
     ctx: typer.Context,
-    from_date: Annotated[int, typer.Option(help="Start date (epoch ms)")],
-    to_date: Annotated[int, typer.Option(help="End date (epoch ms)")],
+    from_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
+    to_date: Annotated[
+        str | None,
+        typer.Option(help=f"End date (defaults to now). {_DATE_HELP}"),
+    ] = None,
     tag: Annotated[
         list[str] | None,
         typer.Option(
@@ -120,7 +153,8 @@ def alerts_by_monitor_tags(
     """Retrieve alert counts grouped by monitor tag."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
-    alerts_list = client.dashboard.alerts_by_monitor_tags(from_date, to_date)
+    start_ms, end_ms = _resolve_range(from_date, to_date)
+    alerts_list = client.dashboard.alerts_by_monitor_tags(start_ms, end_ms)
     if tag:
         wanted = set(tag)
         alerts_list = [entry for entry in alerts_list if entry.tag_value in wanted]
