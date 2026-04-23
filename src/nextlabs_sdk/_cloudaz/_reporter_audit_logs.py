@@ -5,7 +5,7 @@ import functools
 import httpx
 
 from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
-from nextlabs_sdk._cloudaz._response import parse_reporter_paginated
+from nextlabs_sdk._cloudaz._response import parse_pageable
 from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 
 _SEARCH_PATH = "/nextlabs-reporter/api/activity-logs/search"
@@ -36,7 +36,7 @@ class ReporterAuditLogService:
             _SEARCH_PATH,
             params={"page": page_no, "size": page_size},
         )
-        raw_items, total_pages, total_records = parse_reporter_paginated(response)
+        raw_items, total_pages, total_records = parse_pageable(response)
         entries = [ReporterAuditLogEntry.model_validate(entry) for entry in raw_items]
         return PageResult(
             entries=entries,
@@ -72,7 +72,7 @@ class AsyncReporterAuditLogService:
             _SEARCH_PATH,
             params={"page": page_no, "size": page_size},
         )
-        raw_items, total_pages, total_records = parse_reporter_paginated(response)
+        raw_items, total_pages, total_records = parse_pageable(response)
         entries = [ReporterAuditLogEntry.model_validate(entry) for entry in raw_items]
         return PageResult(
             entries=entries,

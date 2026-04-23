@@ -16,7 +16,7 @@ def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_reporter_envelope(
+def _make_bare_pageable(
     content: list[object],
     total_pages: int = 1,
     total_elements: int = 1,
@@ -24,13 +24,24 @@ def _make_reporter_envelope(
     return httpx.Response(
         200,
         json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": {
-                "content": content,
-                "totalPages": total_pages,
-                "totalElements": total_elements,
+            "content": content,
+            "pageable": {
+                "sort": {"unsorted": False, "sorted": True, "empty": False},
+                "pageSize": 20,
+                "pageNumber": 0,
+                "offset": 0,
+                "paged": True,
+                "unpaged": False,
             },
+            "totalPages": total_pages,
+            "totalElements": total_elements,
+            "last": True,
+            "sort": {"unsorted": False, "sorted": True, "empty": False},
+            "first": True,
+            "numberOfElements": len(content),
+            "size": 20,
+            "number": 0,
+            "empty": not content,
         },
         request=_make_request(),
     )
@@ -62,7 +73,7 @@ def _make_entry_data() -> dict[str, object]:
 def test_search_honors_page_size(page_size, kwargs):
     client = mock(httpx.Client)
     service = ReporterAuditLogService(client)
-    response = _make_reporter_envelope(content=[_make_entry_data()])
+    response = _make_bare_pageable(content=[_make_entry_data()])
     when(client).get(
         SEARCH_URL,
         params={"page": 0, "size": page_size},
@@ -81,13 +92,13 @@ def test_search_honors_page_size(page_size, kwargs):
 def test_search_paginates_multiple_pages():
     client = mock(httpx.Client)
     service = ReporterAuditLogService(client)
-    page0 = _make_reporter_envelope(
+    page0 = _make_bare_pageable(
         content=[_make_entry_data()],
         total_pages=2,
         total_elements=2,
     )
     entry1 = dict(_make_entry_data(), id=1340)
-    page1 = _make_reporter_envelope(
+    page1 = _make_bare_pageable(
         content=[entry1],
         total_pages=2,
         total_elements=2,
@@ -100,3 +111,25 @@ def test_search_paginates_multiple_pages():
     assert len(results) == 2
     assert results[0].id == 1339
     assert results[1].id == 1340
+
+
+def test_search_parses_minimal_top_level_content_without_envelope():
+    """Regression: the live server returns a bare Spring Pageable with no
+    ``statusCode`` / ``data`` envelope. The parser must not demand one."""
+    client = mock(httpx.Client)
+    service = ReporterAuditLogService(client)
+    response = httpx.Response(
+        200,
+        json={
+            "content": [_make_entry_data()],
+            "totalPages": 1,
+            "totalElements": 1,
+        },
+        request=_make_request(),
+    )
+    when(client).get(SEARCH_URL, params={"page": 0, "size": 20}).thenReturn(response)
+
+    results = list(service.search())
+
+    assert len(results) == 1
+    assert results[0].id == 1339

@@ -77,8 +77,15 @@ def parse_paginated(response: httpx.Response) -> tuple[Any, int, int]:
 def parse_reporter_paginated(response: httpx.Response) -> tuple[Any, int, int]:
     """Extract content, total_pages, total_records from a reporter-style response.
 
-    Reporter API nests pagination inside data:
-    {"statusCode": ..., "data": {"content": [...], "totalPages": N, "totalElements": N}}
+    Used by the ``/v1/`` Reporter endpoints (audit logs, activity logs, policy
+    activity reports) which nest pagination inside a CloudAz envelope::
+
+        {"statusCode": ..., "data": {"content": [...], "totalPages": N,
+         "totalElements": N}}
+
+    The newer ``/nextlabs-reporter/api/activity-logs/search`` endpoint returns
+    a bare Spring ``Page<T>`` without an envelope — use :func:`parse_pageable`
+    for that shape instead.
     """
     raise_for_status(response)
     body = decode_json_object(response)
@@ -95,6 +102,30 @@ def parse_reporter_paginated(response: httpx.Response) -> tuple[Any, int, int]:
         "totalElements",
         len(content_list) if isinstance(content_list, list) else 0,
     )
+    return content_list, total_pages, total_records
+
+
+def parse_pageable(response: httpx.Response) -> tuple[Any, int, int]:
+    """Extract content, total_pages, total_records from a bare Spring Pageable.
+
+    Shape::
+
+        {"content": [...], "totalPages": N, "totalElements": N, ...}
+
+    Unlike :func:`parse_reporter_paginated`, this response has no CloudAz
+    envelope and no ``statusCode`` — so the envelope-status check is skipped.
+    Used by ``/nextlabs-reporter/api/activity-logs/search``.
+    """
+    raise_for_status(response)
+    body = decode_json_object(response)
+    content_list = require_key(body, "content")
+    total_pages = require_key(body, "totalPages")
+    total_records = require_key(body, "totalElements")
+    if not isinstance(total_pages, int) or not isinstance(total_records, int):
+        raise ApiError(
+            "Unexpected response shape: pagination fields are not integers",
+            status_code=response.status_code,
+        )
     return content_list, total_pages, total_records
 
 
