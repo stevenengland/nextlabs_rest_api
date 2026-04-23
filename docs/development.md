@@ -69,13 +69,19 @@ pre-commit run --all-files
 docker compose -f docker/compose.yaml up --build
 ```
 
-## Bare Metal Setup
+## Local setup without the dev container
 
-For non-Docker deployments:
+If you cannot (or do not want to) use the dev container, set up a local
+virtual environment manually:
 
 ```bash
-./tools/setup_bare_metal.sh
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements/dev.txt -c requirements/constraints.txt
+pip install -e . --no-deps
+pre-commit install
 ```
+
+Docker is still required to run the E2E suite (`tests.py --e2e`).
 
 ## E2E Tests
 

@@ -59,4 +59,4 @@ notice — do not import from tests outside their own module, examples, or docs.
 | `tests.py` | Pytest wrapper. `--short` filters output; `--e2e` / `--all` pick markers. Accepts path/nodeid targets (e.g. `tests/foo.py::test_bar`); explicit targets drop the default `-m "not e2e"` marker and auto-disable coverage so single-file runs don't trip the 90% gate. |
 | `fetch_openapi_spec.py` | Refresh committed OpenAPI fixture (local only). |
 | `build.py` | Build tasks. |
-| `init_project.sh`, `setup_bare_metal.sh` | Setup helpers. |
+| `init_project.sh` | Setup helper (template bootstrap). |
