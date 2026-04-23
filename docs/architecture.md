@@ -55,8 +55,8 @@ notice — do not import from tests outside their own module, examples, or docs.
 
 | Script | Purpose |
 |---|---|
-| `checks.py` | Black + Flake8 + MyPy + Pyright. Use `--short` for terse output. |
-| `tests.py` | Pytest wrapper. `--short` filters output; `--e2e` / `--all` pick markers. |
+| `checks.py` | Black + Flake8 + MyPy + Pyright. `--short` for terse output. Accepts a tool name (`black` / `flake8` / `mypy` / `pyright`) and/or file paths to narrow the run; narrowed `mypy` auto-adds `--follow-imports=silent`. |
+| `tests.py` | Pytest wrapper. `--short` filters output; `--e2e` / `--all` pick markers. Accepts path/nodeid targets (e.g. `tests/foo.py::test_bar`); explicit targets drop the default `-m "not e2e"` marker and auto-disable coverage so single-file runs don't trip the 90% gate. |
 | `fetch_openapi_spec.py` | Refresh committed OpenAPI fixture (local only). |
 | `build.py` | Build tasks. |
 | `init_project.sh`, `setup_bare_metal.sh` | Setup helpers. |
