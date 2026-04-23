@@ -60,11 +60,17 @@ def search(
         str | None, typer.Option(help="Filter by entity type")
     ] = None,
     action: Annotated[str | None, typer.Option(help="Filter by action")] = None,
-    page_size: Annotated[int | None, typer.Option(help="Results per page")] = None,
-    sort_by: Annotated[str | None, typer.Option(help="Sort field")] = None,
-    sort_order: Annotated[str | None, typer.Option(help="Sort order")] = None,
+    page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
+    sort_by: Annotated[str, typer.Option(help="Sort field")] = "timestamp",
+    sort_order: Annotated[str, typer.Option(help="Sort order")] = "DESC",
 ) -> None:
-    """Search entity audit logs."""
+    """Search entity audit logs.
+
+    ``--sort-by``, ``--sort-order``, and ``--page-size`` default to values
+    accepted by live reporter deployments. The server rejects requests that
+    omit these fields (observed 400/500 responses) even though the OpenAPI
+    spec marks them optional.
+    """
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     start_ms = parse_time(start_date)
@@ -92,7 +98,14 @@ def export(
     ],
     query_path: Annotated[
         Path | None,
-        typer.Option("--query", help="Path to a JSON AuditLogQuery payload"),
+        typer.Option(
+            "--query",
+            help=(
+                "Path to a JSON AuditLogQuery payload. Live reporter servers "
+                "require 'sortBy', 'sortOrder', and 'pageSize' to be present "
+                "in the payload."
+            ),
+        ),
     ] = None,
     ids: Annotated[
         list[int] | None,
@@ -107,7 +120,12 @@ def export(
         typer.Option("--overwrite/--no-overwrite", help="Replace existing file"),
     ] = False,
 ) -> None:
-    """Export audit logs as bytes to ``--output``."""
+    """Export audit logs as bytes to ``--output``.
+
+    The ``--query`` JSON file is forwarded verbatim; live reporter servers
+    reject queries missing ``sortBy``, ``sortOrder``, or ``pageSize``, so
+    include those fields in the payload.
+    """
     resolved_ids: list[int] | None = None
     if ids or ids_csv:
         resolved_ids = parse_bulk_ids(ids, ids_csv)
