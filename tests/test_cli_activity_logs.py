@@ -52,6 +52,8 @@ def query_file(tmp_path: Path) -> Path:
                 "policy_decision": "AD",
                 "sort_by": "TIME",
                 "sort_order": "descending",
+                "field_name": "user_name",
+                "field_value": "alice",
             },
         ),
     )

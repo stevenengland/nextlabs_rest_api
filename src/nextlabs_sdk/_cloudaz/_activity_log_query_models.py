@@ -11,13 +11,13 @@ class ActivityLogQuery(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    from_date: int = Field(serialization_alias="fromDate")
-    to_date: int = Field(serialization_alias="toDate")
     policy_decision: str = Field(serialization_alias="policyDecision")
     sort_by: str = Field(serialization_alias="sortBy")
     sort_order: str = Field(serialization_alias="sortOrder")
-    field_name: str | None = Field(default=None, serialization_alias="fieldName")
-    field_value: str | None = Field(default=None, serialization_alias="fieldValue")
+    field_name: str = Field(serialization_alias="fieldName")
+    field_value: str = Field(serialization_alias="fieldValue")
+    from_date: int | None = Field(default=None, serialization_alias="fromDate")
+    to_date: int | None = Field(default=None, serialization_alias="toDate")
     header: list[str] | None = None
     page: int | None = None
     size: int | None = None
