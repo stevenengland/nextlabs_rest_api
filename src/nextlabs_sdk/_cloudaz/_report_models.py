@@ -105,6 +105,7 @@ class DeleteReportsRequest(BaseModel):
         default=None, serialization_alias="policyDecision"
     )
     report_ids: list[int] | None = Field(default=None, serialization_alias="reportIds")
+    shared: bool | None = None
 
 
 class PolicyActivityReport(BaseModel):
