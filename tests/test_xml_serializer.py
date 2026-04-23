@@ -31,6 +31,11 @@ from nextlabs_sdk._pdp._xml_serializer import (
 from nextlabs_sdk.exceptions import PdpStatusError
 
 XACML_NS = "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+XACML_SCHEMA_LOCATION = (
+    "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+    " http://docs.oasis-open.org/xacml/3.0/xacml-core-v3-schema-wd-17.xsd"
+)
 _OK_URN = "urn:oasis:names:tc:xacml:1.0:status:ok"
 
 
@@ -99,6 +104,29 @@ def test_xml_serialize_subject_attribute_values():
             assert value_el.text == "user@example.com"
             return
     raise AssertionError("Subject category not found")
+
+
+def test_xml_serialize_eval_request_declares_xsi_schema_location():
+    raw = serialize_eval_request(_make_eval_request())
+    root = _parse_xml(raw)
+
+    assert root.attrib.get(f"{{{XSI_NS}}}schemaLocation") == XACML_SCHEMA_LOCATION
+    assert b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' in raw
+    assert b"xsi:schemaLocation=" in raw
+
+
+def test_xml_serialize_permissions_request_declares_xsi_schema_location():
+    request = PermissionsRequest(
+        subject=Subject(id="u"),
+        resource=Resource(id="r", type="t"),
+        application=Application(id="app"),
+    )
+    raw = serialize_permissions_request(request)
+    root = _parse_xml(raw)
+
+    assert root.attrib.get(f"{{{XSI_NS}}}schemaLocation") == XACML_SCHEMA_LOCATION
+    assert b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"' in raw
+    assert b"xsi:schemaLocation=" in raw
 
 
 def test_xml_serialize_permissions_no_action():

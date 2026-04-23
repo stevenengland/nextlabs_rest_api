@@ -29,6 +29,11 @@ from nextlabs_sdk._pdp._response_models import (
 from nextlabs_sdk._pdp._status_check import raise_if_not_ok
 
 _XACML_NS = "urn:oasis:names:tc:xacml:3.0:core:schema:wd-17"
+_XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+_XACML_SCHEMA_URL = (
+    "http://docs.oasis-open.org/xacml/3.0/xacml-core-v3-schema-wd-17.xsd"
+)
+_XACML_SCHEMA_LOCATION = f"{_XACML_NS} {_XACML_SCHEMA_URL}"
 _ATTRIBUTE_TAG = "Attribute"
 _ATTRIBUTE_VALUE_TAG = "AttributeValue"
 _ATTRIBUTE_ID_KEY = "AttributeId"
@@ -165,7 +170,9 @@ def _ns(tag: str) -> str:
 
 def _make_request_element(return_policy_ids: bool) -> ET.Element:
     ET.register_namespace("", _XACML_NS)
+    ET.register_namespace("xsi", _XSI_NS)
     root = ET.Element(_ns("Request"))
+    root.set(f"{{{_XSI_NS}}}schemaLocation", _XACML_SCHEMA_LOCATION)
     root.set(
         "ReturnPolicyIdList",
         "true" if return_policy_ids else "false",
