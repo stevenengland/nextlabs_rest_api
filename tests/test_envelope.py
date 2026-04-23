@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
 import pytest
 
@@ -89,3 +91,40 @@ class TestEnvelopeFromMapping:
             None,
             None,
         )
+
+
+class TestEnvelopeDebugLogging:
+    """Each (None, None) path emits a distinct debug-level reason (issue #96)."""
+
+    def _reasons(self, caplog: pytest.LogCaptureFixture) -> list[str | None]:
+        return [
+            record.__dict__.get("reason")
+            for record in caplog.records
+            if record.name == "nextlabs_sdk" and record.levelno == logging.DEBUG
+        ]
+
+    def test_logs_body_not_json(self, caplog: pytest.LogCaptureFixture):
+        response = httpx.Response(500, text="<html>not json</html>")
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            envelope_from_response(response)
+        assert "body_not_json" in self._reasons(caplog)
+
+    def test_logs_body_not_mapping(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            envelope_from_mapping(["statusCode", "6000"])
+        assert "body_not_mapping" in self._reasons(caplog)
+
+    def test_logs_missing_status_code(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            envelope_from_mapping({"message": "no code"})
+        assert "missing_status_code" in self._reasons(caplog)
+
+    def test_logs_status_code_not_string(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            envelope_from_mapping({"statusCode": 1003, "message": "m"})
+        assert "status_code_not_string" in self._reasons(caplog)
+
+    def test_success_path_does_not_log(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.DEBUG, logger="nextlabs_sdk"):
+            envelope_from_mapping({"statusCode": "6000", "message": "boom"})
+        assert self._reasons(caplog) == []

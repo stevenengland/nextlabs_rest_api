@@ -20,9 +20,16 @@ designed for use from both the success parsers in
 
 from __future__ import annotations
 
+import logging
 from typing import Mapping
 
 import httpx
+
+logger = logging.getLogger("nextlabs_sdk")
+
+
+def _log_reason(reason: str) -> None:
+    logger.debug("envelope decode failed: %s", reason, extra={"reason": reason})
 
 
 def envelope_from_mapping(
@@ -35,13 +42,25 @@ def envelope_from_mapping(
     string. Returns ``(status_code, None)`` when ``statusCode`` is a
     string but ``message`` is missing, not a string, or an empty string.
 
+    Each ``(None, None)`` return path emits a debug-level log record on
+    the ``nextlabs_sdk`` logger with a structured ``reason`` field
+    (``body_not_mapping``, ``missing_status_code``, or
+    ``status_code_not_string``) to aid diagnosis of surprising server
+    responses.
+
     Never raises.
     """
     if not isinstance(body, Mapping):
+        _log_reason("body_not_mapping")
+        return None, None
+
+    if "statusCode" not in body:
+        _log_reason("missing_status_code")
         return None, None
 
     raw_code = body.get("statusCode")
     if not isinstance(raw_code, str):
+        _log_reason("status_code_not_string")
         return None, None
 
     raw_message = body.get("message")
@@ -61,11 +80,17 @@ def envelope_from_response(
     is a string but ``message`` is missing, not a string, or an empty
     string.
 
+    Each ``(None, None)`` return path emits a debug-level log record on
+    the ``nextlabs_sdk`` logger with a structured ``reason`` field
+    (e.g. ``body_not_json``) — see :func:`envelope_from_mapping` for the
+    mapping-level reasons.
+
     Never raises; safe to call on any ``httpx.Response``.
     """
     try:
         body = response.json()
     except ValueError:
+        _log_reason("body_not_json")
         return None, None
 
     return envelope_from_mapping(body)
