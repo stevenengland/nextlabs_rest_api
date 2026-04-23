@@ -59,8 +59,13 @@ def parse_data(response: httpx.Response) -> Any:
     return require_key(body, "data")
 
 
-def parse_paginated(response: httpx.Response) -> tuple[Any, int, int]:
-    """Extract data, total_pages, and total_records from a paginated response."""
+def parse_paginated(response: httpx.Response) -> tuple[Any, int, int, int | None]:
+    """Extract data, total_pages, total_records, and page_size from a paginated response.
+
+    The fourth element is the server-reported ``pageSize`` (the effective page
+    size the server used). It is ``None`` when the envelope omits the field, in
+    which case callers should fall back to the length of the returned page.
+    """
     raise_for_status(response)
     body = decode_json_object(response)
     _check_envelope_status(body, response)
@@ -71,7 +76,9 @@ def parse_paginated(response: httpx.Response) -> tuple[Any, int, int]:
             "Unexpected response shape: pagination fields are not integers",
             status_code=response.status_code,
         )
-    return require_key(body, "data"), total_pages, total_records
+    raw_page_size = body.get("pageSize")
+    page_size = raw_page_size if isinstance(raw_page_size, int) else None
+    return require_key(body, "data"), total_pages, total_records, page_size
 
 
 def parse_reporter_paginated(response: httpx.Response) -> tuple[Any, int, int]:
@@ -140,13 +147,17 @@ def build_page(
     model: type[_ModelT],
     page_no: int,
 ) -> PageResult[_ModelT]:
-    """Parse a paginated CloudAz response into a typed ``PageResult``."""
-    raw_items, total_pages, total_records = parse_paginated(response)
+    """Parse a paginated CloudAz response into a typed ``PageResult``.
+
+    ``PageResult.page_size`` reflects the server-reported ``pageSize``. If the
+    envelope omits that field we fall back to the length of the returned page.
+    """
+    raw_items, total_pages, total_records, page_size = parse_paginated(response)
     entries = [model.model_validate(entry) for entry in raw_items]
     return PageResult(
         entries=entries,
         page_no=page_no,
-        page_size=len(entries),
+        page_size=len(entries) if page_size is None else page_size,
         total_pages=total_pages,
         total_records=total_records,
     )

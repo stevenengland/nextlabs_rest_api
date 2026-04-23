@@ -243,3 +243,60 @@ def test_list_names_by_type_returns_paginator(client, service):
     assert isinstance(paginator, SyncPaginator)
     results = list(paginator)
     assert len(results) == 1
+
+
+@pytest.mark.parametrize(
+    "call,url",
+    [
+        pytest.param(
+            lambda s: s.list_saved_searches(page_size=50),
+            "/console/api/v1/component/search/savedlist",
+            id="list-saved-searches",
+        ),
+        pytest.param(
+            lambda s: s.find_saved_search("security", page_size=50),
+            "/console/api/v1/component/search/savedlist/security",
+            id="find-saved-search",
+        ),
+    ],
+)
+def test_saved_search_sends_page_size(client, service, call, url):
+    when(client).get(url, params={"pageNo": 0, "pageSize": 50}).thenReturn(
+        _make_envelope(data=[_saved_search_data()], page_size=50),
+    )
+
+    list(call(service))
+
+
+@pytest.mark.parametrize(
+    "call,url",
+    [
+        pytest.param(
+            lambda s: s.list_names("RESOURCE", page_size=50),
+            "/console/api/v1/component/search/listNames/RESOURCE",
+            id="list-names",
+        ),
+        pytest.param(
+            lambda s: s.list_names_by_type("RESOURCE", "Support Tickets", page_size=50),
+            "/console/api/v1/component/search/listNames/RESOURCE/Support Tickets",
+            id="list-names-by-type",
+        ),
+    ],
+)
+def test_list_names_sends_page_size(client, service, call, url):
+    when(client).get(url, params={"pageNo": 0, "pageSize": 50}).thenReturn(
+        _make_envelope(data=[_name_entry_data()], page_size=50),
+    )
+
+    list(call(service))
+
+
+def test_page_size_reflects_server_value(client, service):
+    when(client).get(
+        "/console/api/v1/component/search/savedlist",
+        params={"pageNo": 0, "pageSize": 25},
+    ).thenReturn(_make_envelope(data=[_saved_search_data()], page_size=25))
+
+    page = service.list_saved_searches(page_size=25).first_page()
+
+    assert page.page_size == 25

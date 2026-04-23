@@ -196,3 +196,55 @@ def test_saved_search_paginator(
     results = list(paginator)
     assert len(results) == 1
     assert isinstance(results[0], SavedSearch)
+
+
+@pytest.mark.parametrize(
+    "endpoint,call_method",
+    [
+        pytest.param(
+            f"{_SAVED_LIST}/POLICY_MODEL_RESOURCE",
+            lambda svc: svc.list_saved_searches(
+                "POLICY_MODEL_RESOURCE",
+                page_size=50,
+            ),
+            id="list-saved-searches",
+        ),
+        pytest.param(
+            f"{_SAVED_LIST}/POLICY_MODEL_RESOURCE/support",
+            lambda svc: svc.find_saved_search(
+                "POLICY_MODEL_RESOURCE",
+                "support",
+                page_size=50,
+            ),
+            id="find-saved-search",
+        ),
+    ],
+)
+def test_saved_search_sends_page_size(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+    endpoint: str,
+    call_method: Callable[[ComponentTypeSearchService], Any],
+) -> None:
+    svc, client = service
+    when(client).get(endpoint, params={"pageNo": 0, "pageSize": 50}).thenReturn(
+        _make_envelope([_make_saved_search_data()])
+    )
+
+    list(call_method(svc))
+
+
+def test_saved_search_page_size_reflects_server_value(
+    service: tuple[ComponentTypeSearchService, httpx.Client],
+) -> None:
+    svc, client = service
+    when(client).get(
+        f"{_SAVED_LIST}/POLICY_MODEL_RESOURCE",
+        params={"pageNo": 0, "pageSize": 25},
+    ).thenReturn(_make_envelope([_make_saved_search_data()]))
+
+    page = svc.list_saved_searches(
+        "POLICY_MODEL_RESOURCE",
+        page_size=25,
+    ).first_page()
+
+    assert page.page_size == 10

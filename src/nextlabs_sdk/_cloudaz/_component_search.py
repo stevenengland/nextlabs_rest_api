@@ -14,6 +14,7 @@ from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
 _PAGE_NO_PARAM = "pageNo"
+_PAGE_SIZE_PARAM = "pageSize"
 
 
 class ComponentSearchService:
@@ -39,16 +40,29 @@ class ComponentSearchService:
         )
         return SavedSearch.model_validate(parse_data(response))
 
-    def list_saved_searches(self) -> SyncPaginator[SavedSearch]:
+    def list_saved_searches(
+        self,
+        *,
+        page_size: int | None = None,
+    ) -> SyncPaginator[SavedSearch]:
         return SyncPaginator(
-            fetch_page=self._fetch_saved_searches_page,
+            fetch_page=functools.partial(
+                self._fetch_saved_searches_page,
+                page_size,
+            ),
         )
 
-    def find_saved_search(self, name: str) -> SyncPaginator[SavedSearch]:
+    def find_saved_search(
+        self,
+        name: str,
+        *,
+        page_size: int | None = None,
+    ) -> SyncPaginator[SavedSearch]:
         return SyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_find_saved_search_page,
                 name,
+                page_size,
             ),
         )
 
@@ -58,26 +72,41 @@ class ComponentSearchService:
         )
         raise_for_status(response)
 
-    def list_names(self, group: str) -> SyncPaginator[ComponentNameEntry]:
+    def list_names(
+        self,
+        group: str,
+        *,
+        page_size: int | None = None,
+    ) -> SyncPaginator[ComponentNameEntry]:
         return SyncPaginator(
-            fetch_page=functools.partial(self._fetch_names_page, group),
+            fetch_page=functools.partial(self._fetch_names_page, group, page_size),
         )
 
     def list_names_by_type(
         self,
         group: str,
         component_type: str,
+        *,
+        page_size: int | None = None,
     ) -> SyncPaginator[ComponentNameEntry]:
         return SyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_names_by_type_page,
                 group,
                 component_type,
+                page_size,
             ),
         )
 
-    def _page_params(self, page_no: int) -> dict[str, int]:
-        return {_PAGE_NO_PARAM: page_no}
+    def _page_params(
+        self,
+        page_no: int,
+        page_size: int | None = None,
+    ) -> dict[str, int]:
+        query_params: dict[str, int] = {_PAGE_NO_PARAM: page_no}
+        if page_size is not None:
+            query_params[_PAGE_SIZE_PARAM] = page_size
+        return query_params
 
     def _fetch_search_page(
         self,
@@ -92,33 +121,36 @@ class ComponentSearchService:
 
     def _fetch_saved_searches_page(
         self,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             "/console/api/v1/component/search/savedlist",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, SavedSearch, page_no)
 
     def _fetch_find_saved_search_page(
         self,
         name: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             f"/console/api/v1/component/search/savedlist/{name}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, SavedSearch, page_no)
 
     def _fetch_names_page(
         self,
         group: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[ComponentNameEntry]:
         response = self._client.get(
             f"/console/api/v1/component/search/listNames/{group}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, ComponentNameEntry, page_no)
 
@@ -126,11 +158,12 @@ class ComponentSearchService:
         self,
         group: str,
         component_type: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[ComponentNameEntry]:
         response = self._client.get(
             f"/console/api/v1/component/search/listNames/{group}/{component_type}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, ComponentNameEntry, page_no)
 
@@ -158,16 +191,29 @@ class AsyncComponentSearchService:
         )
         return SavedSearch.model_validate(parse_data(response))
 
-    def list_saved_searches(self) -> AsyncPaginator[SavedSearch]:
+    def list_saved_searches(
+        self,
+        *,
+        page_size: int | None = None,
+    ) -> AsyncPaginator[SavedSearch]:
         return AsyncPaginator(
-            fetch_page=self._fetch_saved_searches_page,
+            fetch_page=functools.partial(
+                self._fetch_saved_searches_page,
+                page_size,
+            ),
         )
 
-    def find_saved_search(self, name: str) -> AsyncPaginator[SavedSearch]:
+    def find_saved_search(
+        self,
+        name: str,
+        *,
+        page_size: int | None = None,
+    ) -> AsyncPaginator[SavedSearch]:
         return AsyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_find_saved_search_page,
                 name,
+                page_size,
             ),
         )
 
@@ -177,26 +223,41 @@ class AsyncComponentSearchService:
         )
         raise_for_status(response)
 
-    def list_names(self, group: str) -> AsyncPaginator[ComponentNameEntry]:
+    def list_names(
+        self,
+        group: str,
+        *,
+        page_size: int | None = None,
+    ) -> AsyncPaginator[ComponentNameEntry]:
         return AsyncPaginator(
-            fetch_page=functools.partial(self._fetch_names_page, group),
+            fetch_page=functools.partial(self._fetch_names_page, group, page_size),
         )
 
     def list_names_by_type(
         self,
         group: str,
         component_type: str,
+        *,
+        page_size: int | None = None,
     ) -> AsyncPaginator[ComponentNameEntry]:
         return AsyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_names_by_type_page,
                 group,
                 component_type,
+                page_size,
             ),
         )
 
-    def _page_params(self, page_no: int) -> dict[str, int]:
-        return {_PAGE_NO_PARAM: page_no}
+    def _page_params(
+        self,
+        page_no: int,
+        page_size: int | None = None,
+    ) -> dict[str, int]:
+        query_params: dict[str, int] = {_PAGE_NO_PARAM: page_no}
+        if page_size is not None:
+            query_params[_PAGE_SIZE_PARAM] = page_size
+        return query_params
 
     async def _fetch_search_page(
         self,
@@ -211,33 +272,36 @@ class AsyncComponentSearchService:
 
     async def _fetch_saved_searches_page(
         self,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             "/console/api/v1/component/search/savedlist",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, SavedSearch, page_no)
 
     async def _fetch_find_saved_search_page(
         self,
         name: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             f"/console/api/v1/component/search/savedlist/{name}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, SavedSearch, page_no)
 
     async def _fetch_names_page(
         self,
         group: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[ComponentNameEntry]:
         response = await self._client.get(
             f"/console/api/v1/component/search/listNames/{group}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, ComponentNameEntry, page_no)
 
@@ -245,10 +309,11 @@ class AsyncComponentSearchService:
         self,
         group: str,
         component_type: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[ComponentNameEntry]:
         response = await self._client.get(
             f"/console/api/v1/component/search/listNames/{group}/{component_type}",
-            params=self._page_params(page_no),
+            params=self._page_params(page_no, page_size),
         )
         return build_page(response, ComponentNameEntry, page_no)

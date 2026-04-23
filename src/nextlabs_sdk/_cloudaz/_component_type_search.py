@@ -11,6 +11,44 @@ from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
 _PAGE_NO_PARAM = "pageNo"
+_PAGE_SIZE_PARAM = "pageSize"
+
+
+def _saved_list_params(page_no: int, page_size: int | None) -> dict[str, int]:
+    query_params: dict[str, int] = {_PAGE_NO_PARAM: page_no}
+    if page_size is not None:
+        query_params[_PAGE_SIZE_PARAM] = page_size
+    return query_params
+
+
+def _saved_search_page_result(
+    response: httpx.Response,
+    page_no: int,
+) -> PageResult[SavedSearch]:
+    raw_items, total_pages, total_records, server_page_size = parse_paginated(response)
+    searches = [SavedSearch.model_validate(entry) for entry in raw_items]
+    return PageResult(
+        entries=searches,
+        page_no=page_no,
+        page_size=len(searches) if server_page_size is None else server_page_size,
+        total_pages=total_pages,
+        total_records=total_records,
+    )
+
+
+def _component_type_page_result(
+    response: httpx.Response,
+    page_no: int,
+) -> PageResult[ComponentType]:
+    raw_items, total_pages, total_records, server_page_size = parse_paginated(response)
+    entries = [ComponentType.model_validate(entry) for entry in raw_items]
+    return PageResult(
+        entries=entries,
+        page_no=page_no,
+        page_size=len(entries) if server_page_size is None else server_page_size,
+        total_pages=total_pages,
+        total_records=total_records,
+    )
 
 
 class ComponentTypeSearchService:
@@ -45,11 +83,14 @@ class ComponentTypeSearchService:
     def list_saved_searches(
         self,
         search_type: str,
+        *,
+        page_size: int | None = None,
     ) -> SyncPaginator[SavedSearch]:
         return SyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_saved_searches_page,
                 search_type,
+                page_size,
             ),
         )
 
@@ -57,12 +98,15 @@ class ComponentTypeSearchService:
         self,
         search_type: str,
         name: str,
+        *,
+        page_size: int | None = None,
     ) -> SyncPaginator[SavedSearch]:
         return SyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_find_saved_search_page,
                 search_type,
                 name,
+                page_size,
             ),
         )
 
@@ -75,54 +119,32 @@ class ComponentTypeSearchService:
             "/console/api/v1/policyModel/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        component_types = [ComponentType.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=component_types,
-            page_no=page_no,
-            page_size=len(component_types),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _component_type_page_result(response, page_no)
 
     def _fetch_saved_searches_page(
         self,
         search_type: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             f"/console/api/v1/policyModel/search/savedlist/{search_type}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=_saved_list_params(page_no, page_size),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _saved_search_page_result(response, page_no)
 
     def _fetch_find_saved_search_page(
         self,
         search_type: str,
         name: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = self._client.get(
             f"/console/api/v1/policyModel/search/savedlist/{search_type}/{name}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=_saved_list_params(page_no, page_size),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _saved_search_page_result(response, page_no)
 
 
 class AsyncComponentTypeSearchService:
@@ -157,11 +179,14 @@ class AsyncComponentTypeSearchService:
     def list_saved_searches(
         self,
         search_type: str,
+        *,
+        page_size: int | None = None,
     ) -> AsyncPaginator[SavedSearch]:
         return AsyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_saved_searches_page,
                 search_type,
+                page_size,
             ),
         )
 
@@ -169,12 +194,15 @@ class AsyncComponentTypeSearchService:
         self,
         search_type: str,
         name: str,
+        *,
+        page_size: int | None = None,
     ) -> AsyncPaginator[SavedSearch]:
         return AsyncPaginator(
             fetch_page=functools.partial(
                 self._fetch_find_saved_search_page,
                 search_type,
                 name,
+                page_size,
             ),
         )
 
@@ -187,51 +215,29 @@ class AsyncComponentTypeSearchService:
             "/console/api/v1/policyModel/search",
             json=criteria.page(page_no).to_dict(),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        component_types = [ComponentType.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=component_types,
-            page_no=page_no,
-            page_size=len(component_types),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _component_type_page_result(response, page_no)
 
     async def _fetch_saved_searches_page(
         self,
         search_type: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             f"/console/api/v1/policyModel/search/savedlist/{search_type}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=_saved_list_params(page_no, page_size),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _saved_search_page_result(response, page_no)
 
     async def _fetch_find_saved_search_page(
         self,
         search_type: str,
         name: str,
+        page_size: int | None,
         page_no: int,
     ) -> PageResult[SavedSearch]:
         response = await self._client.get(
             f"/console/api/v1/policyModel/search/savedlist/{search_type}/{name}",
-            params={_PAGE_NO_PARAM: page_no},
+            params=_saved_list_params(page_no, page_size),
         )
-        raw_items, total_pages, total_records = parse_paginated(response)
-        searches = [SavedSearch.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=searches,
-            page_no=page_no,
-            page_size=len(searches),
-            total_pages=total_pages,
-            total_records=total_records,
-        )
+        return _saved_search_page_result(response, page_no)

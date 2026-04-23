@@ -113,3 +113,19 @@ def test_async_delete_succeeds():
     )
 
     _run(lambda: service.delete(10))
+
+
+def test_async_list_sends_page_size_and_show_hidden():
+    client, service = _make_service()
+    when(client).get(
+        "/console/api/v1/config/tags/list/COMPONENT_TAG",
+        params={"pageNo": 0, "pageSize": 50, "showHidden": "true"},
+    ).thenReturn(_make_envelope(data=[_make_tag_data()]))
+
+    paginator = service.list(TagType.COMPONENT, page_size=50, show_hidden=True)
+
+    async def collect() -> list[Tag]:
+        return [tag async for tag in paginator]
+
+    tags = _run(collect)
+    assert len(tags) == 1

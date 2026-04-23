@@ -149,3 +149,34 @@ def test_get_raises_not_found(client, service):
 
     with pytest.raises(NotFoundError):
         service.get(999)
+
+
+def test_list_sends_page_size_and_show_hidden(client, service):
+    when(client).get(
+        "/console/api/v1/config/tags/list/COMPONENT_TAG",
+        params={"pageNo": 0, "pageSize": 50, "showHidden": "true"},
+    ).thenReturn(_make_envelope(data=[_tag_data()], page_size=50))
+
+    tags = list(service.list(TagType.COMPONENT, page_size=50, show_hidden=True))
+
+    assert len(tags) == 1
+
+
+def test_list_show_hidden_false_is_sent_as_string(client, service):
+    when(client).get(
+        "/console/api/v1/config/tags/list/COMPONENT_TAG",
+        params={"pageNo": 0, "showHidden": "false"},
+    ).thenReturn(_make_envelope(data=[]))
+
+    list(service.list(TagType.COMPONENT, show_hidden=False))
+
+
+def test_first_page_reports_server_page_size(client, service):
+    when(client).get(
+        "/console/api/v1/config/tags/list/COMPONENT_TAG",
+        params={"pageNo": 0, "pageSize": 25},
+    ).thenReturn(_make_envelope(data=[_tag_data()], page_size=25))
+
+    page = service.list(TagType.COMPONENT, page_size=25).first_page()
+
+    assert page.page_size == 25
