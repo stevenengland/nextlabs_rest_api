@@ -6,7 +6,7 @@ import functools
 import httpx
 from pydantic import BaseModel
 
-from nextlabs_sdk._cloudaz._report_models import (
+from nextlabs_sdk._cloudaz._report_models import (  # noqa: WPS235
     ApplicationUser,
     AttributeMappings,
     CachedPolicy,
@@ -35,7 +35,7 @@ _SORT_ORDER_ASCENDING = "ascending"
 _SORT_FIELD_ROW_ID = "rowId"
 
 
-class PolicyActivityReportService:
+class PolicyActivityReportService:  # noqa: WPS214
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
@@ -68,7 +68,7 @@ class PolicyActivityReportService:
     def get(self, report_id: int) -> PolicyActivityReportDetail:
         """Retrieve a report's criteria and widget configuration."""
         response = self._client.get(f"{_BASE_PATH}/{report_id}")
-        raw = parse_data(response)
+        raw = parse_data(response)  # noqa: WPS204
         return PolicyActivityReportDetail.model_validate(raw)
 
     def create(self, request: PolicyActivityReportRequest) -> PolicyActivityReport:
@@ -314,7 +314,7 @@ class PolicyActivityReportService:
         )
 
 
-class AsyncPolicyActivityReportService:
+class AsyncPolicyActivityReportService:  # noqa: WPS214
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

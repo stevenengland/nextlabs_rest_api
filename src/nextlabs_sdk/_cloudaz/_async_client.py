@@ -26,10 +26,10 @@ from nextlabs_sdk._config import HttpConfig
 from nextlabs_sdk.exceptions import AuthenticationError
 
 
-class AsyncCloudAzClient:
+class AsyncCloudAzClient:  # noqa: WPS214
     """Asynchronous client for the NextLabs CloudAz Console API."""
 
-    def __init__(
+    def __init__(  # noqa: WPS211
         self,
         *,
         base_url: str,

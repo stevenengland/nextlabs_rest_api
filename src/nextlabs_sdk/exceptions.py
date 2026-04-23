@@ -10,9 +10,9 @@ _CLIENT_ERROR_THRESHOLD = 400
 _SERVER_ERROR_THRESHOLD = 500
 
 
-class NextLabsError(Exception):
+class NextLabsError(Exception):  # noqa: WPS230
 
-    def __init__(
+    def __init__(  # noqa: WPS211
         self,
         message: str,
         *,
@@ -92,7 +92,7 @@ class PdpStatusError(ApiError):
     ``ApiError`` continue to work.
     """
 
-    def __init__(
+    def __init__(  # noqa: WPS211
         self,
         message: str,
         *,

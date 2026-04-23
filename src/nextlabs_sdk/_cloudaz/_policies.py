@@ -19,7 +19,7 @@ _PLAIN_MODE = "PLAIN"
 _EXPORT_MODE_PARAM = "exportMode"
 
 
-class PolicyService:
+class PolicyService:  # noqa: WPS214
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
@@ -28,7 +28,7 @@ class PolicyService:
         response = self._client.get(
             f"/console/api/v1/policy/mgmt/{policy_id}",
         )
-        return Policy.model_validate(parse_data(response))
+        return Policy.model_validate(parse_data(response))  # noqa: WPS204
 
     def get_active(self, policy_id: int) -> Policy:
         response = self._client.get(
@@ -199,7 +199,7 @@ class PolicyService:
         raise_for_status(response)
 
 
-class AsyncPolicyService:
+class AsyncPolicyService:  # noqa: WPS214
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
@@ -208,7 +208,7 @@ class AsyncPolicyService:
         resp = await self._client.get(
             f"/console/api/v1/policy/mgmt/{policy_id}",
         )
-        return Policy.model_validate(parse_data(resp))
+        return Policy.model_validate(parse_data(resp))  # noqa: WPS204
 
     async def get_active(self, policy_id: int) -> Policy:
         resp = await self._client.get(

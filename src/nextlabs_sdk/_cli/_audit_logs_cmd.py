@@ -49,7 +49,7 @@ _DATE_HELP = (
 
 @audit_logs_app.command()
 @cli_error_handler
-def search(
+def search(  # noqa: WPS211
     ctx: typer.Context,
     start_date: Annotated[str, typer.Option(help=f"Start date. {_DATE_HELP}")],
     end_date: Annotated[
@@ -90,7 +90,7 @@ def search(
 
 @audit_logs_app.command()
 @cli_error_handler
-def export(
+def export(  # noqa: WPS211
     ctx: typer.Context,
     output: Annotated[
         Path,

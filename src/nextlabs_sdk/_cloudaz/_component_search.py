@@ -17,7 +17,7 @@ _PAGE_NO_PARAM = "pageNo"
 _PAGE_SIZE_PARAM = "pageSize"
 
 
-class ComponentSearchService:
+class ComponentSearchService:  # noqa: WPS214
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
@@ -168,7 +168,7 @@ class ComponentSearchService:
         return build_page(response, ComponentNameEntry, page_no)
 
 
-class AsyncComponentSearchService:
+class AsyncComponentSearchService:  # noqa: WPS214
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

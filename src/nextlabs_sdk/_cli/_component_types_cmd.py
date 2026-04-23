@@ -193,7 +193,7 @@ def _build_criteria(
 
 @component_types_app.command()
 @cli_error_handler
-def search(
+def search(  # noqa: WPS211
     ctx: typer.Context,
     type_filter: Annotated[
         str | None,

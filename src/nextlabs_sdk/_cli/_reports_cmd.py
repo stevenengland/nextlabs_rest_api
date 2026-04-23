@@ -81,7 +81,7 @@ _APPLICATION_USER_COLUMNS = (
 
 @reports_app.command(name="list")
 @cli_error_handler
-def list_reports(
+def list_reports(  # noqa: WPS211
     ctx: typer.Context,
     title: Annotated[str, typer.Option(help="Filter by title")] = "",
     shared: Annotated[bool, typer.Option(help="Include shared reports")] = True,
@@ -264,7 +264,7 @@ def generate_enforcements(
 
 @reports_app.command(name="generate-export")
 @cli_error_handler
-def generate_export(
+def generate_export(  # noqa: WPS211
     ctx: typer.Context,
     output: Annotated[
         Path,

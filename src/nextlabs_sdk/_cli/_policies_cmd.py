@@ -67,11 +67,11 @@ _IMPORT_RESULT_COLUMNS = (
 @cli_error_handler
 def get(
     ctx: typer.Context,
-    policy_id: Annotated[int, typer.Argument(help="Policy ID")],
+    policy_id: Annotated[int, typer.Argument(help="Policy ID")],  # noqa: WPS204
 ) -> None:
     """Get a policy by ID."""
     cli_ctx: CliContext = ctx.obj
-    client = _client_factory.make_cloudaz_client(cli_ctx)
+    client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     policy = client.policies.get(policy_id)
     render(cli_ctx, policy, _POLICY_COLUMNS, wide_columns=_POLICY_WIDE_COLUMNS)
 
@@ -341,7 +341,7 @@ def delete(
 
 @policies_app.command()
 @cli_error_handler
-def search(
+def search(  # noqa: WPS211
     ctx: typer.Context,
     status: Annotated[
         str | None, typer.Option(help="Filter by status (DRAFT, APPROVED)")

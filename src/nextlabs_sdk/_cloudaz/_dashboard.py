@@ -22,7 +22,7 @@ class DashboardService:
     def latest_alerts(self, from_date: int, to_date: int) -> list[Alert]:
         """Retrieve the latest alerts between from_date and to_date (epoch ms)."""
         response = self._client.get(f"{_BASE_PATH}/latestAlerts/{from_date}/{to_date}")
-        raw = parse_data(response)
+        raw = parse_data(response)  # noqa: WPS204
         return [Alert.model_validate(entry) for entry in raw]
 
     def alerts_by_monitor_tags(

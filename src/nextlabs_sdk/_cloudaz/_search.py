@@ -66,7 +66,7 @@ def _typed_payload(label: str, **entries: Any) -> dict[str, Any]:
     return out
 
 
-class SearchCriteria:
+class SearchCriteria:  # noqa: WPS214
     """Builder for CloudAz search API request payloads."""
 
     def __init__(self) -> None:

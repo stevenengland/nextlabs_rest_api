@@ -181,7 +181,7 @@ def _dispatch_permissions_payload(
 
 @pdp_app.command(name="eval")
 @cli_error_handler
-def evaluate(
+def evaluate(  # noqa: WPS211
     ctx: typer.Context,
     payload_path: Annotated[
         Path | None,
@@ -277,7 +277,7 @@ def evaluate(
 
 @pdp_app.command()
 @cli_error_handler
-def permissions(
+def permissions(  # noqa: WPS211
     ctx: typer.Context,
     payload_path: Annotated[
         Path | None,

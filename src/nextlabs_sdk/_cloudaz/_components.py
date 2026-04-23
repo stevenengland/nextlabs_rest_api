@@ -11,7 +11,7 @@ from nextlabs_sdk._cloudaz._response import parse_data
 from nextlabs_sdk.exceptions import raise_for_status
 
 
-class ComponentService:
+class ComponentService:  # noqa: WPS214
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
@@ -93,7 +93,7 @@ class ComponentService:
         return [Dependency.model_validate(entry) for entry in raw]
 
 
-class AsyncComponentService:
+class AsyncComponentService:  # noqa: WPS214
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client

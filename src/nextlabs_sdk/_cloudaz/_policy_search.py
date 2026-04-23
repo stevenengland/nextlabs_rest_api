@@ -13,7 +13,7 @@ from nextlabs_sdk.exceptions import raise_for_status
 _PAGE_NO_PARAM = "pageNo"
 
 
-class PolicySearchService:
+class PolicySearchService:  # noqa: WPS214
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
@@ -119,7 +119,7 @@ class PolicySearchService:
         return build_page(response, SavedSearch, page_no)
 
 
-class AsyncPolicySearchService:
+class AsyncPolicySearchService:  # noqa: WPS214
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
