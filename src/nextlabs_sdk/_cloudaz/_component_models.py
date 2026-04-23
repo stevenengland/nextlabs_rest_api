@@ -129,19 +129,19 @@ class PredicateData(BaseModel):
 class ComponentLite(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    id: int  # noqa: WPS125
-    folder_id: int = Field(default=-1, alias="folderId")
+    id: int | None = None  # noqa: WPS125
+    folder_id: int | None = Field(default=None, alias="folderId")
     folder_path: str | None = Field(default=None, alias="folderPath")
     name: str
     lowercase_name: str = Field(default="", alias="lowercase_name")
     full_name: str = Field(default="", alias="fullName")
     description: str | None = None
     status: ComponentStatus
-    model_id: int = Field(alias="modelId")
-    model_type: str = Field(alias="modelType")
-    group: ComponentGroupType
-    last_updated_date: int = Field(alias="lastUpdatedDate")
-    created_date: int = Field(alias="createdDate")
+    model_id: int | None = Field(default=None, alias="modelId")
+    model_type: str | None = Field(default=None, alias="modelType")
+    group: ComponentGroupType | None = None
+    last_updated_date: int | None = Field(default=None, alias="lastUpdatedDate")
+    created_date: int | None = Field(default=None, alias="createdDate")
     owner_id: int = Field(default=0, alias="ownerId")
     owner_display_name: str = Field(default="", alias="ownerDisplayName")
     modified_by_id: int = Field(default=0, alias="modifiedById")

@@ -355,6 +355,26 @@ def test_component_lite_from_api_payload():
     assert cl.empty is False
 
 
+def test_component_lite_accepts_openapi_minimal_payload():
+    cl = ComponentLite.model_validate({"name": "Minimal", "status": "DRAFT"})
+    assert cl.name == "Minimal"
+    assert cl.status == ComponentStatus.DRAFT
+    assert cl.id is None
+    assert cl.model_id is None
+    assert cl.model_type is None
+    assert cl.group is None
+    assert cl.last_updated_date is None
+    assert cl.created_date is None
+    assert cl.tags == []
+
+
+def test_component_lite_rejects_missing_openapi_required():
+    with pytest.raises(ValidationError):
+        ComponentLite.model_validate({"name": "NoStatus"})
+    with pytest.raises(ValidationError):
+        ComponentLite.model_validate({"status": "DRAFT"})
+
+
 def test_push_result_from_api_payload():
     pr = PushResult.model_validate(
         {

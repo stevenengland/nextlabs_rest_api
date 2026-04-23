@@ -91,6 +91,24 @@ def test_operator_rejects_missing_fields() -> None:
         Operator.model_validate({"id": 1, "key": "eq"})
 
 
+def test_tag_accepts_empty_payload() -> None:
+    tag = Tag.model_validate({})
+    assert tag.id is None
+    assert tag.key is None
+    assert tag.label is None
+    assert tag.type is None
+    assert tag.status is None
+
+
+def test_tag_accepts_partial_payload() -> None:
+    tag = Tag.model_validate({"key": "dept", "status": "ACTIVE"})
+    assert tag.key == "dept"
+    assert tag.status == "ACTIVE"
+    assert tag.id is None
+    assert tag.label is None
+    assert tag.type is None
+
+
 def test_tag_rejects_invalid_type() -> None:
     with pytest.raises(ValidationError):
         Tag.model_validate(
