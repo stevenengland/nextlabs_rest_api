@@ -36,6 +36,16 @@ echo "[ok] Package installed."
 "$VENV_DIR/bin/pre-commit" install
 echo "[ok] Pre-commit hooks installed."
 
+# --- Optional system tooling --------------------------------------------------
+# ripgrep (`rg`) is recommended: it respects .gitignore and keeps agent
+# code-search tool output small. Install via your platform's package manager:
+#   Debian/Ubuntu : sudo apt-get install ripgrep
+#   Fedora/RHEL   : sudo dnf install ripgrep
+#   macOS         : brew install ripgrep
+if ! command -v rg >/dev/null 2>&1; then
+    echo "[warn] ripgrep (rg) not found. Install it to speed up agent/code search."
+fi
+
 # --- Summary ------------------------------------------------------------------
 echo ""
 echo "=== Setup complete ==="
