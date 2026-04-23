@@ -7,6 +7,7 @@ import pytest
 
 from nextlabs_sdk._cloudaz._response import (
     parse_data,
+    parse_pageable,
     parse_paginated,
     parse_raw,
     parse_reporter_paginated,
@@ -107,6 +108,103 @@ def test_parse_reporter_paginated_defaults_missing_totals():
     assert items == [{"id": 1}]
     assert total_pages == 1
     assert total_records == 1
+
+
+def _make_bare_pageable(
+    content: list[object],
+    total_pages: int = 1,
+    total_elements: int = 2,
+) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "content": content,
+            "pageable": {
+                "sort": {"unsorted": False, "sorted": True, "empty": False},
+                "pageSize": 20,
+                "pageNumber": 0,
+                "offset": 0,
+                "paged": True,
+                "unpaged": False,
+            },
+            "totalPages": total_pages,
+            "totalElements": total_elements,
+            "last": True,
+            "sort": {"unsorted": False, "sorted": True, "empty": False},
+            "first": True,
+            "numberOfElements": len(content),
+            "size": 20,
+            "number": 0,
+            "empty": not content,
+        },
+        request=_make_request(),
+    )
+
+
+def test_parse_pageable_extracts_content_and_totals():
+    response = _make_bare_pageable(
+        content=[{"id": 1}, {"id": 2}],
+        total_pages=3,
+        total_elements=42,
+    )
+    items, total_pages, total_records = parse_pageable(response)
+    assert items == [{"id": 1}, {"id": 2}]
+    assert total_pages == 3
+    assert total_records == 42
+
+
+def test_parse_pageable_ignores_envelope_status_code():
+    response = httpx.Response(
+        200,
+        json={
+            "statusCode": "5000",
+            "message": "ignored",
+            "content": [{"id": 1}],
+            "totalPages": 1,
+            "totalElements": 1,
+        },
+        request=_make_request(),
+    )
+    items, total_pages, total_records = parse_pageable(response)
+    assert items == [{"id": 1}]
+    assert total_pages == 1
+    assert total_records == 1
+
+
+def test_parse_pageable_raises_on_missing_content():
+    response = httpx.Response(
+        200,
+        json={"totalPages": 1, "totalElements": 0},
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parse_pageable(response)
+    assert "missing 'content'" in exc_info.value.message
+
+
+def test_parse_pageable_raises_on_non_integer_totals():
+    response = httpx.Response(
+        200,
+        json={
+            "content": [],
+            "totalPages": "1",
+            "totalElements": None,
+        },
+        request=_make_request(),
+    )
+    with pytest.raises(ApiError) as exc_info:
+        parse_pageable(response)
+    assert "pagination fields are not integers" in exc_info.value.message
+
+
+def test_parse_pageable_raises_on_http_error():
+    with pytest.raises(ServerError):
+        parse_pageable(_err_response(500, "boom"))
+
+
+def test_parse_pageable_raises_api_error_on_non_json():
+    with pytest.raises(ApiError):
+        parse_pageable(_non_json_response())
 
 
 def test_parse_raw_returns_json_body():

@@ -19,13 +19,28 @@ def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_reporter_envelope(content: list[object]) -> httpx.Response:
+def _make_bare_pageable(content: list[object]) -> httpx.Response:
     return httpx.Response(
         200,
         json={
-            "statusCode": "1003",
-            "message": "Data found successfully",
-            "data": {"content": content, "totalPages": 1, "totalElements": 1},
+            "content": content,
+            "pageable": {
+                "sort": {"unsorted": False, "sorted": True, "empty": False},
+                "pageSize": 20,
+                "pageNumber": 0,
+                "offset": 0,
+                "paged": True,
+                "unpaged": False,
+            },
+            "totalPages": 1,
+            "totalElements": 1,
+            "last": True,
+            "sort": {"unsorted": False, "sorted": True, "empty": False},
+            "first": True,
+            "numberOfElements": len(content),
+            "size": 20,
+            "number": 0,
+            "empty": not content,
         },
         request=_make_request(),
     )
@@ -57,7 +72,7 @@ def _collect(paginator: AsyncPaginator[T]) -> list[T]:
 def test_async_search_returns_paginator():
     client = mock(httpx.AsyncClient)
     service = AsyncReporterAuditLogService(client)
-    response = _make_reporter_envelope(content=[_make_entry_data()])
+    response = _make_bare_pageable(content=[_make_entry_data()])
     when(client).get(
         "/nextlabs-reporter/api/activity-logs/search",
         params={"page": 0, "size": 20},
@@ -71,3 +86,26 @@ def test_async_search_returns_paginator():
     assert isinstance(results[0], ReporterAuditLogEntry)
     assert results[0].component == "REPORTER"
     assert results[0].msg_code == "audit.export.generated.report"
+
+
+def test_async_search_parses_minimal_top_level_content_without_envelope():
+    """Regression: mirrors the sync test — bare Pageable must parse."""
+    client = mock(httpx.AsyncClient)
+    service = AsyncReporterAuditLogService(client)
+    response = httpx.Response(
+        200,
+        json={
+            "content": [_make_entry_data()],
+            "totalPages": 1,
+            "totalElements": 1,
+        },
+        request=_make_request(),
+    )
+    when(client).get(
+        "/nextlabs-reporter/api/activity-logs/search",
+        params={"page": 0, "size": 20},
+    ).thenReturn(response)
+
+    results = _collect(service.search())
+    assert len(results) == 1
+    assert results[0].id == 1339
