@@ -206,9 +206,11 @@ class CloudAzAuth(httpx.Auth):
     ``id_token``; per the CloudAz documentation, the ``id_token`` is the
     value sent in the ``Authorization: Bearer …`` header. ``CloudAzAuth``
     uses ``id_token`` as the bearer credential and keeps ``refresh_token``
-    for silent re-auth. When a token response omits ``id_token``
-    (non-conforming server) the SDK logs a warning and falls back to
-    ``access_token`` for transport continuity.
+    for silent re-auth. By default, a token response that omits
+    ``id_token`` raises :class:`AuthenticationError` so misconfigured OIDC
+    deployments fail loudly. Set ``allow_access_token_fallback=True`` to
+    instead log a warning and fall back to ``access_token`` for transport
+    continuity against known-broken servers.
 
     Supports an optional pluggable :class:`TokenCache` backend. Expiry is
     tracked as absolute UTC epoch seconds so that cached tokens survive
@@ -246,6 +248,7 @@ class CloudAzAuth(httpx.Auth):
         self._cache_key = f"{token_url}|{username}|{client_id}|cloudaz"
         self._lock = threading.Lock()
         self.refresh_token_lifetime: int | None = None
+        self.allow_access_token_fallback: bool = False
 
         self._id_token: str | None = None
         self._access_token: str | None = None
@@ -474,13 +477,24 @@ class CloudAzAuth(httpx.Auth):
         id_token_raw = body.get("id_token")
         if isinstance(id_token_raw, str):
             id_token = id_token_raw
-        else:
+        elif self.allow_access_token_fallback:
             logger.warning(
                 "cloudaz auth: token response missing id_token;"
-                " falling back to access_token. The server is not"
-                " conforming to the CloudAz OIDC contract.",
+                " falling back to access_token (allow_access_token_fallback=True)."
+                " The server is not conforming to the CloudAz OIDC contract.",
             )
             id_token = access_token
+        else:
+            raise AuthenticationError(
+                "Token response missing id_token. The CloudAz API requires"
+                " the OIDC id_token as the bearer credential. Set"
+                " allow_access_token_fallback=True to permit using"
+                " access_token against non-conforming servers.",
+                status_code=response.status_code,
+                response_body=response.text,
+                request_method=_HTTP_POST,
+                request_url=self._token_url,
+            )
         refresh_token_raw = body.get("refresh_token")
         refresh_token = (
             refresh_token_raw
