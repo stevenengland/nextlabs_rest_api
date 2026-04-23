@@ -194,13 +194,9 @@ def new_group_stubs(seeded_wiremock: str) -> str:
                 "status": 200,
                 "headers": {"Content-Type": "application/json"},
                 "jsonBody": {
-                    "statusCode": "100",
-                    "message": "OK",
-                    "data": {
-                        "content": [],
-                        "totalPages": 1,
-                        "totalElements": 0,
-                    },
+                    "content": [],
+                    "totalPages": 1,
+                    "totalElements": 0,
                 },
             },
         },
