@@ -117,7 +117,7 @@ def _make_record_matching_attr() -> dict[str, object]:
         "AttributeId": urns.RECORD_MATCHING_POLICIES_ATTR,
         _VALUE_KEY: "true",
         "DataType": urns.STRING_DATATYPE,
-        "IncludeInResult": False,
+        "IncludeInResult": "false",
     }
 
 
@@ -309,6 +309,7 @@ def _make_attr(
         "AttributeId": attr_id,
         _VALUE_KEY: attr_value,
         "DataType": _infer_datatype(attr_value),
+        "IncludeInResult": "false",
     }
 
 

@@ -272,3 +272,23 @@ def test_xml_deserialize_permissions_response():
     assert response.allowed[0].name == "VIEW"
     assert len(response.denied) == 1
     assert response.denied[0].name == "DELETE"
+
+
+def test_xml_serialize_every_attribute_has_include_in_result_false():
+    request = EvalRequest(
+        subject=Subject(id="u", department="IT"),
+        action=Action(id="VIEW"),
+        resource=Resource(id="r", type="t", attributes={"prod": "p"}),
+        application=Application(id="app", version="1.0"),
+    )
+    root = _parse_xml(serialize_eval_request(request))
+
+    attr_count = 0
+    for attrs_el in root.findall(_ns("Attributes")):
+        for attr_el in attrs_el.findall(_ns("Attribute")):
+            attr_count += 1
+            assert attr_el.get("IncludeInResult") == "false", (
+                f"Attribute {attr_el.get('AttributeId')!r} missing "
+                f'IncludeInResult="false"'
+            )
+    assert attr_count > 0
