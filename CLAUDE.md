@@ -20,6 +20,26 @@ python ./tools/tests.py --short --e2e    # E2E only (needs Docker)
 python ./tools/tests.py --short --all    # Unit + E2E (needs Docker)
 ```
 
+Narrowed invocations (prefer over raw pytest/flake8/mypy/pyright —
+wrappers filter output and save tokens):
+
+```bash
+# one tool, project-wide
+python ./tools/checks.py --short flake8
+
+# one tool, one file (mypy auto-adds --follow-imports=silent)
+python ./tools/checks.py --short mypy src/nextlabs_sdk/_pdp/_client.py
+
+# all tools, narrowed to path(s)
+python ./tools/checks.py --short src/nextlabs_sdk/exceptions.py
+
+# single test by nodeid (coverage auto-disabled when targets given)
+python ./tools/tests.py --short tests/test_foo.py::TestX::test_y
+
+# explicit e2e file — marker auto-dropped, no need for --e2e
+python ./tools/tests.py --short tests/e2e/test_foo.py
+```
+
 Pre-commit hooks (black, flake8, mypy, pyright) on `git commit`. Timeout
 **120 s+** — pyright slow.
 

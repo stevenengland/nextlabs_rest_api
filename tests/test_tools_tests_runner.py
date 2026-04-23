@@ -89,3 +89,79 @@ def test_all_and_e2e_are_mutually_exclusive():
         tests_runner._build_marker_args(["--all", "--e2e"])
 
     assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize(
+    "arg,expected",
+    [
+        ("tests/unit/test_foo.py", True),
+        ("tests/e2e/test_foo.py::TestX::test_y", True),
+        ("src/foo.py", True),
+        ("some/path", True),
+        ("-k", False),
+        ("pagination", False),
+        ("--short", False),
+        ("", False),
+    ],
+)
+def test_looks_like_target(arg, expected):
+    assert tests_runner._looks_like_target(arg) is expected
+
+
+@pytest.mark.parametrize(
+    "argv,expected",
+    [
+        ([], False),
+        (["-k", "pagination"], False),
+        (["tests/unit/test_foo.py"], True),
+        (["-k", "pagination", "tests/unit/"], True),
+        (["--no-cov"], False),
+        (["path/with/sep"], True),
+    ],
+)
+def test_has_explicit_targets(argv, expected):
+    assert tests_runner._has_explicit_targets(argv) is expected
+
+
+@pytest.mark.parametrize(
+    "argv,has_targets,expected_extra,expected_env",
+    [
+        pytest.param([], True, ["--no-cov"], "1", id="targets-drop-default-marker"),
+        pytest.param(
+            ["--no-cov"],
+            True,
+            ["--no-cov"],
+            "1",
+            id="targets-preserve-no-cov",
+        ),
+        pytest.param(
+            ["--e2e"],
+            True,
+            ["-m", "e2e", "--no-cov"],
+            "1",
+            id="targets-plus-e2e-still-applies-e2e-marker",
+        ),
+    ],
+)
+def test_build_marker_args_with_targets(
+    argv, has_targets, expected_extra, expected_env
+):
+    extra = tests_runner._build_marker_args(argv, has_targets=has_targets)
+
+    assert extra == expected_extra
+    assert os.environ.get("E2E_COLLECT") == expected_env
+
+
+def test_compose_cmd_drops_root_when_targets_present():
+    argv = ["tests/unit/test_foo.py"]
+    cmd = tests_runner._compose_cmd(argv, has_targets=True)
+
+    assert "." not in cmd
+    assert "tests/unit/test_foo.py" in cmd
+
+
+def test_compose_cmd_adds_root_when_no_targets():
+    argv: list[str] = []
+    cmd = tests_runner._compose_cmd(argv, has_targets=False)
+
+    assert "." in cmd
