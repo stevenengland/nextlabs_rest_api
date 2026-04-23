@@ -31,6 +31,20 @@ def test_tag_type_values() -> None:
     assert TagType.POLICY_MODEL.value == "POLICY_MODEL_TAG"
     assert TagType.COMPONENT.value == "COMPONENT_TAG"
     assert TagType.POLICY.value == "POLICY_TAG"
+    assert TagType.FOLDER.value == "FOLDER_TAG"
+
+
+def test_tag_accepts_folder_type() -> None:
+    tag = Tag.model_validate(
+        {
+            "id": 7,
+            "key": "folder",
+            "label": "Folder",
+            "type": "FOLDER_TAG",
+            "status": "ACTIVE",
+        },
+    )
+    assert tag.type == TagType.FOLDER
 
 
 def test_tag_from_api_payload() -> None:
