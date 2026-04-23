@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import itertools
 import math
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
+from mockito import when
 
+from nextlabs_sdk import _retry_policy as retry_policy_module
 from nextlabs_sdk._retry_policy import RetryPolicy
 
 _MAX_DELAY = 10.0
@@ -74,6 +77,57 @@ def test_huge_retry_after_does_not_stall() -> None:
 def test_non_finite_retry_after_falls_through_to_backoff(value: str) -> None:
     policy = RetryPolicy(max_retries=3, base_delay=1.0, max_delay=_MAX_DELAY)
     response = _make_response(429, headers={"retry-after": value})
+
+    delay = policy.next_delay(0, response, None)
+
+    _assert_within_bounds(delay, _MAX_DELAY)
+
+
+# ── next_delay: HTTP-date Retry-After (RFC 7231 §7.1.3) ──
+
+
+def _freeze_now(now: datetime) -> None:
+    when(retry_policy_module)._now_utc().thenReturn(now)
+
+
+def test_http_date_retry_after_in_future_returns_delta_seconds() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    _freeze_now(now)
+    future = now + timedelta(seconds=7)
+    header = future.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    policy = RetryPolicy(max_retries=3, base_delay=1.0, max_delay=30.0)
+    response = _make_response(429, headers={"retry-after": header})
+
+    assert policy.next_delay(0, response, None) == pytest.approx(7.0)
+
+
+def test_http_date_retry_after_in_past_clamped_to_zero() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    _freeze_now(now)
+    past = now - timedelta(seconds=60)
+    header = past.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    policy = RetryPolicy(max_retries=3, base_delay=1.0, max_delay=30.0)
+    response = _make_response(429, headers={"retry-after": header})
+
+    assert policy.next_delay(0, response, None) == pytest.approx(0)
+
+
+def test_http_date_retry_after_far_future_clamped_to_max_delay() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    _freeze_now(now)
+    far = now + timedelta(hours=1)
+    header = far.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    policy = RetryPolicy(max_retries=3, base_delay=1.0, max_delay=_MAX_DELAY)
+    response = _make_response(429, headers={"retry-after": header})
+
+    assert policy.next_delay(0, response, None) == pytest.approx(_MAX_DELAY)
+
+
+def test_malformed_http_date_falls_through_to_backoff() -> None:
+    policy = RetryPolicy(max_retries=3, base_delay=1.0, max_delay=_MAX_DELAY)
+    response = _make_response(
+        429, headers={"retry-after": "Wed, 99 Foo 9999 99:99:99 GMT"}
+    )
 
     delay = policy.next_delay(0, response, None)
 
