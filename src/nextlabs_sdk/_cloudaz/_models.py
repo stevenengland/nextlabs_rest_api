@@ -18,6 +18,7 @@ class TagType(str, Enum):
     POLICY_MODEL = "POLICY_MODEL_TAG"
     COMPONENT = "COMPONENT_TAG"
     POLICY = "POLICY_TAG"
+    FOLDER = "FOLDER_TAG"
 
 
 class Tag(BaseModel):
