@@ -11,6 +11,10 @@ validation_projects/
 coverage.xml
 htmlcov/
 __pycache__/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+.grimp_cache/
 docker/*.tar.gz
 *.egg-info/
 .worktrees/

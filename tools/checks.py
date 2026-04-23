@@ -1,108 +1,153 @@
+"""Run quality checks (Black, Flake8, MyPy, Pyright).
+
+Default: live/verbose output (every tool streams to stdout).
+`--short`: one-line summary per tool on success; full output only for
+failures. Mirrors the convention used by ``tools/tests.py --short``.
+"""
+
 import os
 import subprocess  # noqa: S404
 import sys
+from typing import Callable
+
+# A "short" runner captures output and returns (return_code, combined_output).
+ToolRunner = Callable[[str, bool], int]
 
 
-def call_black(directory) -> None:
-    print("** BLACK **")
-    cmd_path = "black"
-    result_subprocess = None
+def _run_captured(cmd: list[str], env: dict[str, str] | None = None) -> tuple[int, str]:
+    """Run ``cmd`` capturing stdout+stderr; return (returncode, combined text)."""
+    proc = subprocess.run(  # noqa: S603
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def _emit_result(name: str, rc: int, output: str, short: bool) -> int:
+    """Emit one tool's outcome; suppress output on success when ``short``."""
+    if rc == 0:
+        if short:
+            print(f"[ok] {name}")
+        else:
+            print(f"Calling {name} completed successfully.")
+        return 0
+    print(f"[fail] {name} (exit {rc})")
+    if output.strip():
+        print(output.rstrip())
+    return rc
+
+
+def call_black(directory: str, short: bool = False) -> int:
+    if not short:
+        print("** BLACK **")
+    cmd = ["black", directory]
+    if short:
+        cmd.insert(1, "--quiet")
     try:
-        result_subprocess = subprocess.run(  # noqa: S607, S603
-            [cmd_path, directory],
+        rc, out = (
+            _run_captured(cmd)
+            if short
+            else (
+                subprocess.run(cmd, check=False).returncode,  # noqa: S603
+                "",
+            )
         )
-
     except FileNotFoundError:
-        print("Black formatter not found. Please make sure it is installed.")
-
-    if result_subprocess is not None and result_subprocess.returncode != 0:
-        raise RuntimeError(
-            f"Black formatter failed with return code {result_subprocess.returncode}",
-        )
-
-    print("Calling black completed successfully.")
+        print("[fail] black not installed")
+        return 127
+    return _emit_result("black", rc, out, short)
 
 
-def call_flake8(directory) -> None:
-    print("** FLAKE8 **")
-    cmd_path = "flake8"
-    result_subprocess = None
+def call_flake8(directory: str, short: bool = False) -> int:
+    if not short:
+        print("** FLAKE8 **")
+    cmd = ["flake8", directory]
     try:
-        result_subprocess = subprocess.run([cmd_path, directory])  # noqa: S607, S603
-    except FileNotFoundError:
-        print("flake8 not found. Please make sure it is installed.")
-
-    if result_subprocess is not None and result_subprocess.returncode != 0:
-        raise RuntimeError(
-            f"flake8 failed with return code {result_subprocess.returncode}",
+        rc, out = (
+            _run_captured(cmd)
+            if short
+            else (
+                subprocess.run(cmd, check=False).returncode,  # noqa: S603
+                "",
+            )
         )
+    except FileNotFoundError:
+        print("[fail] flake8 not installed")
+        return 127
+    return _emit_result("flake8", rc, out, short)
 
-    print("Calling flake8 completed successfully.")
 
-
-def call_pyright(directory: str) -> None:
-    print("** PYRIGHT (Pylance) **")
-    cmd_path = "pyright"
-    result_subprocess = None
+def call_pyright(directory: str, short: bool = False) -> int:
+    if not short:
+        print("** PYRIGHT (Pylance) **")
+    cmd = ["pyright", "--warnings", directory]
     try:
-        result_subprocess = subprocess.run(  # noqa: S607, S603
-            [cmd_path, "--warnings", directory],
+        rc, out = (
+            _run_captured(cmd)
+            if short
+            else (
+                subprocess.run(cmd, check=False).returncode,  # noqa: S603
+                "",
+            )
         )
-
     except FileNotFoundError:
-        print("Pyright not found. Please make sure it is installed.")
-
-    if result_subprocess is not None and result_subprocess.returncode != 0:
-        raise RuntimeError(
-            f"Pyright failed with return code {result_subprocess.returncode}",
-        )
-
-    print("Calling Pyright completed successfully.")
+        print("[fail] pyright not installed")
+        return 127
+    return _emit_result("pyright", rc, out, short)
 
 
-def call_mypy(directory: str) -> None:
-    print("** MYPY **")
-    cmd_path = "mypy"
-    result_subprocess = None
+def call_mypy(directory: str, short: bool = False) -> int:
+    if not short:
+        print("** MYPY **")
+    cmd = ["mypy", directory, "--cache-dir=/dev/null"]
     env = {**os.environ, "MYPYPATH": "src"}
     try:
-        result_subprocess = subprocess.run(  # noqa: S607, S603
-            [
-                cmd_path,
-                directory,
-                "--cache-dir=/dev/null",
-            ],  # null on windows to disable cache
-            check=True,
-            env=env,
+        rc, out = (
+            _run_captured(cmd, env=env)
+            if short
+            else (
+                subprocess.run(cmd, check=False, env=env).returncode,  # noqa: S603
+                "",
+            )
         )
-
     except FileNotFoundError:
-        print("MyPy formatter not found. Please make sure it is installed.")
-
-    if result_subprocess is not None and result_subprocess.returncode != 0:
-        raise RuntimeError(
-            f"MyPy failed with return code {result_subprocess.returncode}",
-        )
-
-    print("Calling MyPy completed successfully.")
+        print("[fail] mypy not installed")
+        return 127
+    return _emit_result("mypy", rc, out, short)
 
 
-if len(sys.argv) > 1:  # noqa: C901
-    argument = sys.argv[1]
-    if argument == "black":
-        call_black(".")
-    elif argument == "flake8":
-        call_flake8(".")
-    elif argument == "mypy":
-        call_mypy(".")
-    elif argument == "pyright":
-        call_pyright(".")
-    else:
-        print(
-            "Invalid argument. Please specify 'black', 'flake8', 'mypy', or 'pyright'."
-        )
-else:
-    call_black(".")
-    call_flake8(".")
-    call_mypy(".")
-    call_pyright(".")
+CHECKS: dict[str, ToolRunner] = {
+    "black": call_black,
+    "flake8": call_flake8,
+    "mypy": call_mypy,
+    "pyright": call_pyright,
+}
+
+
+def main(argv: list[str]) -> int:
+    short = "--short" in argv
+    if short:
+        argv.remove("--short")
+
+    if argv:
+        name = argv[0]
+        runner = CHECKS.get(name)
+        if runner is None:
+            print("Invalid argument. Specify 'black', 'flake8', 'mypy', or 'pyright'.")
+            return 2
+        return runner(".", short)
+
+    failures = 0
+    for runner in CHECKS.values():
+        if runner(".", short) != 0:
+            failures += 1
+    if short:
+        print(f"[summary] {len(CHECKS) - failures}/{len(CHECKS)} checks passed")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
