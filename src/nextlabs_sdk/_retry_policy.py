@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 import random
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -14,7 +16,12 @@ _RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
 _RETRYABLE_STATUS_FLOOR = 500
 _RATE_LIMIT_STATUS = 429
 _BACKOFF_BASE = 2
+_NO_DELAY: float = 0
 _RNG = random.SystemRandom()
+
+
+def _now_utc() -> datetime:
+    return datetime.now(tz=timezone.utc)
 
 
 class RetryPolicy:
@@ -70,14 +77,35 @@ class RetryPolicy:
         header = response.headers.get("retry-after")
         if header is None:
             return None
-        try:
-            parsed_value = float(header)
-        except ValueError:
-            return None
-        if not math.isfinite(parsed_value):
+        parsed_value = _parse_delay_seconds(header)
+        if parsed_value is None:
+            parsed_value = _parse_http_date_seconds(header)
+        if parsed_value is None or not math.isfinite(parsed_value):
             return None
         return parsed_value
 
     def _backoff_delay(self, attempt: int) -> float:
         exp_delay = min(self._base_delay * (_BACKOFF_BASE**attempt), self._max_delay)
         return _RNG.uniform(0, exp_delay)
+
+
+def _parse_delay_seconds(header: str) -> float | None:
+    try:
+        return float(header)
+    except ValueError:
+        return None
+
+
+def _parse_http_date_seconds(header: str) -> float | None:
+    """Parse an RFC 7231 HTTP-date and return seconds until that instant.
+
+    Returns ``None`` for malformed dates so the caller can fall back to
+    exponential backoff. Past dates are clamped to ``0`` per RFC 7231 §7.1.3.
+    """
+    try:
+        target = parsedate_to_datetime(header)
+    except (TypeError, ValueError):
+        return None
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=timezone.utc)
+    return max(_NO_DELAY, (target - _now_utc()).total_seconds())
