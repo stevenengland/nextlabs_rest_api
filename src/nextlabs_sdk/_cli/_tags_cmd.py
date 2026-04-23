@@ -94,7 +94,7 @@ def _render_tag_detail(model: BaseModel, console: Console) -> None:
     console.print(f"[bold]Tag[/bold] {model.id}")
     console.print(f"  [bold]Key[/bold]:    {model.key}")
     console.print(f"  [bold]Label[/bold]:  {model.label}")
-    console.print(f"  [bold]Type[/bold]:   {model.type.value}")
+    console.print(f"  [bold]Type[/bold]:   {model.type.value if model.type else ''}")
     console.print(f"  [bold]Status[/bold]: {model.status}")
 
 

@@ -24,8 +24,8 @@ class TagType(str, Enum):
 class Tag(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    id: int  # noqa: WPS125
-    key: str
-    label: str
-    type: TagType  # noqa: WPS125
-    status: str
+    id: int | None = None  # noqa: WPS125
+    key: str | None = None
+    label: str | None = None
+    type: TagType | None = None  # noqa: WPS125
+    status: str | None = None
