@@ -38,6 +38,18 @@ _MSG_NO_CREDS = "No refresh token and no password available. {hint}"
 _RESPONSE_BODY_PREVIEW_LIMIT = 2000
 
 
+def _wall_to_monotonic(wall_expires_at: float) -> float:
+    """Translate an absolute wall-clock expiry into a monotonic deadline.
+
+    In-memory expiry checks use ``time.monotonic()`` so NTP steps or
+    manual clock adjustments cannot flip a token's validity. Persisted
+    cache entries still store wall-clock ``expires_at`` because
+    monotonic clocks don't survive a process restart; callers translate
+    them to a local monotonic deadline on load and after each refresh.
+    """
+    return time.monotonic() + (wall_expires_at - time.time())
+
+
 def _truncate_body(text: str, total_bytes: int) -> str:
     if len(text) <= _RESPONSE_BODY_PREVIEW_LIMIT:
         return text
@@ -259,14 +271,17 @@ class CloudAzAuth(httpx.Auth):
         cached = self._cache.load(self._cache_key)
         if cached is not None:
             self._refresh_token = cached.refresh_token
-            self._refresh_expires_at = cached.refresh_expires_at
+            if cached.refresh_expires_at is not None:
+                self._refresh_expires_at = _wall_to_monotonic(
+                    cached.refresh_expires_at,
+                )
             if cached.id_token is not None and not cached.is_expired(
                 now=time.time(),
                 safety_margin=_EXPIRY_SAFETY_MARGIN,
             ):
                 self._id_token = cached.id_token
                 self._access_token = cached.access_token
-                self._expires_at = cached.expires_at
+                self._expires_at = _wall_to_monotonic(cached.expires_at)
 
     def auth_flow(
         self,
@@ -345,12 +360,12 @@ class CloudAzAuth(httpx.Auth):
         return decide(
             refresh_token=self._refresh_token,
             refresh_expires_at=self._refresh_expires_at,
-            now=time.time(),
+            now=time.monotonic(),
         )
 
     def _has_valid_token(self) -> bool:
         with self._lock:
-            return self._id_token is not None and time.time() < self._expires_at
+            return self._id_token is not None and time.monotonic() < self._expires_at
 
     def _reauthenticate(self) -> Generator[httpx.Request, httpx.Response, None]:
         decision = self._refresh_decision()
@@ -466,8 +481,10 @@ class CloudAzAuth(httpx.Auth):
             error_cls=AuthenticationError,
             context=" in token response",
         )
-        now = time.time()
-        expires_at = now + expires_in - _EXPIRY_SAFETY_MARGIN
+        now_wall = time.time()
+        now_mono = time.monotonic()
+        expires_at = now_wall + expires_in - _EXPIRY_SAFETY_MARGIN
+        mono_expires_at = now_mono + expires_in - _EXPIRY_SAFETY_MARGIN
         access_token = require_str(
             body,
             "access_token",
@@ -508,15 +525,20 @@ class CloudAzAuth(httpx.Auth):
         refresh_expires_at = (
             None
             if self.refresh_token_lifetime is None
-            else now + self.refresh_token_lifetime
+            else now_wall + self.refresh_token_lifetime
+        )
+        mono_refresh_expires_at = (
+            None
+            if self.refresh_token_lifetime is None
+            else now_mono + self.refresh_token_lifetime
         )
 
         with self._lock:
             self._id_token = id_token
             self._access_token = access_token
             self._refresh_token = refresh_token
-            self._expires_at = expires_at
-            self._refresh_expires_at = refresh_expires_at
+            self._expires_at = mono_expires_at
+            self._refresh_expires_at = mono_refresh_expires_at
 
         self._cache.save(
             self._cache_key,

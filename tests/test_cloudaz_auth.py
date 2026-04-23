@@ -46,6 +46,21 @@ def _make_auth(
 _UNSET: Any = object()
 
 
+def _stub_clock(*values: float) -> None:
+    """Stub ``time.time`` and ``time.monotonic`` to the same sequence.
+
+    CloudAz auth reads the wall clock for persisted cache entries and
+    the monotonic clock for in-memory expiry checks (see issue #93).
+    Tests that simulate elapsed time must advance both so the two views
+    agree on how far the clock has moved.
+    """
+    time_stub = when(time).time()
+    mono_stub = when(time).monotonic()
+    for value in values:
+        time_stub = time_stub.thenReturn(value)
+        mono_stub = mono_stub.thenReturn(value)
+
+
 def _make_token_response(
     access_token: str = "test-access-token",
     expires_in: int = 1200,
@@ -82,7 +97,7 @@ def _token_error_response(
 
 
 def test_first_request_acquires_token():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     flow = auth.auth_flow(
         httpx.Request("GET", "https://cloudaz.example.com/console/api/v1/tags"),
@@ -97,7 +112,7 @@ def test_first_request_acquires_token():
 
 
 def test_cached_token_skips_token_request():
-    when(time).time().thenReturn(float(0)).thenReturn(100.0)
+    _stub_clock(float(0), 100.0)
     auth = _make_auth()
     request = _api_request()
 
@@ -115,7 +130,7 @@ def test_cached_token_skips_token_request():
 
 
 def test_expired_token_triggers_reauth():
-    when(time).time().thenReturn(float(0)).thenReturn(1200.0)
+    _stub_clock(float(0), 1200.0)
     auth = _make_auth()
     request = _api_request()
 
@@ -130,7 +145,7 @@ def test_expired_token_triggers_reauth():
 
 
 def test_401_triggers_reauth():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     request = _api_request()
 
@@ -178,7 +193,7 @@ def test_401_triggers_reauth():
     ],
 )
 def test_token_acquisition_failure_raises(response: httpx.Response, match: str | None):
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     flow = auth.auth_flow(_api_request())
     next(flow)
@@ -232,7 +247,7 @@ def _cached(
 
 
 def test_restores_valid_token_from_cache_without_network():
-    when(time).time().thenReturn(100.0)
+    _stub_clock(100.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
         access_token="cached",
@@ -247,7 +262,7 @@ def test_restores_valid_token_from_cache_without_network():
 
 
 def test_saves_token_to_cache_after_fresh_acquire():
-    when(time).time().thenReturn(100.0)
+    _stub_clock(100.0)
     cache = _InMemoryTokenCache()
     auth = _make_auth(token_cache=cache)
 
@@ -261,7 +276,7 @@ def test_saves_token_to_cache_after_fresh_acquire():
 
 
 def test_expired_cached_token_with_refresh_token_uses_refresh_grant():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-1")
     auth = _make_auth(password=None, token_cache=cache)
@@ -279,7 +294,7 @@ def test_expired_cached_token_with_refresh_token_uses_refresh_grant():
 
 
 def test_refresh_failure_falls_back_to_password_grant():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
     auth = _make_auth(token_cache=cache)
@@ -295,7 +310,7 @@ def test_refresh_failure_falls_back_to_password_grant():
 
 
 def test_refresh_failure_without_password_raises():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
     auth = _make_auth(password=None, token_cache=cache)
@@ -318,7 +333,7 @@ def test_refresh_failure_without_password_raises():
     ],
 )
 def test_refresh_rejection_populates_error_with_status_and_body(status: int, body: str):
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
     auth = _make_auth(password=None, token_cache=cache)
@@ -336,7 +351,7 @@ def test_refresh_rejection_populates_error_with_status_and_body(status: int, bod
 
 
 def test_refresh_spa_redirect_raises_refresh_token_expired():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
     auth = _make_auth(password=None, token_cache=cache)
@@ -382,7 +397,7 @@ def test_refresh_body_short_bodies_returned_verbatim():
 def test_refresh_rejection_populates_byte_length_from_response_content():
     from nextlabs_sdk._auth import _cloudaz_auth as mod
 
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-bad")
     auth = _make_auth(password=None, token_cache=cache)
@@ -399,7 +414,7 @@ def test_refresh_rejection_populates_byte_length_from_response_content():
 
 
 def test_no_cache_behaves_like_null_cache():
-    when(time).time().thenReturn(100.0)
+    _stub_clock(100.0)
     auth = _make_auth()
     flow = auth.auth_flow(_api_request())
     assert str(next(flow).url) == TOKEN_URL
@@ -424,7 +439,7 @@ def _make_spa_redirect_response(
 
 
 def test_spa_hash_redirect_triggers_reauth():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     request = _api_request()
 
@@ -440,7 +455,7 @@ def test_spa_hash_redirect_triggers_reauth():
 
 
 def test_persistent_spa_hash_redirect_raises_authentication_error():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     request = _api_request()
 
@@ -458,7 +473,7 @@ def test_persistent_spa_hash_redirect_raises_authentication_error():
 
 
 def test_non_hash_redirect_does_not_trigger_reauth():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     request = _api_request("https://cloudaz.example.com/api/v1/foo")
 
@@ -500,7 +515,7 @@ def _run_ensure_token(
 
 
 def test_ensure_token_noop_when_valid_token_cached():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
 
     request = _api_request()
@@ -514,7 +529,7 @@ def test_ensure_token_noop_when_valid_token_cached():
 
 
 def test_ensure_token_uses_password_grant_when_no_refresh():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
 
     sent = _run_ensure_token(auth, [_make_token_response(access_token="fresh")])
@@ -526,7 +541,7 @@ def test_ensure_token_uses_password_grant_when_no_refresh():
 
 
 def test_ensure_token_prefers_refresh_token_when_available():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     auth._refresh_token = "RT-cached"
 
@@ -540,7 +555,7 @@ def test_ensure_token_prefers_refresh_token_when_available():
 
 
 def test_ensure_token_falls_back_to_password_when_refresh_fails():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
     auth._refresh_token = "RT-stale"
 
@@ -559,7 +574,7 @@ def test_ensure_token_falls_back_to_password_when_refresh_fails():
 
 
 def test_ensure_token_raises_when_no_password_and_refresh_fails():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth(password=None)
     auth._refresh_token = "RT-stale"
 
@@ -570,7 +585,7 @@ def test_ensure_token_raises_when_no_password_and_refresh_fails():
 
 
 def test_ensure_token_caches_access_token(tmp_path: object):
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     auth = _make_auth(token_cache=cache)
 
@@ -582,7 +597,7 @@ def test_ensure_token_caches_access_token(tmp_path: object):
 
 
 def test_ensure_token_async_fetches_and_caches():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
 
     sent: list[httpx.Request] = []
@@ -601,7 +616,7 @@ def test_ensure_token_async_fetches_and_caches():
 
 
 def test_refresh_token_lifetime_populates_refresh_expires_at():
-    when(time).time().thenReturn(1000.0)
+    _stub_clock(1000.0)
     cache = _InMemoryTokenCache()
     auth = _make_auth(token_cache=cache, lifetime=86_400)
 
@@ -614,7 +629,7 @@ def test_refresh_token_lifetime_populates_refresh_expires_at():
 
 
 def test_no_lifetime_leaves_refresh_expires_at_none():
-    when(time).time().thenReturn(1000.0)
+    _stub_clock(1000.0)
     cache = _InMemoryTokenCache()
     auth = _make_auth(token_cache=cache)  # no lifetime → reactive mode
 
@@ -626,7 +641,7 @@ def test_no_lifetime_leaves_refresh_expires_at_none():
 
 
 def test_known_expired_refresh_skips_http_call_and_uses_password():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
         refresh_token="RT-stale",
@@ -642,7 +657,7 @@ def test_known_expired_refresh_skips_http_call_and_uses_password():
 
 
 def test_known_expired_refresh_without_password_raises_refresh_token_expired():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
         refresh_token="RT-stale",
@@ -660,7 +675,7 @@ def test_known_expired_refresh_without_password_raises_refresh_token_expired():
 
 
 def test_reactive_rejection_without_password_raises_refresh_token_expired():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-dead")
     auth = _make_auth(password=None, token_cache=cache)
@@ -683,7 +698,7 @@ def test_refresh_token_expired_is_authentication_error_subclass():
 
 
 def test_ensure_token_async_known_expired_skips_refresh_http_call():
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
         refresh_token="RT-stale",
@@ -703,7 +718,7 @@ def test_ensure_token_async_known_expired_skips_refresh_http_call():
 
 
 def test_logs_refresh_attempt_and_success(caplog: pytest.LogCaptureFixture):
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-good")
     auth = _make_auth(token_cache=cache)
@@ -719,7 +734,7 @@ def test_logs_refresh_attempt_and_success(caplog: pytest.LogCaptureFixture):
 
 
 def test_logs_warning_on_terminal_refresh_failure(caplog: pytest.LogCaptureFixture):
-    when(time).time().thenReturn(10_000.0)
+    _stub_clock(10_000.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(refresh_token="RT-dead")
     auth = _make_auth(password=None, token_cache=cache)
@@ -742,7 +757,7 @@ def test_logs_warning_on_terminal_refresh_failure(caplog: pytest.LogCaptureFixtu
 
 
 def test_authorization_header_uses_id_token_not_access_token():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
 
     flow = auth.auth_flow(_api_request())
@@ -756,7 +771,7 @@ def test_authorization_header_uses_id_token_not_access_token():
 
 
 def test_cache_persists_both_access_and_id_token():
-    when(time).time().thenReturn(100.0)
+    _stub_clock(100.0)
     cache = _InMemoryTokenCache()
     auth = _make_auth(token_cache=cache)
 
@@ -770,7 +785,7 @@ def test_cache_persists_both_access_and_id_token():
 
 
 def test_response_missing_id_token_raises_when_fallback_disabled():
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth()
 
     flow = auth.auth_flow(_api_request())
@@ -786,7 +801,7 @@ def test_response_missing_id_token_raises_when_fallback_disabled():
 def test_response_missing_id_token_falls_back_when_opt_in(
     caplog: pytest.LogCaptureFixture,
 ):
-    when(time).time().thenReturn(float(0))
+    _stub_clock(float(0))
     auth = _make_auth(allow_access_token_fallback=True)
     caplog.set_level(logging.WARNING, logger="nextlabs_sdk")
 
@@ -802,7 +817,7 @@ def test_response_missing_id_token_falls_back_when_opt_in(
 
 
 def test_legacy_cache_without_id_token_triggers_silent_refresh_not_relogin():
-    when(time).time().thenReturn(100.0)
+    _stub_clock(100.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
         access_token="legacy-at",
@@ -824,3 +839,107 @@ def test_legacy_cache_without_id_token_triggers_silent_refresh_not_relogin():
     )
     assert api_request.headers["Authorization"] == "Bearer IDT-new"
     assert cache.entries[_DERIVED_KEY].id_token == "IDT-new"
+
+
+# ──────────────── Wall-clock vs monotonic-clock consistency (#93) ────────────────
+
+
+def test_wall_clock_backward_step_does_not_expire_valid_token():
+    """Regression for #93.
+
+    An NTP backward step on the wall clock must not flip an in-memory
+    valid token to expired. The in-memory expiry check uses
+    ``time.monotonic()``, which is immune to wall-clock adjustments.
+    """
+    # Acquire token at wall=1000, mono=500. Valid for expires_in=1200 - 60 margin.
+    when(time).time().thenReturn(1000.0).thenReturn(
+        2000.0
+    )  # later: wall leaps backwards
+    when(time).monotonic().thenReturn(500.0).thenReturn(
+        600.0
+    )  # only 100s elapsed by mono
+    auth = _make_auth()
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    api_request = flow.send(_make_token_response())
+    assert api_request.headers["Authorization"].startswith("Bearer ")
+
+    # Now: wall clock steps BACKWARD to 200 (NTP correction); monotonic advances to 600.
+    when(time).time().thenReturn(200.0)
+    when(time).monotonic().thenReturn(600.0)
+
+    flow2 = auth.auth_flow(_api_request())
+    first = next(flow2)
+    # Token still valid in-memory — no re-auth token request — goes straight to API.
+    assert str(first.url) == API_URL
+
+
+def test_wall_clock_forward_step_expires_token_via_monotonic():
+    """Regression for #93.
+
+    Wall-clock forward jumps must not extend a token's effective life;
+    the monotonic clock is the source of truth for validity.
+    """
+    # Acquire: wall=1000, mono=500, expires_in=1200 → mono_expires_at = 500+1200-60 = 1640
+    when(time).time().thenReturn(1000.0)
+    when(time).monotonic().thenReturn(500.0)
+    auth = _make_auth()
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    flow.send(_make_token_response())
+
+    # Wall clock leaps forward (would falsely appear fresh by wall math),
+    # but monotonic shows the token expired.
+    when(time).time().thenReturn(1005.0)  # wall barely moved
+    when(time).monotonic().thenReturn(5000.0)  # mono far past expiry
+
+    flow2 = auth.auth_flow(_api_request())
+    token_request = next(flow2)
+    # Must be a token re-auth call, not an API call.
+    assert str(token_request.url) == TOKEN_URL
+
+
+def test_cached_token_translates_wall_expiry_to_monotonic_on_load():
+    """Persisted cache stores wall-clock expiry; in-memory uses monotonic."""
+    when(time).time().thenReturn(100.0)
+    when(time).monotonic().thenReturn(10.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(
+        access_token="cached-at",
+        refresh_token=None,
+        expires_at=10_000.0,  # wall-clock: 9900 seconds of headroom at load
+    )
+    auth = _make_auth(token_cache=cache)
+
+    # Wall clock leaps backward by 1000s after load; mono barely moves.
+    when(time).time().thenReturn(50.0)
+    when(time).monotonic().thenReturn(11.0)
+
+    flow = auth.auth_flow(_api_request())
+    first = next(flow)
+    # No re-auth: token still valid per monotonic deadline.
+    assert str(first.url) == API_URL
+
+
+def test_refresh_expires_at_uses_monotonic_for_known_expired_decision():
+    """refresh_expires_at comparison must also be monotonic."""
+    # Load cache with a refresh token whose wall-clock expiry is in the past
+    # relative to current wall time.
+    when(time).time().thenReturn(10_000.0)
+    when(time).monotonic().thenReturn(500.0)
+    cache = _InMemoryTokenCache()
+    cache.entries[_DERIVED_KEY] = _cached(
+        refresh_token="RT-stale",
+        refresh_expires_at=9_000.0,  # wall-clock past → translates to mono ≈ -500
+    )
+    auth = _make_auth(token_cache=cache, lifetime=86_400)
+
+    # Clocks both advance a bit; refresh should be known-expired → skip to password.
+    when(time).time().thenReturn(10_001.0)
+    when(time).monotonic().thenReturn(501.0)
+
+    flow = auth.auth_flow(_api_request())
+    token_req = next(flow)
+    body = bytes(token_req.content).decode()
+    assert "grant_type=password" in body
