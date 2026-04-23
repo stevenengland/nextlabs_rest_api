@@ -20,7 +20,15 @@ class AuditLogEntry(BaseModel):
 
 
 class AuditLogQuery(BaseModel):
-    """Query parameters for entity audit log search."""
+    """Query parameters for entity audit log search.
+
+    Note:
+        Although ``sortBy``, ``sortOrder``, and ``pageSize`` are marked
+        optional in the OpenAPI spec, live reporter deployments reject
+        requests that omit them (observed 400/500 responses). Callers should
+        set these fields explicitly; the CLI applies sensible defaults
+        (``sortBy="timestamp"``, ``sortOrder="DESC"``, ``pageSize=20``).
+    """
 
     model_config = ConfigDict(populate_by_name=True)
 

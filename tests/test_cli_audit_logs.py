@@ -261,9 +261,33 @@ def test_search_accepts_relative_start_date(
         end_date=frozen_clock,
         entity_type=None,
         action=None,
-        page_size=None,
-        sort_by=None,
-        sort_order=None,
+        page_size=20,
+        sort_by="timestamp",
+        sort_order="DESC",
+    )
+    when(stubbed_audit).search(expected).thenReturn(_make_paginator([_make_entry()]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "audit-logs", "search", "--start-date", "5m"],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_search_applies_default_sort_and_page_size(
+    stubbed_audit: Any, frozen_clock: int
+) -> None:
+    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+
+    expected = AuditLogQuery(
+        start_date=frozen_clock - 5 * 60 * 1000,
+        end_date=frozen_clock,
+        entity_type=None,
+        action=None,
+        page_size=20,
+        sort_by="timestamp",
+        sort_order="DESC",
     )
     when(stubbed_audit).search(expected).thenReturn(_make_paginator([_make_entry()]))
 
@@ -284,9 +308,9 @@ def test_search_accepts_iso_dates(stubbed_audit: Any) -> None:
         end_date=1705363200000,
         entity_type=None,
         action=None,
-        page_size=None,
-        sort_by=None,
-        sort_order=None,
+        page_size=20,
+        sort_by="timestamp",
+        sort_order="DESC",
     )
     when(stubbed_audit).search(expected).thenReturn(_make_paginator([_make_entry()]))
 
