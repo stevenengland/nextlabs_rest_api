@@ -270,3 +270,68 @@ def test_dashboard_alerts_by_monitor_tags_filter() -> None:
     assert result.exit_code == 0, result.output
     assert "red" in result.output
     assert "blue" not in result.output
+
+
+_FROZEN_NOW_MS = 1_800_000_000_000
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> int:
+    monkeypatch.setattr(
+        "nextlabs_sdk._cli._time_parser.time.time",
+        lambda: _FROZEN_NOW_MS / 1000,
+    )
+    return _FROZEN_NOW_MS
+
+
+def test_alerts_accepts_relative_from_date_and_defaults_to_now(
+    frozen_clock: int,
+) -> None:
+    _, mock_dashboard = _stub_client()
+    expected_start = frozen_clock - 60 * 60 * 1000
+    when(mock_dashboard).latest_alerts(expected_start, frozen_clock).thenReturn(
+        [_make_alert()],
+    )
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "dashboard", "alerts", "--from-date", "1h"],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_top_users_accepts_iso_dates() -> None:
+    _, mock_dashboard = _stub_client()
+    when(mock_dashboard).top_users(
+        1705276800000,
+        1705363200000,
+        "AD",
+    ).thenReturn([_make_activity()])
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "dashboard",
+            "top-users",
+            "--from-date",
+            "2024-01-15",
+            "--to-date",
+            "2024-01-16",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_dashboard_rejects_unrecognized_date() -> None:
+    _stub_client()
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "dashboard", "alerts", "--from-date", "yesterday"],
+    )
+
+    assert result.exit_code == 1
+    assert "accepted formats" in strip_ansi(result.output)

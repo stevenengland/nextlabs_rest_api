@@ -237,3 +237,80 @@ def test_audit_logs_list_users(stubbed_audit: Any) -> None:
 
     assert result.exit_code == 0, result.output
     assert "ada" in result.output
+
+
+_FROZEN_NOW_MS = 1_800_000_000_000
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> int:
+    monkeypatch.setattr(
+        "nextlabs_sdk._cli._time_parser.time.time",
+        lambda: _FROZEN_NOW_MS / 1000,
+    )
+    return _FROZEN_NOW_MS
+
+
+def test_search_accepts_relative_start_date(
+    stubbed_audit: Any, frozen_clock: int
+) -> None:
+    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+
+    expected = AuditLogQuery(
+        start_date=frozen_clock - 5 * 60 * 1000,
+        end_date=frozen_clock,
+        entity_type=None,
+        action=None,
+        page_size=None,
+        sort_by=None,
+        sort_order=None,
+    )
+    when(stubbed_audit).search(expected).thenReturn(_make_paginator([_make_entry()]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "audit-logs", "search", "--start-date", "5m"],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_search_accepts_iso_dates(stubbed_audit: Any) -> None:
+    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+
+    # 2024-01-15T00:00:00Z = 1705276800000; 2024-01-16T00:00:00Z = 1705363200000
+    expected = AuditLogQuery(
+        start_date=1705276800000,
+        end_date=1705363200000,
+        entity_type=None,
+        action=None,
+        page_size=None,
+        sort_by=None,
+        sort_order=None,
+    )
+    when(stubbed_audit).search(expected).thenReturn(_make_paginator([_make_entry()]))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "audit-logs",
+            "search",
+            "--start-date",
+            "2024-01-15",
+            "--end-date",
+            "2024-01-16",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+
+def test_search_rejects_unrecognized_date(stubbed_audit: Any) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "audit-logs", "search", "--start-date", "yesterday"],
+    )
+
+    assert result.exit_code == 1
+    assert "accepted formats" in strip_ansi(result.output)
