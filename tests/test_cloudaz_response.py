@@ -67,11 +67,33 @@ def test_parse_data_extracts_data_field(data, expected):
 
 
 def test_parse_paginated_extracts_all_fields():
-    response = _make_envelope(data=[{"id": 1}], total_pages=5, total_records=42)
-    data, total_pages, total_records = parse_paginated(response)
+    response = _make_envelope(
+        data=[{"id": 1}],
+        total_pages=5,
+        total_records=42,
+        page_size=25,
+    )
+    data, total_pages, total_records, page_size = parse_paginated(response)
     assert data == [{"id": 1}]
     assert total_pages == 5
     assert total_records == 42
+    assert page_size == 25
+
+
+def test_parse_paginated_page_size_missing_returns_none():
+    response = httpx.Response(
+        200,
+        json={
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": [{"id": 1}],
+            "totalPages": 1,
+            "totalNoOfRecords": 1,
+        },
+        request=_make_request(),
+    )
+    _, _, _, page_size = parse_paginated(response)
+    assert page_size is None
 
 
 def test_parse_reporter_paginated_extracts_content():
