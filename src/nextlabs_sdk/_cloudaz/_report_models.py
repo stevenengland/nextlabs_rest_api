@@ -58,10 +58,23 @@ class ReportOrderBy(BaseModel):
     sort_order: str
 
 
+class SaveInfo(BaseModel):
+    """Persistence metadata for a saved report (name, sharing, audience)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    report_name: str | None = None
+    report_desc: str | None = None
+    report_type: str | None = None
+    shared_mode: str | None = None
+    user_ids: list[str] | None = None
+    group_ids: list[int] | None = None
+
+
 class ReportCriteria(BaseModel):
     """Full report criteria including filters, headers, ordering, and paging."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     filters: ReportFilters | None = None
     header: list[str] | None = None
@@ -70,14 +83,17 @@ class ReportCriteria(BaseModel):
     max_rows: int | None = None
     grouping_mode: str | None = None
     group_by: list[str] | None = None
+    aggregators: list[FilterField] | None = None
+    save_info: SaveInfo | None = None
 
 
 class ReportWidget(BaseModel):
     """Widget configuration for a report."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     id: int | None = None  # noqa: WPS125
+    key: str | None = None
     name: str
     title: str
     enabled: bool | None = None

@@ -25,6 +25,7 @@ from nextlabs_sdk._cloudaz._report_models import (
     ReportFilters,
     ReportOrderBy,
     ReportWidget,
+    SaveInfo,
     ResourceActions,
     UserGroup,
     WidgetData,
@@ -212,6 +213,63 @@ def test_report_criteria_round_trip_from_api_response() -> None:
     assert criteria.pagesize == 20
 
 
+# --- SaveInfo ---
+
+
+def test_save_info_round_trip() -> None:
+    raw = {
+        "report_name": "Q1 Enforcement",
+        "report_desc": "Quarterly review",
+        "report_type": "custom",
+        "shared_mode": "private",
+        "user_ids": ["alice", "bob"],
+        "group_ids": [1, 2, 3],
+    }
+    info = SaveInfo.model_validate(raw)
+    assert info.report_name == "Q1 Enforcement"
+    assert info.user_ids == ["alice", "bob"]
+    assert info.group_ids == [1, 2, 3]
+    assert info.model_dump(exclude_none=True) == raw
+
+
+def test_save_info_defaults_all_optional() -> None:
+    info = SaveInfo()
+    assert info.report_name is None
+    assert info.user_ids is None
+    assert info.group_ids is None
+
+
+# --- ReportCriteria: aggregators / save_info / extra ---
+
+
+def test_report_criteria_preserves_aggregators_and_save_info() -> None:
+    raw = {
+        "pagesize": 20,
+        "aggregators": [
+            {"name": "decision", "operator": "count"},
+            {"name": "user_name", "operator": "group"},
+        ],
+        "save_info": {
+            "report_name": "Audit",
+            "shared_mode": "shared",
+            "group_ids": [7],
+        },
+    }
+    criteria = ReportCriteria.model_validate(raw)
+    assert criteria.aggregators is not None
+    assert len(criteria.aggregators) == 2
+    assert criteria.aggregators[0].name == "decision"
+    assert criteria.save_info is not None
+    assert criteria.save_info.report_name == "Audit"
+    assert criteria.save_info.group_ids == [7]
+
+
+def test_report_criteria_allows_unknown_fields() -> None:
+    criteria = ReportCriteria.model_validate({"pagesize": 10, "future_field": "x"})
+    dumped = criteria.model_dump()
+    assert dumped.get("future_field") == "x"
+
+
 # --- ReportWidget ---
 
 
@@ -219,6 +277,7 @@ def test_report_widget_from_api_payload() -> None:
     widget = ReportWidget.model_validate(
         {
             "id": 1,
+            "key": "enforcements",
             "name": "enforcement",
             "title": "Enforcement Trend",
             "enabled": True,
@@ -227,9 +286,24 @@ def test_report_widget_from_api_payload() -> None:
             "maxSize": 10,
         }
     )
+    assert widget.key == "enforcements"
     assert widget.chart_type == "line"
     assert widget.attribute_name == "decision"
     assert widget.max_size == 10
+
+
+def test_report_widget_allows_unknown_fields() -> None:
+    widget = ReportWidget.model_validate(
+        {
+            "name": "enforcement",
+            "title": "Trend",
+            "chartType": "line",
+            "attributeName": "decision",
+            "new_server_field": 42,
+        }
+    )
+    dumped = widget.model_dump()
+    assert dumped.get("new_server_field") == 42
 
 
 def test_report_widget_python_construction() -> None:

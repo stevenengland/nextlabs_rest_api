@@ -83,6 +83,9 @@ from nextlabs_sdk._cloudaz._report_models import (
     ResourceActions as ResourceActions,
 )
 from nextlabs_sdk._cloudaz._report_models import (
+    SaveInfo as SaveInfo,
+)
+from nextlabs_sdk._cloudaz._report_models import (
     UserGroup as UserGroup,
 )
 from nextlabs_sdk._cloudaz._report_models import (
