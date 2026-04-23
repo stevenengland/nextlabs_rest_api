@@ -127,3 +127,26 @@ def test_authenticate_raises_when_custom_auth_override():
         assert "custom auth" in exc.message.lower()
     else:
         raise AssertionError("expected AuthenticationError")
+
+
+def test_client_forwards_allow_access_token_fallback():
+    from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+
+    _stub_transport()
+    client = CloudAzClient(
+        base_url=BASE_URL,
+        username="admin",
+        password="secret",
+        allow_access_token_fallback=True,
+    )
+    assert isinstance(client._auth, CloudAzAuth)
+    assert client._auth.allow_access_token_fallback is True
+
+
+def test_client_default_disallows_access_token_fallback():
+    from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
+
+    _stub_transport()
+    client = _make_client()
+    assert isinstance(client._auth, CloudAzAuth)
+    assert client._auth.allow_access_token_fallback is False

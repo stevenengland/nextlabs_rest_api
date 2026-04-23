@@ -26,6 +26,7 @@ def _make_auth(
     password: str | None = "secret",
     token_cache: TokenCache | None = None,
     lifetime: int | None = None,
+    allow_access_token_fallback: bool = False,
 ) -> CloudAzAuth:
     kwargs: dict[str, Any] = dict(
         token_url=TOKEN_URL,
@@ -38,6 +39,7 @@ def _make_auth(
     auth = CloudAzAuth(**kwargs)
     if lifetime is not None:
         auth.refresh_token_lifetime = lifetime
+    auth.allow_access_token_fallback = allow_access_token_fallback
     return auth
 
 
@@ -767,11 +769,25 @@ def test_cache_persists_both_access_and_id_token():
     assert saved.id_token == "IDT-1"
 
 
-def test_response_missing_id_token_falls_back_to_access_token_with_warning(
+def test_response_missing_id_token_raises_when_fallback_disabled():
+    when(time).time().thenReturn(float(0))
+    auth = _make_auth()
+
+    flow = auth.auth_flow(_api_request())
+    next(flow)
+    with pytest.raises(exceptions.AuthenticationError) as excinfo:
+        flow.send(
+            _make_token_response(access_token="AT-only", include_id_token=False),
+        )
+
+    assert "id_token" in str(excinfo.value)
+
+
+def test_response_missing_id_token_falls_back_when_opt_in(
     caplog: pytest.LogCaptureFixture,
 ):
     when(time).time().thenReturn(float(0))
-    auth = _make_auth()
+    auth = _make_auth(allow_access_token_fallback=True)
     caplog.set_level(logging.WARNING, logger="nextlabs_sdk")
 
     flow = auth.auth_flow(_api_request())
