@@ -288,6 +288,18 @@ def test_report_request_serialization() -> None:
             ("reportIds",),
             id="with-query",
         ),
+        pytest.param(
+            {"title": "Deny", "shared": True},
+            {"title": "Deny", "shared": True},
+            ("reportIds", "policyDecision"),
+            id="with-shared",
+        ),
+        pytest.param(
+            {"report_ids": [1], "shared": False},
+            {"reportIds": [1], "shared": False},
+            ("title", "policyDecision"),
+            id="with-shared-false",
+        ),
     ],
 )
 def test_delete_request(
