@@ -81,10 +81,22 @@ from nextlabs_sdk._cloudaz._report_models import (
     SaveInfo as SaveInfo,
 )
 from nextlabs_sdk._cloudaz._report_models import (
+    SavedReportCriteria as SavedReportCriteria,
+)
+from nextlabs_sdk._cloudaz._report_models import (
     UserGroup as UserGroup,
 )
 from nextlabs_sdk._cloudaz._report_models import (
     WidgetData as WidgetData,
+)
+from nextlabs_sdk._cloudaz._reporter_audit_log_models import (
+    ReporterAuditLogEntry as ReporterAuditLogEntry,
+)
+from nextlabs_sdk._cloudaz._search import (
+    SavedSearch as SavedSearch,
+)
+from nextlabs_sdk._cloudaz._search import (
+    SearchCriteria as SearchCriteria,
 )
 from nextlabs_sdk._cloudaz._system_config_models import (
     SystemConfig as SystemConfig,

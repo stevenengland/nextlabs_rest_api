@@ -71,7 +71,7 @@ class SaveInfo(BaseModel):
     group_ids: list[int] | None = None
 
 
-class ReportCriteria(BaseModel):
+class SavedReportCriteria(BaseModel):
     """Full report criteria including filters, headers, ordering, and paging."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -85,6 +85,9 @@ class ReportCriteria(BaseModel):
     group_by: list[str] | None = None
     aggregators: list[FilterField] | None = None
     save_info: SaveInfo | None = None
+
+
+ReportCriteria = SavedReportCriteria
 
 
 class ReportWidget(BaseModel):
@@ -107,7 +110,7 @@ class PolicyActivityReportRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    criteria: ReportCriteria
+    criteria: SavedReportCriteria
     widgets: list[ReportWidget] | None = None
 
 
@@ -147,7 +150,7 @@ class PolicyActivityReportDetail(BaseModel):
 
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    criteria: ReportCriteria
+    criteria: SavedReportCriteria
     widgets: list[ReportWidget]
 
 
