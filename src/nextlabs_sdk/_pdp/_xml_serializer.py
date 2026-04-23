@@ -86,6 +86,7 @@ def _append_attribute(
     attr_value: AttrValue,
 ) -> None:
     attr_el = ET.SubElement(parent, _ns(_ATTRIBUTE_TAG))
+    attr_el.set("IncludeInResult", "false")
     attr_el.set(_ATTRIBUTE_ID_KEY, attr_id)
     value_el = ET.SubElement(attr_el, _ns(_ATTRIBUTE_VALUE_TAG))
     value_el.set("DataType", _infer_datatype(attr_value))

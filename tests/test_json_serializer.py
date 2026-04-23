@@ -222,7 +222,7 @@ def test_serialize_permissions_request_with_record_matching():
     record_attr = _find_attribute(env_cat, urns.RECORD_MATCHING_POLICIES_ATTR)
     assert record_attr["Value"] == "true"
     assert record_attr["DataType"] == urns.STRING_DATATYPE
-    assert record_attr["IncludeInResult"] is False
+    assert record_attr["IncludeInResult"] == "false"
 
 
 def test_serialize_permissions_request_merges_record_matching_into_env():
@@ -608,3 +608,22 @@ def test_deserialize_carries_request_context_on_status_error():
         "https://pdp.example/dpc/authorization/pdppermissions"
     )
     assert excinfo.value.envelope_status_code == _MISSING_ATTR_URN
+
+
+def test_serialize_every_attribute_has_include_in_result_false():
+    body = _eval_body(
+        EvalRequest(
+            subject=Subject(id="u", department="IT"),
+            action=Action(id="VIEW"),
+            resource=Resource(id="r", type="t", attributes={"prod": "p"}),
+            application=Application(id="app", version="1.0"),
+            environment=Environment(attributes={"ip": "10.0.0.1"}),
+        ),
+    )
+
+    for category in body["Request"]["Category"]:
+        for attr in category["Attribute"]:
+            assert attr["IncludeInResult"] == "false", (
+                f"Attribute {attr['AttributeId']} in category "
+                f"{category['CategoryId']} missing IncludeInResult=\"false\""
+            )
