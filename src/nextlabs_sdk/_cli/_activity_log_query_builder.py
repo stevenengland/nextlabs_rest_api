@@ -2,25 +2,27 @@
 
 Supports layered configuration: values from the ``--query`` JSON file
 are overlaid by any inline flags the user explicitly passed. When no
-file is given, defaults reused from the OpenAPI spec fill in optional
-fields so users only need to supply ``field_name`` / ``field_value``.
+file is given, defaults derived from a known-good live payload fill in
+optional fields so users can run ``search`` with no flags at all.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import typer
-
-from nextlabs_sdk._cli._output import print_error
 from nextlabs_sdk._cli._payload_loader import load_payload
 from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
 from nextlabs_sdk._cloudaz._activity_log_query_models import ActivityLogQuery
 from nextlabs_sdk.exceptions import NextLabsError
 
 _DEFAULT_POLICY_DECISION = "AD"
-_DEFAULT_SORT_BY = "time"
+_DEFAULT_SORT_BY = "ROW_ID"
 _DEFAULT_SORT_ORDER = "descending"
+_DEFAULT_FIELD_NAME = ""
+_DEFAULT_FIELD_VALUE = ""
+_DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000
+_FROM_DATE_KEY = "from_date"
+_TO_DATE_KEY = "to_date"
 
 
 def build_activity_log_query(  # noqa: WPS211
@@ -66,13 +68,9 @@ def build_activity_log_query(  # noqa: WPS211
         NextLabsError: If the merged payload fails validation, or if a
             date string cannot be parsed.
         typer.Exit: If the file is missing, unreadable, or not JSON
-            (propagated from :func:`load_payload`), or if required
-            inline flags (``--field-name`` / ``--field-value``) are
-            missing in inline-build mode.
+            (propagated from :func:`load_payload`).
     """
     inline_mode = query_path is None
-    if inline_mode:
-        _require_inline_flags(field_name=field_name, field_value=field_value)
 
     base: dict[str, object] = dict(load_payload(query_path)) if query_path else {}
 
@@ -108,10 +106,28 @@ def _apply_inline_defaults(
     base.setdefault("policy_decision", _DEFAULT_POLICY_DECISION)
     base.setdefault("sort_by", _DEFAULT_SORT_BY)
     base.setdefault("sort_order", _DEFAULT_SORT_ORDER)
-    if "from_date" in base and "to_date" not in base:
-        base["to_date"] = now_epoch_ms()
+    base.setdefault("field_name", _DEFAULT_FIELD_NAME)
+    base.setdefault("field_value", _DEFAULT_FIELD_VALUE)
+    _apply_date_window_defaults(base)
     if default_header is not None and "header" not in base:
         base["header"] = list(default_header)
+
+
+def _apply_date_window_defaults(base: dict[str, object]) -> None:
+    has_from = _FROM_DATE_KEY in base
+    has_to = _TO_DATE_KEY in base
+    if has_from and has_to:
+        return
+    now = now_epoch_ms()
+    if not has_from and not has_to:
+        base[_FROM_DATE_KEY] = now - _DEFAULT_WINDOW_MS
+        base[_TO_DATE_KEY] = now
+    elif has_from and not has_to:
+        base[_TO_DATE_KEY] = now
+    else:
+        to_date = base[_TO_DATE_KEY]
+        assert isinstance(to_date, int)
+        base[_FROM_DATE_KEY] = to_date - _DEFAULT_WINDOW_MS
 
 
 def _collect_overrides(  # noqa: WPS211
@@ -156,19 +172,3 @@ def _parse_date(raw: str, flag: str) -> int:
         return parse_time(raw)
     except ValueError as exc:
         raise NextLabsError(f"Invalid {flag} value: {exc}") from None
-
-
-def _require_inline_flags(*, field_name: str | None, field_value: str | None) -> None:
-    missing: list[str] = []
-    if field_name is None:
-        missing.append("--field-name")
-    if field_value is None:
-        missing.append("--field-value")
-    if not missing:
-        return
-    joined = ", ".join(missing)
-    print_error(
-        f"Missing required option: {joined} "
-        "(or provide --query PATH to supply them from a JSON file)",
-    )
-    raise typer.Exit(code=1)

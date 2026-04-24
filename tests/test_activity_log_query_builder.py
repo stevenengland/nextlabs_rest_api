@@ -26,15 +26,32 @@ def test_inline_only_uses_flag_values_and_defaults() -> None:
     assert query.field_name == "user_name"
     assert query.field_value == "alice"
     assert query.policy_decision == "AD"
-    assert query.sort_by == "time"
+    assert query.sort_by == "ROW_ID"
     assert query.sort_order == "descending"
 
 
-def test_inline_only_missing_required_fields_errors() -> None:
-    import click
+def test_inline_no_flags_uses_empty_field_defaults() -> None:
+    query = build_activity_log_query(None)
 
-    with pytest.raises(click.exceptions.Exit):
-        build_activity_log_query(None)
+    assert query.field_name == ""
+    assert query.field_value == ""
+    assert query.policy_decision == "AD"
+    assert query.sort_by == "ROW_ID"
+    assert query.sort_order == "descending"
+
+
+def test_inline_only_field_name_defaults_field_value_to_empty() -> None:
+    query = build_activity_log_query(None, field_name="sapsid")
+
+    assert query.field_name == "sapsid"
+    assert query.field_value == ""
+
+
+def test_inline_only_field_value_defaults_field_name_to_empty() -> None:
+    query = build_activity_log_query(None, field_value="R3M")
+
+    assert query.field_name == ""
+    assert query.field_value == "R3M"
 
 
 def test_file_only_preserves_existing_behaviour(tmp_path: Path) -> None:
@@ -173,34 +190,18 @@ def test_invalid_date_errors() -> None:
     assert "from-date" in str(exc_info.value) or "from_date" in str(exc_info.value)
 
 
-def test_inline_missing_flags_prints_friendly_error(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    import click
+def test_inline_missing_flags_no_longer_errors() -> None:
+    query = build_activity_log_query(None)
 
-    with pytest.raises(click.exceptions.Exit):
-        build_activity_log_query(None)
-
-    captured = capsys.readouterr()
-    combined = captured.out + captured.err
-    assert "Missing required option" in combined
-    assert "--field-name" in combined
-    assert "--field-value" in combined
-    assert "--query PATH" in combined
-    assert "validation error" not in combined.lower()
+    assert query.field_name == ""
+    assert query.field_value == ""
 
 
-def test_inline_missing_field_value_only(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    import click
+def test_inline_partial_flags_no_longer_errors() -> None:
+    query = build_activity_log_query(None, field_name="u")
 
-    with pytest.raises(click.exceptions.Exit):
-        build_activity_log_query(None, field_name="u")
-
-    combined = capsys.readouterr().out + capsys.readouterr().err
-    assert "--field-value" in combined
-    assert "--field-name" not in combined
+    assert query.field_name == "u"
+    assert query.field_value == ""
 
 
 def test_inline_from_date_defaults_to_date_to_now(
@@ -239,15 +240,76 @@ def test_inline_explicit_to_date_preserved(
     assert query.to_date == 1_737_100_800_000
 
 
-def test_inline_without_from_date_does_not_set_to_date() -> None:
+def test_inline_without_from_date_defaults_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 4_242_000)
+
     query = build_activity_log_query(
         None,
         field_name="u",
         field_value="v",
     )
 
-    assert query.from_date is None
-    assert query.to_date is None
+    assert query.to_date == 4_242_000
+    assert query.from_date == 4_242_000 - 24 * 60 * 60 * 1000
+
+
+def test_inline_without_dates_defaults_last_24h(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    now_ms = 1_737_014_400_000
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: now_ms)
+
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+    )
+
+    assert query.to_date == now_ms
+    assert query.from_date == now_ms - 24 * 60 * 60 * 1000
+
+
+def test_inline_only_to_date_defaults_from_date_24h_earlier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 9_999_000)
+
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+        to_date="1737100800000",
+    )
+
+    assert query.to_date == 1_737_100_800_000
+    assert query.from_date == 1_737_100_800_000 - 24 * 60 * 60 * 1000
+
+
+def test_inline_query_path_forwarded_verbatim(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path / "q.json",
+        {
+            "policy_decision": "AD",
+            "sort_by": "time",
+            "sort_order": "descending",
+            "field_name": "u",
+            "field_value": "v",
+        },
+    )
+
+    query = build_activity_log_query(path)
+
+    assert query.sort_by == "time"
+    assert query.field_name == "u"
+    assert query.field_value == "v"
 
 
 def test_inline_default_header_applied_when_not_supplied() -> None:
