@@ -33,8 +33,14 @@ _ENFORCEMENT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
     ColumnDef("Log Level", "log_level"),
 )
 
-_DEFAULT_HEADER_COLUMNS: tuple[str, ...] = tuple(
-    col.field.upper() for col in (*_ENFORCEMENT_COLUMNS, *_ENFORCEMENT_WIDE_COLUMNS)
+_DEFAULT_HEADER_COLUMNS: tuple[str, ...] = (
+    "ROW_ID",
+    "TIME",
+    "USER_NAME",
+    "FROM_RESOURCE_NAME",
+    "POLICY_NAME",
+    "POLICY_DECISION",
+    "ACTION",
 )
 
 _ATTRIBUTE_COLUMNS = (
@@ -101,8 +107,13 @@ def search(  # noqa: WPS211
     ``toDate`` or ``header`` are absent. In inline-build mode this
     command therefore defaults ``toDate`` to now when ``--from-date`` is
     supplied without ``--to-date``, and populates ``header`` with the
-    CLI's rendered column set when ``--header`` is not given. Payloads
-    loaded via ``--query PATH`` are forwarded verbatim.
+    OpenAPI spec's example column set (``ROW_ID``, ``TIME``,
+    ``USER_NAME``, ``FROM_RESOURCE_NAME``, ``POLICY_NAME``,
+    ``POLICY_DECISION``, ``ACTION``) when ``--header`` is not given.
+    Non-example columns have been observed to be rejected by live
+    servers; pass ``--header`` explicitly to request additional columns
+    your deployment supports. Payloads loaded via ``--query PATH`` are
+    forwarded verbatim.
     """
     cli_ctx: CliContext = ctx.obj
     log_query = build_activity_log_query(

@@ -499,9 +499,15 @@ def test_activity_logs_search_inline_defaults_to_date_and_header(
 
     assert result.exit_code == 0, result.output
     assert captured["query"].to_date == 9_999_000
-    assert "ROW_ID" in captured["query"].header
-    assert "FROM_RESOURCE_PATH" in captured["query"].header
-    assert "LOG_LEVEL" in captured["query"].header
+    assert captured["query"].header == [
+        "ROW_ID",
+        "TIME",
+        "USER_NAME",
+        "FROM_RESOURCE_NAME",
+        "POLICY_NAME",
+        "POLICY_DECISION",
+        "ACTION",
+    ]
 
 
 def test_activity_logs_export_inline_defaults_to_date_and_header(
