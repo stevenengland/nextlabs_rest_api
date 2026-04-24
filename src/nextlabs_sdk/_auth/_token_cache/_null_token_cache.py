@@ -9,12 +9,15 @@ class NullTokenCache(TokenCache):
 
     def load(self, key: str) -> CachedToken | None:
         """Always return None."""
+        ...
 
     def save(self, key: str, token: CachedToken) -> None:
         """No-op."""
+        ...
 
     def delete(self, key: str) -> None:
         """No-op."""
+        ...
 
     def keys(self) -> list[str]:
         """Always return an empty list."""
