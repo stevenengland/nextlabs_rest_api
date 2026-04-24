@@ -342,7 +342,7 @@ def test_activity_logs_search_inline_flags_only(
     assert captured["query"].field_name == "user_name"
     assert captured["query"].field_value == "alice"
     assert captured["query"].policy_decision == "AD"
-    assert captured["query"].sort_by == "time"
+    assert captured["query"].sort_by == "ROW_ID"
     assert captured["query"].sort_order == "descending"
 
 
@@ -448,19 +448,29 @@ def test_activity_logs_search_from_date_epoch_ms(
     assert captured["query"].from_date == 1_737_014_400_000
 
 
-def test_activity_logs_search_inline_missing_required_errors(
+def test_activity_logs_search_inline_no_flags_succeeds(
     stub: tuple[Any, Any],
 ) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, "activity-logs", "search"],
     )
 
-    assert result.exit_code == 1
-    assert "Missing required option" in result.output
-    assert "--field-name" in result.output
-    assert "--field-value" in result.output
-    assert "validation error" not in result.output.lower()
+    assert result.exit_code == 0, result.output
+    assert captured["query"].field_name == ""
+    assert captured["query"].field_value == ""
+    assert captured["query"].sort_by == "ROW_ID"
 
 
 def test_activity_logs_search_inline_defaults_to_date_and_header(
@@ -580,20 +590,29 @@ def test_activity_logs_search_file_mode_does_not_inject_defaults(
     assert captured["query"].header is None
 
 
-def test_activity_logs_export_inline_missing_required_errors(
+def test_activity_logs_export_inline_no_flags_succeeds(
     stub: tuple[Any, Any],
     tmp_path: Path,
 ) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(query: ActivityLogQuery) -> bytes:
+        captured["query"] = query
+        return b"csv"
+
+    when(service).export(...).thenAnswer(_fake)
+
     out = tmp_path / "export.csv"
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, "activity-logs", "export", "--output", str(out)],
     )
 
-    assert result.exit_code == 1
-    assert "Missing required option" in result.output
-    assert "--field-name" in result.output
-    assert "--field-value" in result.output
+    assert result.exit_code == 0, result.output
+    assert captured["query"].field_name == ""
+    assert captured["query"].field_value == ""
+    assert captured["query"].sort_by == "ROW_ID"
 
 
 def test_activity_logs_export_inline_flags_only(

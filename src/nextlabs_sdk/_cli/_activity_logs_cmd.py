@@ -99,21 +99,22 @@ def search(  # noqa: WPS211
 
     Inline flags may be combined with ``--query PATH``. When both are
     supplied, inline flag values override the corresponding keys in the
-    file. When ``--query`` is omitted, ``--field-name`` and
-    ``--field-value`` are required; other optional fields fall back to
-    spec-example defaults.
+    file. All inline flags are optional: ``--field-name`` and
+    ``--field-value`` default to empty strings (unfiltered) and the
+    other fields fall back to a known-good live payload's values.
 
     Live reporter servers have been observed to return 500 when
     ``toDate`` or ``header`` are absent. In inline-build mode this
-    command therefore defaults ``toDate`` to now when ``--from-date`` is
-    supplied without ``--to-date``, and populates ``header`` with the
-    OpenAPI spec's example column set (``ROW_ID``, ``TIME``,
-    ``USER_NAME``, ``FROM_RESOURCE_NAME``, ``POLICY_NAME``,
-    ``POLICY_DECISION``, ``ACTION``) when ``--header`` is not given.
-    Non-example columns have been observed to be rejected by live
-    servers; pass ``--header`` explicitly to request additional columns
-    your deployment supports. Payloads loaded via ``--query PATH`` are
-    forwarded verbatim.
+    command therefore defaults the date window to the last 24 hours
+    (both ``fromDate`` and ``toDate`` are set; a lone ``--from-date``
+    defaults ``toDate`` to now, a lone ``--to-date`` defaults
+    ``fromDate`` to 24 hours earlier), and populates ``header`` with
+    ``ROW_ID``, ``TIME``, ``USER_NAME``, ``FROM_RESOURCE_NAME``,
+    ``POLICY_NAME``, ``POLICY_DECISION``, ``ACTION`` when ``--header``
+    is not given. Non-example columns have been observed to be rejected
+    by live servers; pass ``--header`` explicitly to request additional
+    columns your deployment supports. Payloads loaded via
+    ``--query PATH`` are forwarded verbatim.
     """
     cli_ctx: CliContext = ctx.obj
     log_query = build_activity_log_query(
@@ -197,10 +198,11 @@ def export(  # noqa: WPS211
     """Export matching activity logs as raw bytes to ``--output``.
 
     Inline flags follow the same merge semantics as ``search``: they
-    override keys from ``--query PATH`` when both are supplied. In
-    inline-build mode ``toDate`` and ``header`` are defaulted the same
-    way as ``search`` to satisfy live reporter servers that reject
-    payloads missing those fields.
+    override keys from ``--query PATH`` when both are supplied. All
+    inline flags are optional. In inline-build mode ``toDate``,
+    ``fromDate``, and ``header`` are defaulted the same way as
+    ``search`` to satisfy live reporter servers that reject payloads
+    missing those fields.
     """
     cli_ctx: CliContext = ctx.obj
     log_query = build_activity_log_query(
