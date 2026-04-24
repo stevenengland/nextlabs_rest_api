@@ -214,23 +214,20 @@ def _handle_refresh_failure(
 class CloudAzAuth(httpx.Auth):
     """OIDC password grant auth for the CloudAz Console API.
 
-    The OIDC token endpoint returns both ``access_token`` and
-    ``id_token``; per the CloudAz documentation, the ``id_token`` is the
-    value sent in the ``Authorization: Bearer …`` header. ``CloudAzAuth``
-    uses ``id_token`` as the bearer credential and keeps ``refresh_token``
-    for silent re-auth. By default, a token response that omits
-    ``id_token`` raises :class:`AuthenticationError` so misconfigured OIDC
-    deployments fail loudly. Set ``allow_access_token_fallback=True`` to
-    instead log a warning and fall back to ``access_token`` for transport
-    continuity against known-broken servers.
+    The OIDC token endpoint returns both ``access_token`` and, in some
+    deployments, ``id_token``. CloudAzAuth sends ``access_token`` in
+    the ``Authorization: Bearer …`` header: the Reporter microservice
+    under the same ``base_url`` rejects ``id_token`` with HTTP 403 and
+    accepts only ``access_token``, and the Console endpoints accept
+    either. This matches NextLabs' own developer portal "Try it out"
+    guidance, which documents pasting the ``access_token`` (prefixed
+    ``AT-``) as the bearer credential. Any ``id_token`` the server
+    returns is persisted to the cache for forward compatibility but
+    ignored for authentication.
 
     Supports an optional pluggable :class:`TokenCache` backend. Expiry is
     tracked as absolute UTC epoch seconds so that cached tokens survive
-    process restarts. Cache entries written by older SDK versions that
-    predate ``id_token`` support are restored without the bearer in
-    memory, so the next call silently refreshes and repopulates the
-    cache — a usable ``refresh_token`` is preserved to avoid an
-    interactive re-login.
+    process restarts.
 
     When ``refresh_token_lifetime`` is provided, the SDK records the
     refresh token's absolute expiry at every successful token
@@ -260,9 +257,7 @@ class CloudAzAuth(httpx.Auth):
         self._cache_key = f"{token_url}|{username}|{client_id}|cloudaz"
         self._lock = threading.Lock()
         self.refresh_token_lifetime: int | None = None
-        self.allow_access_token_fallback: bool = False
 
-        self._id_token: str | None = None
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._refresh_expires_at: float | None = None
@@ -275,11 +270,10 @@ class CloudAzAuth(httpx.Auth):
                 self._refresh_expires_at = _wall_to_monotonic(
                     cached.refresh_expires_at,
                 )
-            if cached.id_token is not None and not cached.is_expired(
+            if not cached.is_expired(
                 now=time.time(),
                 safety_margin=_EXPIRY_SAFETY_MARGIN,
             ):
-                self._id_token = cached.id_token
                 self._access_token = cached.access_token
                 self._expires_at = _wall_to_monotonic(cached.expires_at)
 
@@ -290,12 +284,12 @@ class CloudAzAuth(httpx.Auth):
         if not self._has_valid_token():
             yield from self._reauthenticate()
 
-        request.headers["Authorization"] = f"Bearer {self._id_token}"
+        request.headers["Authorization"] = f"Bearer {self._access_token}"
         response = yield request
 
         if response.status_code == _UNAUTHORIZED_STATUS or _is_spa_redirect(response):
             yield from self._reauthenticate()
-            request.headers["Authorization"] = f"Bearer {self._id_token}"
+            request.headers["Authorization"] = f"Bearer {self._access_token}"
             retried = yield request
             if _is_spa_redirect(retried):
                 raise AuthenticationError(
@@ -365,7 +359,9 @@ class CloudAzAuth(httpx.Auth):
 
     def _has_valid_token(self) -> bool:
         with self._lock:
-            return self._id_token is not None and time.monotonic() < self._expires_at
+            return (
+                self._access_token is not None and time.monotonic() < self._expires_at
+            )
 
     def _reauthenticate(self) -> Generator[httpx.Request, httpx.Response, None]:
         decision = self._refresh_decision()
@@ -492,26 +488,7 @@ class CloudAzAuth(httpx.Auth):
             context=" in token response",
         )
         id_token_raw = body.get("id_token")
-        if isinstance(id_token_raw, str):
-            id_token = id_token_raw
-        elif self.allow_access_token_fallback:
-            logger.warning(
-                "cloudaz auth: token response missing id_token;"
-                " falling back to access_token (allow_access_token_fallback=True)."
-                " The server is not conforming to the CloudAz OIDC contract.",
-            )
-            id_token = access_token
-        else:
-            raise AuthenticationError(
-                "Token response missing id_token. The CloudAz API requires"
-                " the OIDC id_token as the bearer credential. Set"
-                " allow_access_token_fallback=True to permit using"
-                " access_token against non-conforming servers.",
-                status_code=response.status_code,
-                response_body=response.text,
-                request_method=_HTTP_POST,
-                request_url=self._token_url,
-            )
+        id_token = id_token_raw if isinstance(id_token_raw, str) else None
         refresh_token_raw = body.get("refresh_token")
         refresh_token = (
             refresh_token_raw
@@ -534,7 +511,6 @@ class CloudAzAuth(httpx.Auth):
         )
 
         with self._lock:
-            self._id_token = id_token
             self._access_token = access_token
             self._refresh_token = refresh_token
             self._expires_at = mono_expires_at
