@@ -101,7 +101,8 @@ def main(
         "--output",
         case_sensitive=False,
         help=(
-            "Output format: table (default compact), wide (extra columns), "
+            "Output format: table (default compact), "
+            "wide (extra columns where available), "
             "detail (sectioned per-item), json (raw JSON)."
         ),
     ),

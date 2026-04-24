@@ -104,6 +104,28 @@ def test_reporter_audit_logs_search_page_size(stub: tuple[Any, Any]) -> None:
     assert result.exit_code == 0
 
 
+def test_reporter_audit_logs_search_wide_includes_extra_columns(
+    stub: tuple[Any, Any],
+) -> None:
+    _, service = stub
+    when(service).search(page_size=20).thenReturn(_paginator([_entry(42)]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "reporter-audit-logs", "search"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Last Updated" in output
+    assert "Msg Code" in output
+    assert "Created By" in output
+    assert "Last Updated By" in output
+    assert "Hidden" in output
+    assert "ACTIVITY_CREATED" in output
+
+
 def test_reporter_audit_logs_search_error(stub: tuple[Any, Any]) -> None:
     _, service = stub
     when(service).search(page_size=20).thenRaise(NextLabsError("boom"))

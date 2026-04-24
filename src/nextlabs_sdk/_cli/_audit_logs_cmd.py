@@ -33,6 +33,12 @@ _AUDIT_LOG_COLUMNS = (
     ColumnDef("Entity ID", "entity_id"),
 )
 
+_AUDIT_LOG_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Actor ID", "actor_id"),
+    ColumnDef("Old Value", "old_value"),
+    ColumnDef("New Value", "new_value"),
+)
+
 _USER_COLUMNS = (
     ColumnDef("Username", "username"),
     ColumnDef("First Name", "first_name"),
@@ -85,7 +91,13 @@ def search(  # noqa: WPS211
         sort_order=sort_order,
     )
     entries = list(client.audit_logs.search(query))
-    render(cli_ctx, entries, _AUDIT_LOG_COLUMNS, title="Audit Logs")
+    render(
+        cli_ctx,
+        entries,
+        _AUDIT_LOG_COLUMNS,
+        title="Audit Logs",
+        wide_columns=_AUDIT_LOG_WIDE_COLUMNS,
+    )
 
 
 @audit_logs_app.command()

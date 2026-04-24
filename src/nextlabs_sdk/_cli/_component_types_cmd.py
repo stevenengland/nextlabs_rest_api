@@ -27,12 +27,25 @@ _CT_COLUMNS = (
     ColumnDef("Status", "status"),
 )
 
+_CT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Description", "description"),
+    ColumnDef("Owner", "owner_display_name"),
+    ColumnDef("Created", "created_date"),
+    ColumnDef("Updated", "last_updated_date"),
+    ColumnDef("Version", "version"),
+)
+
 _ATTRIBUTE_CONFIG_COLUMNS = (
     ColumnDef("ID", "id"),
     ColumnDef("Name", "name"),
     ColumnDef("Short Name", "short_name"),
     ColumnDef("Data Type", "data_type"),
     ColumnDef("Sort Order", "sort_order"),
+)
+
+_ATTRIBUTE_CONFIG_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Regex Pattern", "reg_ex_pattern"),
+    ColumnDef("Version", "version"),
 )
 
 
@@ -46,7 +59,7 @@ def get(
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)  # noqa: WPS204
     ct = client.component_types.get(component_type_id)
-    render(cli_ctx, ct, _CT_COLUMNS)
+    render(cli_ctx, ct, _CT_COLUMNS, wide_columns=_CT_WIDE_COLUMNS)
 
 
 @component_types_app.command(name="get-active")
@@ -59,7 +72,7 @@ def get_active(  # noqa: WPS463
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     ct = client.component_types.get_active(component_type_id)
-    render(cli_ctx, ct, _CT_COLUMNS)
+    render(cli_ctx, ct, _CT_COLUMNS, wide_columns=_CT_WIDE_COLUMNS)
 
 
 @component_types_app.command(name="bulk-delete")
@@ -113,6 +126,7 @@ def list_extra_subject_attributes(
         attrs,
         _ATTRIBUTE_CONFIG_COLUMNS,
         title="Extra Subject Attributes",
+        wide_columns=_ATTRIBUTE_CONFIG_WIDE_COLUMNS,
     )
 
 
@@ -210,7 +224,13 @@ def search(  # noqa: WPS211
     criteria.page(page_no=1, page_size=page_size)
     client = _client_factory.make_cloudaz_client(cli_ctx)
     matches = list(client.component_type_search.search(criteria))
-    render(cli_ctx, matches, _CT_COLUMNS, title="Component Types")
+    render(
+        cli_ctx,
+        matches,
+        _CT_COLUMNS,
+        title="Component Types",
+        wide_columns=_CT_WIDE_COLUMNS,
+    )
 
 
 def _render_component_type_detail(model: BaseModel, console: Console) -> None:

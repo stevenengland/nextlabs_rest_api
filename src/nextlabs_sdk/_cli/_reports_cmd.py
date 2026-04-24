@@ -39,6 +39,14 @@ _REPORT_COLUMNS = (
     ColumnDef("Last Updated", "last_updated_date"),
 )
 
+_REPORT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Description", "description"),
+    ColumnDef("Shared Mode", "shared_mode"),
+    ColumnDef("Window Mode", "window_mode"),
+    ColumnDef("Start Date", "start_date"),
+    ColumnDef("End Date", "end_date"),
+)
+
 _ENFORCEMENT_COLUMNS = (
     ColumnDef("Row ID", "row_id"),
     ColumnDef("Time", "time"),
@@ -47,6 +55,13 @@ _ENFORCEMENT_COLUMNS = (
     ColumnDef("Policy", "policy_name"),
     ColumnDef("Decision", "policy_decision"),
     ColumnDef("Action", "action"),
+)
+
+_ENFORCEMENT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("From Resource Path", "from_resource_path"),
+    ColumnDef("To Resource", "to_resource_name"),
+    ColumnDef("Short Code", "action_short_code"),
+    ColumnDef("Log Level", "log_level"),
 )
 
 _REPORT_DETAIL_COLUMNS = (
@@ -105,7 +120,13 @@ def list_reports(  # noqa: WPS211
             page_size=page_size,
         )
     )
-    render(cli_ctx, reports, _REPORT_COLUMNS, title="Reports")
+    render(
+        cli_ctx,
+        reports,
+        _REPORT_COLUMNS,
+        title="Reports",
+        wide_columns=_REPORT_WIDE_COLUMNS,
+    )
 
 
 @reports_app.command()
@@ -196,7 +217,13 @@ def enforcements(
             page_size=page_size,
         )
     )
-    render(cli_ctx, entries, _ENFORCEMENT_COLUMNS, title="Enforcements")
+    render(
+        cli_ctx,
+        entries,
+        _ENFORCEMENT_COLUMNS,
+        title="Enforcements",
+        wide_columns=_ENFORCEMENT_WIDE_COLUMNS,
+    )
 
 
 @reports_app.command(name="export")
@@ -259,7 +286,13 @@ def generate_enforcements(
         page_size=page_size,
     )
     entries = list(paginator.first_page().entries)
-    render(cli_ctx, entries, _ENFORCEMENT_COLUMNS, title="Enforcements")
+    render(
+        cli_ctx,
+        entries,
+        _ENFORCEMENT_COLUMNS,
+        title="Enforcements",
+        wide_columns=_ENFORCEMENT_WIDE_COLUMNS,
+    )
 
 
 @reports_app.command(name="generate-export")
