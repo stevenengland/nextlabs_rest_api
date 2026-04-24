@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.6.0 - 2026-04-24
+
+### nextlabs-sdk 0.6.0
+
+#### Features
+
+- feat(cloudaz)!: send access_token as bearer credential @stevenengland ([#120](https://github.com/stevenengland/nextlabs_rest_api/pull/120))
+- feat(cloudaz): publicly re-export ReporterAuditLogEntry, SavedSearch, SearchCriteria @stevenengland ([#113](https://github.com/stevenengland/nextlabs_rest_api/pull/113))
+- feat(cli): accept ISO and relative dates for time-range options @stevenengland ([#82](https://github.com/stevenengland/nextlabs_rest_api/pull/82))
+- feat(tools): accept targeted paths in checks.py and tests.py @stevenengland ([#81](https://github.com/stevenengland/nextlabs_rest_api/pull/81))
+
+#### Bug Fixes
+
+- fix(cli): add wide-output columns to cloudaz table commands @stevenengland ([#121](https://github.com/stevenengland/nextlabs_rest_api/pull/121))
+- fix(cli): preserve persisted verify_ssl on silent re-login @stevenengland ([#119](https://github.com/stevenengland/nextlabs_rest_api/pull/119))
+- fix(envelope): emit debug log naming each decode failure mode @stevenengland ([#114](https://github.com/stevenengland/nextlabs_rest_api/pull/114))
+- fix(pdp): declare xmlns:xsi and xsi:schemaLocation on XACML Request @stevenengland ([#112](https://github.com/stevenengland/nextlabs_rest_api/pull/112))
+- fix(auth): use monotonic clock for CloudAz in-memory token expiry @stevenengland ([#111](https://github.com/stevenengland/nextlabs_rest_api/pull/111))
+- fix(retry): support RFC 7231 HTTP-date Retry-After header @stevenengland ([#110](https://github.com/stevenengland/nextlabs_rest_api/pull/110))
+- fix(cloudaz-auth): require id_token by default, opt-in access_token fallback @stevenengland ([#109](https://github.com/stevenengland/nextlabs_rest_api/pull/109))
+- fix(pdp): emit IncludeInResult="false" on every request attribute @stevenengland ([#108](https://github.com/stevenengland/nextlabs_rest_api/pull/108))
+- fix(cloudaz): send pageSize and showHidden on tag and saved-search endpoints @stevenengland ([#107](https://github.com/stevenengland/nextlabs_rest_api/pull/107))
+- fix(cloudaz): align ComponentLite and Tag required fields with OpenAPI @stevenengland ([#106](https://github.com/stevenengland/nextlabs_rest_api/pull/106))
+- fix(cloudaz): add FOLDER_TAG to TagType enum @stevenengland ([#105](https://github.com/stevenengland/nextlabs_rest_api/pull/105))
+- fix(cloudaz): preserve aggregators, save_info, and widget key on report models @stevenengland ([#104](https://github.com/stevenengland/nextlabs_rest_api/pull/104))
+- fix(cloudaz): add shared field to DeleteReportsRequest @stevenengland ([#103](https://github.com/stevenengland/nextlabs_rest_api/pull/103))
+- fix(cloudaz): align ActivityLogQuery required fields with OpenAPI @stevenengland ([#102](https://github.com/stevenengland/nextlabs_rest_api/pull/102))
+- fix(cli): apply reporter-required defaults on audit-logs search @stevenengland ([#101](https://github.com/stevenengland/nextlabs_rest_api/pull/101))
+- fix(cloudaz): parse bare Spring Pageable for reporter audit-logs search @stevenengland ([#83](https://github.com/stevenengland/nextlabs_rest_api/pull/83))
+
+#### Maintenance
+
+- test(cloudaz): verify pagination envelope + zero-indexed pageNo across endpoint families @stevenengland ([#117](https://github.com/stevenengland/nextlabs_rest_api/pull/117))
+- test(openapi): parity checks for required, properties, enums on DTOs @stevenengland ([#116](https://github.com/stevenengland/nextlabs_rest_api/pull/116))
+- style(token-cache): make NullTokenCache stub bodies explicit with ... @stevenengland ([#115](https://github.com/stevenengland/nextlabs_rest_api/pull/115))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.4.0...0.6.0
+
 ## 0.4.0 - 2026-04-23
 
 ### nextlabs-sdk 0.4.0
