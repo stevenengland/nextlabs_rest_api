@@ -259,6 +259,124 @@ def test_component_types_clone(stub_client):
     assert "42" in result.output
 
 
+def _make_component_type_rich(ct_id: int = 7) -> ComponentType:
+    return ComponentType.model_validate(
+        {
+            "id": ct_id,
+            "name": "File Server",
+            "shortName": "file_server",
+            "description": "A file server component type",
+            "type": "RESOURCE",
+            "status": "ACTIVE",
+            "tags": [],
+            "attributes": [],
+            "actions": [],
+            "obligations": [],
+            "version": 3,
+            "ownerDisplayName": "ops-team",
+            "createdDate": 1_700_000_000_000,
+            "lastUpdatedDate": 1_700_100_000_000,
+        },
+    )
+
+
+def test_component_types_get_wide_includes_extra_columns(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get(7).thenReturn(_make_component_type_rich())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "component-types", "get", "7"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Description" in output
+    assert "Owner" in output
+    assert "Created" in output
+    assert "Updated" in output
+    assert "Version" in output
+    assert "ops-team" in output
+    assert "1700000000000" in output
+
+
+def test_component_types_get_active_wide_includes_extra_columns(stub_client):
+    _, mock_ct, _ = stub_client
+    when(mock_ct).get_active(7).thenReturn(_make_component_type_rich())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "component-types", "get-active", "7"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Description" in output
+    assert "Owner" in output
+    assert "ops-team" in output
+
+
+def test_component_types_search_wide_includes_extra_columns(stub_client):
+    _, _, mock_search = stub_client
+    when(mock_search).search(...).thenReturn(
+        _make_paginator([_make_component_type_rich()]),
+    )
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "component-types", "search"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Description" in output
+    assert "Owner" in output
+    assert "Version" in output
+
+
+def test_component_types_list_extra_subject_attributes_wide(stub_client):
+    from nextlabs_sdk._cloudaz._component_type_models import AttributeConfig
+
+    _, mock_ct, _ = stub_client
+    when(mock_ct).list_extra_subject_attributes("USER").thenReturn(
+        [
+            AttributeConfig.model_validate(
+                {
+                    "id": 1,
+                    "name": "Department",
+                    "shortName": "dept",
+                    "dataType": "STRING",
+                    "sortOrder": 0,
+                    "regExPattern": "^[A-Z]+$",
+                    "version": 2,
+                },
+            ),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "--output",
+            "wide",
+            "component-types",
+            "list-extra-subject-attributes",
+            "USER",
+        ],
+        env={"COLUMNS": "240"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Regex Pattern" in output
+    assert "Version" in output
+    assert "^[A-Z]+$" in output
+
+
 def test_component_types_list_extra_subject_attributes(stub_client):
     from nextlabs_sdk._cloudaz._component_type_models import AttributeConfig
 

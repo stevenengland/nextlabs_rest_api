@@ -390,6 +390,75 @@ def test_reports_enforcements(
     assert check(result.output)
 
 
+# ── wide output ──
+
+
+def _make_enforcement_full() -> EnforcementEntry:
+    return EnforcementEntry.model_validate(
+        {
+            "ROW_ID": 101,
+            "TIME": "2024-06-01 12:00:00",
+            "USER_NAME": "admin@test.com",
+            "FROM_RESOURCE_NAME": "/shared/docs",
+            "FROM_RESOURCE_PATH": "/data/shared/docs",
+            "TO_RESOURCE_NAME": "/shared/archive",
+            "POLICY_NAME": "AllowRead",
+            "POLICY_DECISION": "Allow",
+            "ACTION": "READ",
+            "ACTION_SHORT_CODE": "R",
+            "LOG_LEVEL": "INFO",
+        },
+    )
+
+
+def test_reports_list_wide_includes_extra_columns(mock_reports: Any) -> None:
+    when(mock_reports).list(**_default_list_kw()).thenReturn(
+        _paginator([_make_report()]),
+    )
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "reports", "list"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Description" in output
+    assert "Shared Mode" in output
+    assert "Window Mode" in output
+    assert "Start Date" in output
+    assert "End Date" in output
+    assert "A test report" in output
+    assert "PRIVATE" in output
+    assert "LAST_7_DAYS" in output
+
+
+def test_reports_enforcements_wide_includes_extra_columns(mock_reports: Any) -> None:
+    when(mock_reports).get_enforcements(
+        1,
+        sort_by="rowId",
+        sort_order="ascending",
+        page_size=20,
+    ).thenReturn(_paginator([_make_enforcement_full()]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "reports", "enforcements", "1"],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "From Resource Path" in output
+    assert "To Resource" in output
+    assert "Short Code" in output
+    assert "Log Level" in output
+    assert "/data/shared/docs" in output
+    assert "/shared/archive" in output
+    assert "INFO" in output
+
+
 # ── export ──
 
 

@@ -27,6 +27,14 @@ _ENFORCEMENT_COLUMNS = (
     ColumnDef("Action", "action"),
 )
 
+_ENFORCEMENT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Resource", "from_resource_name"),
+    ColumnDef("From Resource Path", "from_resource_path"),
+    ColumnDef("To Resource", "to_resource_name"),
+    ColumnDef("Short Code", "action_short_code"),
+    ColumnDef("Log Level", "log_level"),
+)
+
 _ATTRIBUTE_COLUMNS = (
     ColumnDef("Name", "name"),
     ColumnDef("Value", "value"),
@@ -64,7 +72,13 @@ def search(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     paginator = client.activity_logs.search(log_query, page_size=page_size)
     page = paginator.first_page()
-    render(cli_ctx, page.entries, _ENFORCEMENT_COLUMNS, title="Activity Logs")
+    render(
+        cli_ctx,
+        page.entries,
+        _ENFORCEMENT_COLUMNS,
+        title="Activity Logs",
+        wide_columns=_ENFORCEMENT_WIDE_COLUMNS,
+    )
 
 
 @activity_logs_app.command(name="get-by-row-id")

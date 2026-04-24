@@ -21,6 +21,14 @@ _COLUMNS = (
     ColumnDef("Created", "created_date"),
 )
 
+_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    ColumnDef("Last Updated", "last_updated"),
+    ColumnDef("Msg Code", "msg_code"),
+    ColumnDef("Created By", "created_by"),
+    ColumnDef("Last Updated By", "last_updated_by"),
+    ColumnDef("Hidden", "hidden"),
+)
+
 
 @reporter_audit_logs_app.command()
 @cli_error_handler
@@ -36,4 +44,10 @@ def search(
     client = _client_factory.make_cloudaz_client(cli_ctx)
     paginator = client.reporter_audit_logs.search(page_size=page_size)
     page = paginator.first_page()
-    render(cli_ctx, page.entries, _COLUMNS, title="Reporter Audit Logs")
+    render(
+        cli_ctx,
+        page.entries,
+        _COLUMNS,
+        title="Reporter Audit Logs",
+        wide_columns=_WIDE_COLUMNS,
+    )

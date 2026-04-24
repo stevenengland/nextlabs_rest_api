@@ -161,6 +161,62 @@ def test_activity_logs_get_by_row_id_table(stub: tuple[Any, Any]) -> None:
     assert "alice" in result.output
 
 
+def test_activity_logs_search_wide_includes_extra_columns(
+    stub: tuple[Any, Any],
+    query_file: Path,
+) -> None:
+    _, service = stub
+    entry = EnforcementEntry(
+        ROW_ID=99,
+        TIME="2024-01-01T00:00:00Z",
+        USER_NAME="alice",
+        FROM_RESOURCE_NAME="source.txt",
+        FROM_RESOURCE_PATH="/data/source.txt",
+        TO_RESOURCE_NAME="dest.txt",
+        POLICY_NAME="Allow",
+        POLICY_DECISION="ALLOW",
+        ACTION="read",
+        ACTION_SHORT_CODE="R",
+        LOG_LEVEL="INFO",
+    )
+
+    def fetch(page_no: int) -> PageResult[EnforcementEntry]:
+        return PageResult(
+            entries=[entry],
+            page_no=page_no,
+            page_size=1,
+            total_pages=1,
+            total_records=1,
+        )
+
+    when(service).search(...).thenReturn(SyncPaginator(fetch_page=fetch))
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "--output",
+            "wide",
+            "activity-logs",
+            "search",
+            "--query",
+            str(query_file),
+        ],
+        env={"COLUMNS": "320"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = result.output.replace("\n", " ")
+    assert "Resource" in output
+    assert "From Resource Path" in output
+    assert "To Resource" in output
+    assert "Short Code" in output
+    assert "Log Level" in output
+    assert "/data/source.txt" in output
+    assert "dest.txt" in output
+    assert "INFO" in output
+
+
 def test_activity_logs_export_writes_bytes(
     stub: tuple[Any, Any],
     tmp_path: Path,

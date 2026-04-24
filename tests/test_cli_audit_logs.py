@@ -330,6 +330,37 @@ def test_search_accepts_iso_dates(stubbed_audit: Any) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_search_wide_includes_extra_columns(stubbed_audit: Any) -> None:
+    entry = AuditLogEntry.model_validate(
+        {
+            "id": 7,
+            "timestamp": 1700000000000,
+            "action": "UPDATE",
+            "actorId": 100,
+            "actor": "admin",
+            "entityType": "POLICY",
+            "entityId": 42,
+            "oldValue": "old-blob",
+            "newValue": "new-blob",
+        }
+    )
+    when(stubbed_audit).search(...).thenReturn(_make_paginator([entry]))
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "wide", "audit-logs", "search", *_DATE_OPTS],
+        env={"COLUMNS": "240"},
+    )
+
+    assert result.exit_code == 0, result.output
+    output = strip_ansi(result.output).replace("\n", " ")
+    assert "Actor ID" in output
+    assert "Old Value" in output
+    assert "New Value" in output
+    assert "old-blob" in output
+    assert "new-blob" in output
+
+
 def test_search_rejects_unrecognized_date(stubbed_audit: Any) -> None:
     result = runner.invoke(
         app,
