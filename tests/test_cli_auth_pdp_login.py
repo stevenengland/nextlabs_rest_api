@@ -1028,3 +1028,116 @@ def test_pdp_login_ssl_retry_target_url_reflects_resolved_pdp_url(
 
     assert result.exit_code == 0, result.output
     assert observed_target == ["https://pdp.example"]
+
+
+_PDP_PREFS_KEY = "https://pdp.example||ccid|pdp"
+
+
+def _seed_pdp_prefs_verify_false(tmp_path: Path) -> AccountPreferencesStore:
+    from nextlabs_sdk._cli._account_preferences import AccountPreferences
+
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    store.save(
+        _PDP_PREFS_KEY,
+        AccountPreferences(
+            verify_ssl=False,
+            pdp_url="https://pdp.example",
+            pdp_auth_source="pdp",
+        ),
+    )
+    return store
+
+
+def test_pdp_login_without_flag_preserves_persisted_verify_ssl_false(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Silent PDP re-login must keep a persisted ``verify_ssl=False``.
+
+    Regresses the symmetric CloudAz bug: the PDP login derived the
+    ``verify_ssl`` it used for the token POST (and the pref it then
+    wrote) solely from the CLI flag, so a re-login without
+    ``--no-verify`` would attempt the request with TLS verification
+    on and then persist ``True`` even if the prior preference was
+    ``False``.
+    """
+    _isolate_cache(tmp_path, monkeypatch)
+    store = _seed_pdp_prefs_verify_false(tmp_path)
+    calls_verify: list[object] = []
+    resp = _TokenResp(
+        {"access_token": "AT", "expires_in": 3600, "token_type": "bearer"},
+    )
+
+    def _fake_post(*_args: object, **kwargs: object) -> object:
+        calls_verify.append(kwargs.get("verify"))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "ccid",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls_verify == [False]
+    prefs = store.load(_PDP_PREFS_KEY)
+    assert prefs is not None
+    assert prefs.verify_ssl is False
+
+
+def test_pdp_login_with_explicit_verify_flag_overrides_persisted_false(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit ``--verify`` still wins over a persisted ``False``."""
+    _isolate_cache(tmp_path, monkeypatch)
+    store = _seed_pdp_prefs_verify_false(tmp_path)
+    calls_verify: list[object] = []
+    resp = _TokenResp(
+        {"access_token": "AT", "expires_in": 3600, "token_type": "bearer"},
+    )
+
+    def _fake_post(*_args: object, **kwargs: object) -> object:
+        calls_verify.append(kwargs.get("verify"))
+        return resp
+
+    monkeypatch.setattr(httpx, "post", _fake_post)
+
+    result = runner.invoke(
+        app,
+        [
+            "--verify",
+            "--pdp-url",
+            "https://pdp.example",
+            "--client-id",
+            "ccid",
+            "--client-secret",
+            "S3cret",
+            "--pdp-auth",
+            "pdp",
+            "auth",
+            "login",
+            "--type",
+            "pdp",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert calls_verify == [True]
+    prefs = store.load(_PDP_PREFS_KEY)
+    assert prefs is not None
+    assert prefs.verify_ssl is True

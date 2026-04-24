@@ -284,6 +284,68 @@ def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
     assert entry.verify_ssl is False
 
 
+_CLOUDAZ_PREFS_KEY = "https://example.com|admin|ControlCenterOIDCClient|cloudaz"
+
+_LOGIN_BASE_OPTS = (
+    "--base-url",
+    "https://example.com",
+    "--username",
+    "admin",
+    "--password",
+    "secret",
+    "auth",
+    "login",
+)
+
+
+def _load_cloudaz_prefs(cache_dir: str):
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    return AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json").load(
+        _CLOUDAZ_PREFS_KEY,
+    )
+
+
+def test_login_without_flag_preserves_persisted_verify_ssl_false(login_ctx):
+    """Silent re-login must not overwrite a persisted ``verify_ssl=False``.
+
+    Regresses a bug where ``_save_prefs`` derived ``verify_ssl`` only
+    from the CLI flag, so a re-login on a self-signed host (whose
+    prior ``--no-verify`` had been remembered) silently flipped the
+    preference back to ``True`` — breaking the next CLI call.
+    """
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    seed = runner.invoke(app, ["--no-verify", *_LOGIN_BASE_OPTS])
+    assert seed.exit_code == 0, seed.output
+
+    result = runner.invoke(app, list(_LOGIN_BASE_OPTS))
+
+    assert result.exit_code == 0, result.output
+    entry = _load_cloudaz_prefs(cache_dir)
+    assert entry is not None
+    assert entry.verify_ssl is False
+
+
+def test_login_with_explicit_verify_flag_overrides_persisted_false(login_ctx):
+    """An explicit ``--verify`` still wins over a persisted ``False``."""
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    seed = runner.invoke(app, ["--no-verify", *_LOGIN_BASE_OPTS])
+    assert seed.exit_code == 0, seed.output
+
+    result = runner.invoke(app, ["--verify", *_LOGIN_BASE_OPTS])
+
+    assert result.exit_code == 0, result.output
+    entry = _load_cloudaz_prefs(cache_dir)
+    assert entry is not None
+    assert entry.verify_ssl is True
+
+
 def _wrap_ssl_transport_error() -> "Exception":
     import ssl
 
