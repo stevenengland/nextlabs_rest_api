@@ -309,3 +309,187 @@ def test_activity_logs_search_invalid_query(
 
     assert result.exit_code == 1
     assert "Invalid activity log query" in result.output
+
+
+def test_activity_logs_search_inline_flags_only(
+    stub: tuple[Any, Any],
+) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "search",
+            "--field-name",
+            "user_name",
+            "--field-value",
+            "alice",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].field_name == "user_name"
+    assert captured["query"].field_value == "alice"
+    assert captured["query"].policy_decision == "AD"
+    assert captured["query"].sort_by == "time"
+    assert captured["query"].sort_order == "descending"
+
+
+def test_activity_logs_search_flag_overrides_file(
+    stub: tuple[Any, Any],
+    query_file: Path,
+) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "search",
+            "--query",
+            str(query_file),
+            "--field-value",
+            "carol",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].field_value == "carol"
+    assert captured["query"].field_name == "user_name"
+    assert captured["query"].from_date == 1_700_000_000
+
+
+def test_activity_logs_search_headers_repeatable(
+    stub: tuple[Any, Any],
+) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "search",
+            "--field-name",
+            "u",
+            "--field-value",
+            "v",
+            "--header",
+            "a",
+            "--header",
+            "b",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].header == ["a", "b"]
+
+
+def test_activity_logs_search_from_date_epoch_ms(
+    stub: tuple[Any, Any],
+) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "search",
+            "--field-name",
+            "u",
+            "--field-value",
+            "v",
+            "--from-date",
+            "1737014400000",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].from_date == 1_737_014_400_000
+
+
+def test_activity_logs_search_inline_missing_required_errors(
+    stub: tuple[Any, Any],
+) -> None:
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "activity-logs", "search"],
+    )
+
+    assert result.exit_code == 1
+    assert "Invalid activity log query" in result.output
+
+
+def test_activity_logs_export_inline_flags_only(
+    stub: tuple[Any, Any],
+    tmp_path: Path,
+) -> None:
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(query: ActivityLogQuery) -> bytes:
+        captured["query"] = query
+        return b"csv"
+
+    when(service).export(...).thenAnswer(_fake)
+
+    out = tmp_path / "export.csv"
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "export",
+            "--output",
+            str(out),
+            "--field-name",
+            "u",
+            "--field-value",
+            "v",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert out.read_bytes() == b"csv"
+    assert captured["query"].field_name == "u"
+    assert captured["query"].policy_decision == "AD"

@@ -7,14 +7,12 @@ from typing import Annotated
 
 import typer
 
-from nextlabs_sdk import exceptions as sdk_exceptions
 from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli._activity_log_query_builder import build_activity_log_query
 from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, render
-from nextlabs_sdk._cli._payload_loader import load_payload
-from nextlabs_sdk._cloudaz._activity_log_query_models import ActivityLogQuery
 
 activity_logs_app = typer.Typer(help="Report activity log commands.")
 
@@ -44,31 +42,69 @@ _ATTRIBUTE_COLUMNS = (
 )
 
 
-def _load_query(query_path: Path) -> ActivityLogQuery:
-    raw = load_payload(query_path)
-    try:
-        return ActivityLogQuery.model_validate(raw)
-    except ValueError as exc:
-        raise sdk_exceptions.NextLabsError(
-            f"Invalid activity log query in {query_path}: {exc}",
-        ) from None
+_DATE_HELP = (
+    "Accepts epoch milliseconds (e.g. 1737014400000), ISO 8601 datetime "
+    "(e.g. 2024-01-15 or 2024-01-15T10:30:00+02:00, naive values treated "
+    "as UTC), or a relative offset from now (e.g. 30s, 5m, 2h, 3d, 1w)."
+)
 
 
 @activity_logs_app.command()
 @cli_error_handler
-def search(
+def search(  # noqa: WPS211
     ctx: typer.Context,
     query: Annotated[
-        Path,
+        Path | None,
         typer.Option("--query", help="Path to a JSON query file"),
-    ],
+    ] = None,
+    policy_decision: Annotated[
+        str | None,
+        typer.Option("--policy-decision", help="Policy decision filter"),
+    ] = None,
+    sort_by: Annotated[str | None, typer.Option("--sort-by", help="Sort field")] = None,
+    sort_order: Annotated[
+        str | None, typer.Option("--sort-order", help="Sort order")
+    ] = None,
+    field_name: Annotated[
+        str | None, typer.Option("--field-name", help="Filter field name")
+    ] = None,
+    field_value: Annotated[
+        str | None, typer.Option("--field-value", help="Filter field value")
+    ] = None,
+    from_date: Annotated[
+        str | None, typer.Option("--from-date", help=f"Start date. {_DATE_HELP}")
+    ] = None,
+    to_date: Annotated[
+        str | None, typer.Option("--to-date", help=f"End date. {_DATE_HELP}")
+    ] = None,
+    header: Annotated[
+        list[str] | None,
+        typer.Option("--header", help="Header name (repeatable)"),
+    ] = None,
     page_size: Annotated[
         int, typer.Option("--page-size", help="Entries per page")
     ] = 20,
 ) -> None:
-    """Search activity logs (first page of results)."""
+    """Search activity logs (first page of results).
+
+    Inline flags may be combined with ``--query PATH``. When both are
+    supplied, inline flag values override the corresponding keys in the
+    file. When ``--query`` is omitted, ``--field-name`` and
+    ``--field-value`` are required; other optional fields fall back to
+    spec-example defaults.
+    """
     cli_ctx: CliContext = ctx.obj
-    log_query = _load_query(query)
+    log_query = build_activity_log_query(
+        query,
+        policy_decision=policy_decision,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        field_name=field_name,
+        field_value=field_value,
+        from_date=from_date,
+        to_date=to_date,
+        header=header,
+    )
     client = _client_factory.make_cloudaz_client(cli_ctx)
     paginator = client.activity_logs.search(log_query, page_size=page_size)
     page = paginator.first_page()
@@ -96,24 +132,62 @@ def show_row(
 
 @activity_logs_app.command()
 @cli_error_handler
-def export(
+def export(  # noqa: WPS211
     ctx: typer.Context,
-    query: Annotated[
-        Path,
-        typer.Option("--query", help="Path to a JSON query file"),
-    ],
     output: Annotated[
         Path,
         typer.Option("--output", help="Destination file path"),
     ],
+    query: Annotated[
+        Path | None,
+        typer.Option("--query", help="Path to a JSON query file"),
+    ] = None,
+    policy_decision: Annotated[
+        str | None,
+        typer.Option("--policy-decision", help="Policy decision filter"),
+    ] = None,
+    sort_by: Annotated[str | None, typer.Option("--sort-by", help="Sort field")] = None,
+    sort_order: Annotated[
+        str | None, typer.Option("--sort-order", help="Sort order")
+    ] = None,
+    field_name: Annotated[
+        str | None, typer.Option("--field-name", help="Filter field name")
+    ] = None,
+    field_value: Annotated[
+        str | None, typer.Option("--field-value", help="Filter field value")
+    ] = None,
+    from_date: Annotated[
+        str | None, typer.Option("--from-date", help=f"Start date. {_DATE_HELP}")
+    ] = None,
+    to_date: Annotated[
+        str | None, typer.Option("--to-date", help=f"End date. {_DATE_HELP}")
+    ] = None,
+    header: Annotated[
+        list[str] | None,
+        typer.Option("--header", help="Header name (repeatable)"),
+    ] = None,
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite/--no-overwrite", help="Replace existing file"),
     ] = False,
 ) -> None:
-    """Export matching activity logs as raw bytes to ``--output``."""
+    """Export matching activity logs as raw bytes to ``--output``.
+
+    Inline flags follow the same merge semantics as ``search``: they
+    override keys from ``--query PATH`` when both are supplied.
+    """
     cli_ctx: CliContext = ctx.obj
-    log_query = _load_query(query)
+    log_query = build_activity_log_query(
+        query,
+        policy_decision=policy_decision,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        field_name=field_name,
+        field_value=field_value,
+        from_date=from_date,
+        to_date=to_date,
+        header=header,
+    )
     client = _client_factory.make_cloudaz_client(cli_ctx)
     payload = client.activity_logs.export(log_query)
     write_bytes(output, payload, overwrite=overwrite)
