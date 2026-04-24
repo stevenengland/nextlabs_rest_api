@@ -73,6 +73,35 @@ def load_account_prefs(
     return store.load(legacy)
 
 
+def effective_verify_ssl(
+    store: AccountPreferencesStore,
+    account: ResolvedAccount | None,
+    ctx_verify: bool | None,
+) -> bool:
+    """Return the ``verify_ssl`` value the CLI should actually use.
+
+    Precedence — mirrored by both the runtime HTTP config and login
+    persistence so the two never disagree:
+
+    1. Explicit CLI flag (``ctx_verify`` / ``--verify`` / ``--no-verify``).
+    2. Persisted account preference (written by a previous login).
+    3. Default ``True``.
+
+    When login persists its result it must go through this helper so
+    a silent re-login (which uses the persisted preference to build
+    the HTTP client) does not then overwrite that same preference with
+    the default ``True``.
+    """
+    if ctx_verify is not None:
+        return ctx_verify
+    if account is None:
+        return True
+    entry = load_account_prefs(store, account)
+    if entry is None:
+        return True
+    return entry.verify_ssl
+
+
 def resolve_account(ctx: CliContext) -> ResolvedAccount | None:
     """Resolve the effective account identifiers for ``ctx``.
 

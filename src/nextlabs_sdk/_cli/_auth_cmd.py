@@ -20,9 +20,11 @@ from nextlabs_sdk._cli._account_menu import (
 )
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
+    ResolvedAccount,
     build_active_store,
     build_file_cache,
     build_prefs_store,
+    effective_verify_ssl,
 )
 from nextlabs_sdk._cli._account_status_label import account_status_and_refreshable
 from nextlabs_sdk._cli._context import CliContext
@@ -309,8 +311,15 @@ def _prefs_key(account: AccountIdentifier) -> str:
 
 
 def _save_prefs(cli_ctx: CliContext, account: AccountIdentifier) -> None:
-    verify_ssl = True if cli_ctx.verify is None else cli_ctx.verify
-    build_prefs_store(cli_ctx).save(
+    resolved = ResolvedAccount(
+        base_url=account.base_url,
+        username=account.username,
+        client_id=account.client_id,
+        kind=account.kind,
+    )
+    prefs_store = build_prefs_store(cli_ctx)
+    verify_ssl = effective_verify_ssl(prefs_store, resolved, cli_ctx.verify)
+    prefs_store.save(
         _prefs_key(account),
         AccountPreferences(verify_ssl=verify_ssl),
     )

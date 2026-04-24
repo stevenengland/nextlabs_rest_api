@@ -14,9 +14,11 @@ from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._cli._account_menu import AccountIdentifier, cache_key_for
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
+    ResolvedAccount,
     build_active_store,
     build_file_cache,
     build_prefs_store,
+    effective_verify_ssl,
 )
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_success
@@ -110,7 +112,23 @@ def _attempt_login(cli_ctx: CliContext) -> _PersistedLogin:
         auth_base_url=auth_base_url,
         token_url=None,
     )
-    verify_ssl = True if cli_ctx.verify is None else cli_ctx.verify
+    account = AccountIdentifier(
+        base_url=auth_base_url or pdp_url,
+        username="",
+        client_id=client_id,
+        kind=_KIND_PDP,
+    )
+    resolved = ResolvedAccount(
+        base_url=account.base_url,
+        username=account.username,
+        client_id=account.client_id,
+        kind=account.kind,
+    )
+    verify_ssl = effective_verify_ssl(
+        build_prefs_store(cli_ctx),
+        resolved,
+        cli_ctx.verify,
+    )
     payload = _mint_client_credentials_token(
         token_url=token_url,
         client_id=client_id,
@@ -119,12 +137,6 @@ def _attempt_login(cli_ctx: CliContext) -> _PersistedLogin:
         timeout=cli_ctx.timeout,
     )
 
-    account = AccountIdentifier(
-        base_url=auth_base_url or pdp_url,
-        username="",
-        client_id=client_id,
-        kind=_KIND_PDP,
-    )
     return _PersistedLogin(
         account=account,
         payload=payload,

@@ -9,11 +9,11 @@ import typer
 from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
-from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
     build_file_cache,
     build_prefs_store,
+    effective_verify_ssl,
     load_account_prefs,
     resolve_account,
 )
@@ -106,31 +106,10 @@ def _prompt_url_if_tty(label: str) -> str | None:
     return typer.prompt(label)
 
 
-def _persisted_verify(
-    prefs: AccountPreferencesStore,
-    account: ResolvedAccount,
-) -> bool | None:
-    entry = load_account_prefs(prefs, account)
-    return None if entry is None else entry.verify_ssl
-
-
-def _effective_verify_ssl(
-    ctx: CliContext,
-    account: ResolvedAccount | None,
-) -> bool:
-    if ctx.verify is not None:
-        return ctx.verify
-    if account is not None:
-        persisted = _persisted_verify(build_prefs_store(ctx), account)
-        if persisted is not None:
-            return persisted
-    return True
-
-
 def _http_config(ctx: CliContext, account: ResolvedAccount | None) -> HttpConfig:
     return HttpConfig(
         timeout=ctx.timeout,
-        verify_ssl=_effective_verify_ssl(ctx, account),
+        verify_ssl=effective_verify_ssl(build_prefs_store(ctx), account, ctx.verify),
         verbose=ctx.verbose,
     )
 
