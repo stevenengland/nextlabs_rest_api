@@ -33,6 +33,10 @@ _ENFORCEMENT_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
     ColumnDef("Log Level", "log_level"),
 )
 
+_DEFAULT_HEADER_COLUMNS: tuple[str, ...] = tuple(
+    col.field.upper() for col in (*_ENFORCEMENT_COLUMNS, *_ENFORCEMENT_WIDE_COLUMNS)
+)
+
 _ATTRIBUTE_COLUMNS = (
     ColumnDef("Name", "name"),
     ColumnDef("Value", "value"),
@@ -92,6 +96,13 @@ def search(  # noqa: WPS211
     file. When ``--query`` is omitted, ``--field-name`` and
     ``--field-value`` are required; other optional fields fall back to
     spec-example defaults.
+
+    Live reporter servers have been observed to return 500 when
+    ``toDate`` or ``header`` are absent. In inline-build mode this
+    command therefore defaults ``toDate`` to now when ``--from-date`` is
+    supplied without ``--to-date``, and populates ``header`` with the
+    CLI's rendered column set when ``--header`` is not given. Payloads
+    loaded via ``--query PATH`` are forwarded verbatim.
     """
     cli_ctx: CliContext = ctx.obj
     log_query = build_activity_log_query(
@@ -104,6 +115,7 @@ def search(  # noqa: WPS211
         from_date=from_date,
         to_date=to_date,
         header=header,
+        default_header=list(_DEFAULT_HEADER_COLUMNS),
     )
     client = _client_factory.make_cloudaz_client(cli_ctx)
     paginator = client.activity_logs.search(log_query, page_size=page_size)
@@ -174,7 +186,10 @@ def export(  # noqa: WPS211
     """Export matching activity logs as raw bytes to ``--output``.
 
     Inline flags follow the same merge semantics as ``search``: they
-    override keys from ``--query PATH`` when both are supplied.
+    override keys from ``--query PATH`` when both are supplied. In
+    inline-build mode ``toDate`` and ``header`` are defaulted the same
+    way as ``search`` to satisfy live reporter servers that reject
+    payloads missing those fields.
     """
     cli_ctx: CliContext = ctx.obj
     log_query = build_activity_log_query(
@@ -187,6 +202,7 @@ def export(  # noqa: WPS211
         from_date=from_date,
         to_date=to_date,
         header=header,
+        default_header=list(_DEFAULT_HEADER_COLUMNS),
     )
     client = _client_factory.make_cloudaz_client(cli_ctx)
     payload = client.activity_logs.export(log_query)

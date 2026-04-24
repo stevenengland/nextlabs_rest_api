@@ -31,11 +31,10 @@ def test_inline_only_uses_flag_values_and_defaults() -> None:
 
 
 def test_inline_only_missing_required_fields_errors() -> None:
-    with pytest.raises(NextLabsError) as exc_info:
-        build_activity_log_query(None)
+    import click
 
-    message = str(exc_info.value)
-    assert "field_name" in message or "fieldName" in message
+    with pytest.raises(click.exceptions.Exit):
+        build_activity_log_query(None)
 
 
 def test_file_only_preserves_existing_behaviour(tmp_path: Path) -> None:
@@ -172,3 +171,144 @@ def test_invalid_date_errors() -> None:
         )
 
     assert "from-date" in str(exc_info.value) or "from_date" in str(exc_info.value)
+
+
+def test_inline_missing_flags_prints_friendly_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import click
+
+    with pytest.raises(click.exceptions.Exit):
+        build_activity_log_query(None)
+
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    assert "Missing required option" in combined
+    assert "--field-name" in combined
+    assert "--field-value" in combined
+    assert "--query PATH" in combined
+    assert "validation error" not in combined.lower()
+
+
+def test_inline_missing_field_value_only(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import click
+
+    with pytest.raises(click.exceptions.Exit):
+        build_activity_log_query(None, field_name="u")
+
+    combined = capsys.readouterr().out + capsys.readouterr().err
+    assert "--field-value" in combined
+    assert "--field-name" not in combined
+
+
+def test_inline_from_date_defaults_to_date_to_now(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 4_242_000)
+
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+        from_date="1737014400000",
+    )
+
+    assert query.from_date == 1_737_014_400_000
+    assert query.to_date == 4_242_000
+
+
+def test_inline_explicit_to_date_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 4_242_000)
+
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+        from_date="1737014400000",
+        to_date="1737100800000",
+    )
+
+    assert query.to_date == 1_737_100_800_000
+
+
+def test_inline_without_from_date_does_not_set_to_date() -> None:
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+    )
+
+    assert query.from_date is None
+    assert query.to_date is None
+
+
+def test_inline_default_header_applied_when_not_supplied() -> None:
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+        default_header=["ROW_ID", "TIME", "USER_NAME"],
+    )
+
+    assert query.header == ["ROW_ID", "TIME", "USER_NAME"]
+
+
+def test_inline_supplied_header_overrides_default() -> None:
+    query = build_activity_log_query(
+        None,
+        field_name="u",
+        field_value="v",
+        header=["A", "B"],
+        default_header=["ROW_ID", "TIME", "USER_NAME"],
+    )
+
+    assert query.header == ["A", "B"]
+
+
+def test_file_mode_does_not_inject_to_date_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 4_242_000)
+
+    path = _write(
+        tmp_path / "q.json",
+        {
+            "policy_decision": "AD",
+            "sort_by": "time",
+            "sort_order": "descending",
+            "field_name": "u",
+            "field_value": "v",
+            "from_date": 1_700_000_000,
+        },
+    )
+
+    query = build_activity_log_query(path)
+
+    assert query.to_date is None
+
+
+def test_file_mode_does_not_inject_default_header(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path / "q.json",
+        {
+            "policy_decision": "AD",
+            "sort_by": "time",
+            "sort_order": "descending",
+            "field_name": "u",
+            "field_value": "v",
+        },
+    )
+
+    query = build_activity_log_query(path, default_header=["ROW_ID"])
+
+    assert query.header is None

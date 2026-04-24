@@ -10,8 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import typer
+
+from nextlabs_sdk._cli._output import print_error
 from nextlabs_sdk._cli._payload_loader import load_payload
-from nextlabs_sdk._cli._time_parser import parse_time
+from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
 from nextlabs_sdk._cloudaz._activity_log_query_models import ActivityLogQuery
 from nextlabs_sdk.exceptions import NextLabsError
 
@@ -33,6 +36,7 @@ def build_activity_log_query(  # noqa: WPS211
     header: list[str] | None = None,
     page: int | None = None,
     size: int | None = None,
+    default_header: list[str] | None = None,
 ) -> ActivityLogQuery:
     """Compose an ``ActivityLogQuery`` from an optional file and flags.
 
@@ -50,6 +54,10 @@ def build_activity_log_query(  # noqa: WPS211
         header: Overlay for the ``header`` list (full replacement).
         page: Overlay for ``page``.
         size: Overlay for ``size``.
+        default_header: Fallback ``header`` list applied only when
+            ``query_path`` is ``None`` and ``header`` is ``None``. Lets
+            the caller supply the CLI's render columns so picky servers
+            accept the payload and wide output never blanks.
 
     Returns:
         A validated ``ActivityLogQuery``.
@@ -58,8 +66,14 @@ def build_activity_log_query(  # noqa: WPS211
         NextLabsError: If the merged payload fails validation, or if a
             date string cannot be parsed.
         typer.Exit: If the file is missing, unreadable, or not JSON
-            (propagated from :func:`load_payload`).
+            (propagated from :func:`load_payload`), or if required
+            inline flags (``--field-name`` / ``--field-value``) are
+            missing in inline-build mode.
     """
+    inline_mode = query_path is None
+    if inline_mode:
+        _require_inline_flags(field_name=field_name, field_value=field_value)
+
     base: dict[str, object] = dict(load_payload(query_path)) if query_path else {}
 
     overrides = _collect_overrides(
@@ -76,10 +90,8 @@ def build_activity_log_query(  # noqa: WPS211
     )
     base.update(overrides)
 
-    if query_path is None:
-        base.setdefault("policy_decision", _DEFAULT_POLICY_DECISION)
-        base.setdefault("sort_by", _DEFAULT_SORT_BY)
-        base.setdefault("sort_order", _DEFAULT_SORT_ORDER)
+    if inline_mode:
+        _apply_inline_defaults(base, default_header=default_header)
 
     try:
         return ActivityLogQuery.model_validate(base)
@@ -88,6 +100,18 @@ def build_activity_log_query(  # noqa: WPS211
         raise NextLabsError(
             f"Invalid activity log query{location}: {exc}",
         ) from None
+
+
+def _apply_inline_defaults(
+    base: dict[str, object], *, default_header: list[str] | None
+) -> None:
+    base.setdefault("policy_decision", _DEFAULT_POLICY_DECISION)
+    base.setdefault("sort_by", _DEFAULT_SORT_BY)
+    base.setdefault("sort_order", _DEFAULT_SORT_ORDER)
+    if "from_date" in base and "to_date" not in base:
+        base["to_date"] = now_epoch_ms()
+    if default_header is not None and "header" not in base:
+        base["header"] = list(default_header)
 
 
 def _collect_overrides(  # noqa: WPS211
@@ -132,3 +156,19 @@ def _parse_date(raw: str, flag: str) -> int:
         return parse_time(raw)
     except ValueError as exc:
         raise NextLabsError(f"Invalid {flag} value: {exc}") from None
+
+
+def _require_inline_flags(*, field_name: str | None, field_value: str | None) -> None:
+    missing: list[str] = []
+    if field_name is None:
+        missing.append("--field-name")
+    if field_value is None:
+        missing.append("--field-value")
+    if not missing:
+        return
+    joined = ", ".join(missing)
+    print_error(
+        f"Missing required option: {joined} "
+        "(or provide --query PATH to supply them from a JSON file)",
+    )
+    raise typer.Exit(code=1)

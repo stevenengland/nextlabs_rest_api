@@ -457,7 +457,137 @@ def test_activity_logs_search_inline_missing_required_errors(
     )
 
     assert result.exit_code == 1
-    assert "Invalid activity log query" in result.output
+    assert "Missing required option" in result.output
+    assert "--field-name" in result.output
+    assert "--field-value" in result.output
+    assert "validation error" not in result.output.lower()
+
+
+def test_activity_logs_search_inline_defaults_to_date_and_header(
+    stub: tuple[Any, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 9_999_000)
+
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "search",
+            "--field-name",
+            "u",
+            "--field-value",
+            "v",
+            "--from-date",
+            "1737014400000",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].to_date == 9_999_000
+    assert "ROW_ID" in captured["query"].header
+    assert "FROM_RESOURCE_PATH" in captured["query"].header
+    assert "LOG_LEVEL" in captured["query"].header
+
+
+def test_activity_logs_export_inline_defaults_to_date_and_header(
+    stub: tuple[Any, Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 7_777_000)
+
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(query: ActivityLogQuery) -> bytes:
+        captured["query"] = query
+        return b"csv"
+
+    when(service).export(...).thenAnswer(_fake)
+
+    out = tmp_path / "export.csv"
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "activity-logs",
+            "export",
+            "--output",
+            str(out),
+            "--field-name",
+            "u",
+            "--field-value",
+            "v",
+            "--from-date",
+            "1737014400000",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].to_date == 7_777_000
+    assert "ROW_ID" in captured["query"].header
+
+
+def test_activity_logs_search_file_mode_does_not_inject_defaults(
+    stub: tuple[Any, Any],
+    query_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
+
+    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 9_999_000)
+
+    _, service = stub
+    captured: dict[str, Any] = {}
+
+    def _fake(
+        query: ActivityLogQuery, *, page_size: int
+    ) -> SyncPaginator[EnforcementEntry]:
+        captured["query"] = query
+        return _paginator()
+
+    when(service).search(...).thenAnswer(_fake)
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "activity-logs", "search", "--query", str(query_file)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["query"].header is None
+
+
+def test_activity_logs_export_inline_missing_required_errors(
+    stub: tuple[Any, Any],
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "export.csv"
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "activity-logs", "export", "--output", str(out)],
+    )
+
+    assert result.exit_code == 1
+    assert "Missing required option" in result.output
+    assert "--field-name" in result.output
+    assert "--field-value" in result.output
 
 
 def test_activity_logs_export_inline_flags_only(
