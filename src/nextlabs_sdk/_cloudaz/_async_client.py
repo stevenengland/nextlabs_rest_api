@@ -40,7 +40,6 @@ class AsyncCloudAzClient:  # noqa: WPS214
         token_cache: TokenCache | None = None,
         auth: httpx.Auth | None = None,
         refresh_token_lifetime: int | None = None,
-        allow_access_token_fallback: bool = False,
     ) -> None:
         config = http_config or HttpConfig()
         if auth is None:
@@ -57,7 +56,6 @@ class AsyncCloudAzClient:  # noqa: WPS214
                 token_cache=cache,
             )
             auth.refresh_token_lifetime = refresh_token_lifetime
-            auth.allow_access_token_fallback = allow_access_token_fallback
         self._client = transport_mod.create_async_http_client(
             base_url=base_url,
             auth=auth,

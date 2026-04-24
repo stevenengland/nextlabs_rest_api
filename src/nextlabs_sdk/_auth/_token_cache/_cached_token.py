@@ -46,17 +46,16 @@ class CachedToken:
     """A persisted OIDC token.
 
     Attributes:
-        access_token: The OAuth2 access_token returned by the token
-            endpoint. Retained for diagnostics and refresh flows;
-            CloudAz requests now authenticate with ``id_token``.
+        access_token: The OAuth2 ``access_token`` returned by the token
+            endpoint. Sent as the ``Authorization: Bearer …`` credential
+            on CloudAz API requests.
         refresh_token: Optional refresh_token for silent re-auth.
         expires_at: Absolute UTC epoch seconds at which the token expires.
         token_type: OAuth token type (typically ``"bearer"``).
         scope: Optional OAuth scope string.
-        id_token: OIDC ``id_token`` sent as the bearer credential on
-            CloudAz API requests. ``None`` on cache entries written by
-            older SDK versions; callers should treat such entries as
-            expired and trigger a refresh.
+        id_token: OIDC ``id_token`` echoed back by the token endpoint,
+            if any. Persisted for forward compatibility and diagnostics;
+            the SDK no longer uses it as the bearer credential.
         refresh_expires_at: Absolute UTC epoch seconds at which the
             refresh token is considered expired, or ``None`` when the
             SDK has no information (reactive mode).

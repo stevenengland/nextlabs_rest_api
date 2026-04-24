@@ -26,7 +26,6 @@ def _make_auth(
     password: str | None = "secret",
     token_cache: TokenCache | None = None,
     lifetime: int | None = None,
-    allow_access_token_fallback: bool = False,
 ) -> CloudAzAuth:
     kwargs: dict[str, Any] = dict(
         token_url=TOKEN_URL,
@@ -39,7 +38,6 @@ def _make_auth(
     auth = CloudAzAuth(**kwargs)
     if lifetime is not None:
         auth.refresh_token_lifetime = lifetime
-    auth.allow_access_token_fallback = allow_access_token_fallback
     return auth
 
 
@@ -537,7 +535,7 @@ def test_ensure_token_uses_password_grant_when_no_refresh():
     assert len(sent) == 1
     assert str(sent[0].url) == TOKEN_URL
     assert "grant_type=password" in sent[0].content.decode()
-    assert auth._id_token == "fresh"
+    assert auth._access_token == "fresh"
 
 
 def test_ensure_token_prefers_refresh_token_when_available():
@@ -551,7 +549,7 @@ def test_ensure_token_prefers_refresh_token_when_available():
     body = sent[0].content.decode()
     assert "grant_type=refresh_token" in body
     assert "refresh_token=RT-cached" in body
-    assert auth._id_token == "refreshed"
+    assert auth._access_token == "refreshed"
 
 
 def test_ensure_token_falls_back_to_password_when_refresh_fails():
@@ -570,7 +568,7 @@ def test_ensure_token_falls_back_to_password_when_refresh_fails():
     assert len(sent) == 2
     assert "grant_type=refresh_token" in sent[0].content.decode()
     assert "grant_type=password" in sent[1].content.decode()
-    assert auth._id_token == "pwd-grant"
+    assert auth._access_token == "pwd-grant"
 
 
 def test_ensure_token_raises_when_no_password_and_refresh_fails():
@@ -609,7 +607,7 @@ def test_ensure_token_async_fetches_and_caches():
     asyncio.run(auth.ensure_token_async(send))
 
     assert len(sent) == 1
-    assert auth._id_token == "async-fresh"
+    assert auth._access_token == "async-fresh"
 
 
 # ─────────────── Proactive refresh-token-lifetime tracking ───────────────
@@ -753,10 +751,10 @@ def test_logs_warning_on_terminal_refresh_failure(caplog: pytest.LogCaptureFixtu
         assert "RT-dead" not in record.getMessage()
 
 
-# ────────────────────────── id_token bearer (OIDC) ──────────────────────────
+# ──────────────────────── bearer credential (OAuth2) ────────────────────────
 
 
-def test_authorization_header_uses_id_token_not_access_token():
+def test_authorization_header_uses_access_token():
     _stub_clock(float(0))
     auth = _make_auth()
 
@@ -766,8 +764,8 @@ def test_authorization_header_uses_id_token_not_access_token():
         _make_token_response(access_token="AT-value", id_token="IDT-value"),
     )
 
-    assert api_request.headers["Authorization"] == "Bearer IDT-value"
-    assert "AT-value" not in api_request.headers["Authorization"]
+    assert api_request.headers["Authorization"] == "Bearer AT-value"
+    assert "IDT-value" not in api_request.headers["Authorization"]
 
 
 def test_cache_persists_both_access_and_id_token():
@@ -784,26 +782,10 @@ def test_cache_persists_both_access_and_id_token():
     assert saved.id_token == "IDT-1"
 
 
-def test_response_missing_id_token_raises_when_fallback_disabled():
+def test_response_missing_id_token_is_accepted():
     _stub_clock(float(0))
-    auth = _make_auth()
-
-    flow = auth.auth_flow(_api_request())
-    next(flow)
-    with pytest.raises(exceptions.AuthenticationError) as excinfo:
-        flow.send(
-            _make_token_response(access_token="AT-only", include_id_token=False),
-        )
-
-    assert "id_token" in str(excinfo.value)
-
-
-def test_response_missing_id_token_falls_back_when_opt_in(
-    caplog: pytest.LogCaptureFixture,
-):
-    _stub_clock(float(0))
-    auth = _make_auth(allow_access_token_fallback=True)
-    caplog.set_level(logging.WARNING, logger="nextlabs_sdk")
+    cache = _InMemoryTokenCache()
+    auth = _make_auth(token_cache=cache)
 
     flow = auth.auth_flow(_api_request())
     next(flow)
@@ -812,33 +794,24 @@ def test_response_missing_id_token_falls_back_when_opt_in(
     )
 
     assert api_request.headers["Authorization"] == "Bearer AT-only"
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("missing id_token" in r.getMessage().lower() for r in warnings)
+    assert cache.entries[_DERIVED_KEY].id_token is None
 
 
-def test_legacy_cache_without_id_token_triggers_silent_refresh_not_relogin():
+def test_cache_entry_without_id_token_is_used_directly():
     _stub_clock(100.0)
     cache = _InMemoryTokenCache()
     cache.entries[_DERIVED_KEY] = _cached(
-        access_token="legacy-at",
-        refresh_token="RT-legacy",
+        access_token="cached-at",
+        refresh_token="RT-cached",
         expires_at=10_000.0,
         id_token=None,
     )
     auth = _make_auth(password=None, token_cache=cache)
 
     flow = auth.auth_flow(_api_request())
-    token_req = next(flow)
+    api_request = next(flow)
 
-    body = bytes(token_req.content).decode()
-    assert "grant_type=refresh_token" in body
-    assert "refresh_token=RT-legacy" in body
-
-    api_request = flow.send(
-        _make_token_response(access_token="AT-new", id_token="IDT-new"),
-    )
-    assert api_request.headers["Authorization"] == "Bearer IDT-new"
-    assert cache.entries[_DERIVED_KEY].id_token == "IDT-new"
+    assert api_request.headers["Authorization"] == "Bearer cached-at"
 
 
 # ──────────────── Wall-clock vs monotonic-clock consistency (#93) ────────────────
