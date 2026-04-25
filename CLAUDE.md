@@ -2,7 +2,7 @@
 
 Typed Python SDK wrapping NextLabs CloudAz Console API + PDP REST API.
 Python 3.11+. Dev guide: @docs/development.md. Module map:
-@docs/architecture.md.
+@docs/architecture.md. Domain glossary: @docs/ubiquitous_language.md.
 
 ## Environment
 
