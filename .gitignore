@@ -20,3 +20,4 @@ docker/*.tar.gz
 .worktrees/
 docs/*/
 !docs/cast/
+AGENTS_PRIVATE_INSTRUCTIONS.md
