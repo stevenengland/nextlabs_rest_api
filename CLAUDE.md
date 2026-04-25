@@ -74,7 +74,6 @@ Keep searches tight. Saves tokens, avoids context poisoning.
 - No `noqa`, `type: ignore`, `--no-verify` suppressions.
 - One class / main component per file.
 - Google-style docstrings.
-- TDD: tests before or alongside implementation.
 - Bug fixes: diagnose why existing tests missed it; improve them.
 - No comments unless WHY non-obvious.
 - Conventional commit messages, human-written style.
@@ -86,6 +85,9 @@ Keep searches tight. Saves tokens, avoids context poisoning.
 
 Mocking: **mockito** (not `unittest.mock`). E2E: **testcontainers** via
 `--e2e`/`--all`. Key fixtures: `when`, `unstub` in `tests/conftest.py`.
+
+## Conversation Style
+- be concise
 
 ## References
 
