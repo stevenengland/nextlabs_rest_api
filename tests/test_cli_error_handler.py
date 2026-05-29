@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import click
 import pytest
 import typer
 
@@ -45,7 +44,7 @@ def _make_cli_ctx(
 
 
 def _make_typer_context(cli_ctx: CliContext) -> typer.Context:
-    command = click.Command("test")
+    command = typer.core.TyperCommand(name="test", callback=lambda: None)
     ctx = typer.Context(command)
     ctx.obj = cli_ctx
     return ctx
@@ -100,7 +99,7 @@ def test_handler_catches_exception(
     def failing():
         raise exc
 
-    with pytest.raises(click.exceptions.Exit) as exc_info:
+    with pytest.raises(typer.Exit) as exc_info:
         failing()
 
     assert exc_info.value.exit_code == 1
@@ -116,7 +115,7 @@ def test_handler_lets_typer_exit_propagate():
 
         raise typer.Exit(code=2)
 
-    with pytest.raises(click.exceptions.Exit) as exc_info:
+    with pytest.raises(typer.Exit) as exc_info:
         failing()
 
     assert exc_info.value.exit_code == 2
@@ -177,7 +176,7 @@ def test_refresh_token_expired_reraises_when_not_tty(
     def command(_ctx: typer.Context) -> None:
         raise RefreshTokenExpiredError("refresh rejected")
 
-    with pytest.raises(click.exceptions.Exit):
+    with pytest.raises(typer.Exit):
         command(ctx)
 
     captured = capsys.readouterr()
@@ -200,7 +199,7 @@ def test_refresh_token_expired_reraises_when_explicit_password(
     def command(_ctx: typer.Context) -> None:
         raise RefreshTokenExpiredError("refresh rejected")
 
-    with pytest.raises(click.exceptions.Exit):
+    with pytest.raises(typer.Exit):
         command(ctx)
 
     captured = capsys.readouterr()
@@ -226,7 +225,7 @@ def test_refresh_token_expired_only_retries_once(
         calls.append(_ctx.obj.password)
         raise AuthenticationError("invalid credentials")
 
-    with pytest.raises(click.exceptions.Exit):
+    with pytest.raises(typer.Exit):
         command(ctx)
 
     captured = capsys.readouterr()

@@ -169,12 +169,12 @@ def test_from_date_parsed_relative(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_invalid_json_errors(tmp_path: Path) -> None:
-    import click
+    import typer
 
     path = tmp_path / "bad.json"
     path.write_text("{not json")
 
-    with pytest.raises(click.exceptions.Exit):
+    with pytest.raises(typer.Exit):
         build_activity_log_query(path)
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import click
 import pytest
 import typer
 from strip_ansi import strip_ansi
@@ -24,7 +23,7 @@ def _ctx(verbose: int) -> typer.Context:
         timeout=30.0,
         verbose=verbose,
     )
-    ctx = typer.Context(click.Command("x"))
+    ctx = typer.Context(typer.core.TyperCommand(name="x", callback=lambda: None))
     ctx.obj = cli_ctx
     return ctx
 
@@ -44,7 +43,7 @@ def _run_failing(exc: Exception, verbose: int):
     def failing(ctx: typer.Context):
         raise exc
 
-    with pytest.raises(click.exceptions.Exit):
+    with pytest.raises(typer.Exit):
         failing(_ctx(verbose=verbose))
 
 

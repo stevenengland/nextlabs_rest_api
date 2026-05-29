@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from click.exceptions import Exit as ClickExit
 import pytest
+import typer
 
 from nextlabs_sdk._cli._parsing import parse_json_payload, parse_key_value_attrs
 
@@ -24,7 +24,7 @@ def test_parse_json_payload_valid(raw, expected):
     ],
 )
 def test_parse_json_payload_rejects(raw):
-    with pytest.raises(ClickExit):
+    with pytest.raises(typer.Exit):
         parse_json_payload(raw)
 
 
@@ -41,5 +41,5 @@ def test_parse_key_value_attrs_valid(items, expected):
 
 
 def test_parse_key_value_attrs_invalid():
-    with pytest.raises(ClickExit):
+    with pytest.raises(typer.Exit):
         parse_key_value_attrs(["no-equals"])

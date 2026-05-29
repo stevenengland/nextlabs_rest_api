@@ -6,8 +6,8 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import ParamSpec, TypeVar
 
-import click
 import typer
+from typer._click.core import Context as _ClickContext
 from rich.console import Console
 
 from nextlabs_sdk._cli._context import CliContext
@@ -57,12 +57,12 @@ def _format_error_message(exc: BaseException) -> str:
 def _extract_typer_context(
     args: tuple[object, ...],
     kwargs: dict[str, object] | None = None,
-) -> click.Context | None:
+) -> _ClickContext | None:
     for arg in args:
-        if isinstance(arg, click.Context):
+        if isinstance(arg, _ClickContext):
             return arg
     for ctx_value in (kwargs or {}).values():
-        if isinstance(ctx_value, click.Context):
+        if isinstance(ctx_value, _ClickContext):
             return ctx_value
     return None
 
