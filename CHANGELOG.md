@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 - 2026-05-30
+
+### nextlabs-sdk 0.7.0
+
+#### Features
+
+- feat(cloudaz): re-export component, policy models and services @stevenengland ([#139](https://github.com/stevenengland/nextlabs_rest_api/pull/139))
+- feat(cli): friendly error + toDate/header defaults for activity-logs @stevenengland ([#125](https://github.com/stevenengland/nextlabs_rest_api/pull/125))
+- feat(cli): inline flags for activity-logs search/export @stevenengland ([#124](https://github.com/stevenengland/nextlabs_rest_api/pull/124))
+
+#### Bug Fixes
+
+- fix(cli): relax activity-logs inline defaults for live reporters @stevenengland ([#127](https://github.com/stevenengland/nextlabs_rest_api/pull/127))
+- fix(cli): narrow activity-logs default header to spec-example columns @stevenengland ([#126](https://github.com/stevenengland/nextlabs_rest_api/pull/126))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.6.0...0.7.0
+
 ## 0.6.0 - 2026-04-24
 
 ### nextlabs-sdk 0.6.0
