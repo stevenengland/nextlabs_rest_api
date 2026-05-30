@@ -3,6 +3,37 @@
 Re-exports the curated PDP API from the internal ``_pdp`` package.
 """
 
+__all__: list[str] = [
+    # Clients
+    "AsyncPdpClient",
+    "PdpClient",
+    # Enums/Types
+    "ContentType",
+    "Decision",
+    "ResourceDimension",
+    # Models
+    "Action",
+    "ActionPermission",
+    "Application",
+    "Environment",
+    "EvalRequest",
+    "EvalResponse",
+    "EvalResult",
+    "Obligation",
+    "ObligationAttribute",
+    "PermissionsRequest",
+    "PermissionsResponse",
+    "PolicyRef",
+    "Resource",
+    "Status",
+    "Subject",
+    # Payload
+    "LoadedPayload",
+    "PayloadFormat",
+    "load_eval_payload",
+    "load_permissions_payload",
+]
+
 from nextlabs_sdk._pdp._async_client import AsyncPdpClient as AsyncPdpClient
 from nextlabs_sdk._pdp._client import PdpClient as PdpClient
 from nextlabs_sdk._pdp._payload._format import LoadedPayload as LoadedPayload
