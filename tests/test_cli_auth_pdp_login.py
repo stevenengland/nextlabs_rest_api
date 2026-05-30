@@ -620,7 +620,7 @@ def test_login_pdp_non_200_includes_body_snippet(
 # ─────────────────────── Recommended regression tests ──────────────────────
 
 
-from click.testing import Result as _CliResult
+from typer.testing import Result as _CliResult
 
 
 def _invoke_pdp_login(secret: str) -> _CliResult:
