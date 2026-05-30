@@ -12,7 +12,7 @@ def _cloudaz_module() -> object:
 
 
 class TestCloudazModelImports:
-    """AC1: Core model classes are importable from the public facade."""
+    """Core model classes are importable from the public facade."""
 
     @pytest.mark.parametrize(
         "symbol",
@@ -25,7 +25,7 @@ class TestCloudazModelImports:
 
 
 class TestCloudazServiceImports:
-    """AC2: Service classes (sync, async, search) are importable."""
+    """Service classes (sync, async, search) are importable."""
 
     @pytest.mark.parametrize(
         "symbol",
@@ -49,7 +49,7 @@ class TestCloudazServiceImports:
 
 
 class TestCloudazAllExports:
-    """AC4: ``__all__`` lists every public symbol and each is importable."""
+    """``__all__`` lists every public symbol and each is importable."""
 
     @pytest.mark.parametrize("symbol", cloudaz_all)
     def test_all_symbol_importable(self, symbol: str) -> None:
