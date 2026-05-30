@@ -23,7 +23,6 @@ entries stay stable across file moves.
 
 from __future__ import annotations
 
-
 # (model_name, field_alias) — SDK requires, spec does not.
 REQUIRED_ONLY_IN_SDK: frozenset[tuple[str, str]] = frozenset(
     (

@@ -33,7 +33,6 @@ from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
 
-
 auth_app = typer.Typer(help="Authentication commands")
 
 _NO_ACCOUNTS_MESSAGE = "No cached accounts. Run `nextlabs auth login` to create one."

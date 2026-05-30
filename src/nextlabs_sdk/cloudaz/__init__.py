@@ -3,6 +3,71 @@
 Re-exports the curated CloudAz API from the internal ``_cloudaz`` package.
 """
 
+__all__: list[str] = [
+    # Clients
+    "AsyncCloudAzClient",
+    "CloudAzClient",
+    # Models
+    "ActivityByEntity",
+    "ActivityLogAttribute",
+    "ActivityLogQuery",
+    "Alert",
+    "ApplicationUser",
+    "AttributeMapping",
+    "AttributeMappings",
+    "AuditLogEntry",
+    "AuditLogQuery",
+    "AuditLogUser",
+    "CachedPolicy",
+    "CachedUser",
+    "Component",
+    "ComponentLite",
+    "DeleteReportsRequest",
+    "EnforcementEntry",
+    "EnforcementTimeBucket",
+    "ExportAuditLogsRequest",
+    "FilterCriteria",
+    "FilterField",
+    "MonitorTagAlert",
+    "Policy",
+    "PolicyActivity",
+    "PolicyActivityReport",
+    "PolicyActivityReportDetail",
+    "PolicyActivityReportRequest",
+    "PolicyDayBucket",
+    "PolicyLite",
+    "PolicyModelAction",
+    "ReportCriteria",
+    "ReportFilterGeneral",
+    "ReportFilters",
+    "ReportOrderBy",
+    "ReportWidget",
+    "ReporterAuditLogEntry",
+    "ResourceActions",
+    "SaveInfo",
+    "SavedReportCriteria",
+    "SavedSearch",
+    "SearchCriteria",
+    "SystemConfig",
+    "UserGroup",
+    "WidgetData",
+    # Services
+    "AsyncComponentSearchService",
+    "AsyncComponentService",
+    "AsyncPolicySearchService",
+    "AsyncPolicyService",
+    "AsyncTagService",
+    "ComponentSearchService",
+    "ComponentService",
+    "PolicySearchService",
+    "PolicyService",
+    "TagService",
+    # Enums/Types
+    "Operator",
+    "Tag",
+    "TagType",
+]
+
 from nextlabs_sdk._cloudaz._async_client import (
     AsyncCloudAzClient as AsyncCloudAzClient,
 )
@@ -19,9 +84,35 @@ from nextlabs_sdk._cloudaz._audit_log_models import (
     ExportAuditLogsRequest as ExportAuditLogsRequest,
 )
 from nextlabs_sdk._cloudaz._client import CloudAzClient as CloudAzClient
+from nextlabs_sdk._cloudaz._component_models import Component as Component
+from nextlabs_sdk._cloudaz._component_models import ComponentLite as ComponentLite
+from nextlabs_sdk._cloudaz._component_search import (
+    AsyncComponentSearchService as AsyncComponentSearchService,
+)
+from nextlabs_sdk._cloudaz._component_search import (
+    ComponentSearchService as ComponentSearchService,
+)
+from nextlabs_sdk._cloudaz._components import (
+    AsyncComponentService as AsyncComponentService,
+)
+from nextlabs_sdk._cloudaz._components import ComponentService as ComponentService
 from nextlabs_sdk._cloudaz._models import Operator as Operator
 from nextlabs_sdk._cloudaz._models import Tag as Tag
 from nextlabs_sdk._cloudaz._models import TagType as TagType
+from nextlabs_sdk._cloudaz._policies import (
+    AsyncPolicyService as AsyncPolicyService,
+)
+from nextlabs_sdk._cloudaz._policies import PolicyService as PolicyService
+from nextlabs_sdk._cloudaz._policy_models import Policy as Policy
+from nextlabs_sdk._cloudaz._policy_models import PolicyLite as PolicyLite
+from nextlabs_sdk._cloudaz._policy_search import (
+    AsyncPolicySearchService as AsyncPolicySearchService,
+)
+from nextlabs_sdk._cloudaz._policy_search import (
+    PolicySearchService as PolicySearchService,
+)
+from nextlabs_sdk._cloudaz._tags import AsyncTagService as AsyncTagService
+from nextlabs_sdk._cloudaz._tags import TagService as TagService
 from nextlabs_sdk._cloudaz._report_models import (
     ApplicationUser as ApplicationUser,
 )
