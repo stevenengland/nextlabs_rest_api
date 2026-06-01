@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._pdp import (
+from nextlabs_sdk.pdp import (
     ContentType,
     Decision,
     EvalResponse,

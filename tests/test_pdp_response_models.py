@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._pdp._enums import Decision
-from nextlabs_sdk._pdp._response_models import (
+from nextlabs_sdk.pdp import (
     ActionPermission,
+    Decision,
     EvalResponse,
     EvalResult,
     Obligation,

@@ -6,7 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _pdp_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
-from nextlabs_sdk._pdp import (
+from nextlabs_sdk.pdp import (
     ActionPermission,
     Decision,
     EvalResponse,

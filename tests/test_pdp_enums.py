@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nextlabs_sdk._pdp._enums import ContentType, Decision, ResourceDimension
+from nextlabs_sdk.pdp import ContentType, Decision, ResourceDimension
 
 
 def test_content_type_json_value() -> None:
