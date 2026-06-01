@@ -6,10 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _reports_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
-from nextlabs_sdk._cloudaz._report_models import (
-    PolicyActivityReportDetail,
-    WidgetData,
-)
+from nextlabs_sdk.cloudaz import PolicyActivityReportDetail, WidgetData
 
 
 def _console() -> tuple[Console, io.StringIO]:

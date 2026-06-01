@@ -6,15 +6,14 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _components_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
+from nextlabs_sdk.cloudaz import Component, Tag, TagType
 from nextlabs_sdk._cloudaz._component_models import (
     Authority,
-    Component,
     ComponentCondition,
     ComponentGroupType,
     ComponentStatus,
     PolicyModelRef,
 )
-from nextlabs_sdk._cloudaz._models import Tag, TagType
 
 
 def test_component_detail_renders_scalar_fields() -> None:

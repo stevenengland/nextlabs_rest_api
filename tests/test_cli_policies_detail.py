@@ -6,12 +6,11 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _policies_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
+from nextlabs_sdk.cloudaz import Policy, Tag, TagType
 from nextlabs_sdk._cloudaz._component_models import Authority
-from nextlabs_sdk._cloudaz._models import Tag, TagType
 from nextlabs_sdk._cloudaz._policy_models import (
     ComponentGroup,
     EnvironmentConfig,
-    Policy,
     PolicyObligation,
 )
 

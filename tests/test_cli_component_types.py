@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
+from nextlabs_sdk.cloudaz import CloudAzClient
 from nextlabs_sdk._cloudaz._component_type_models import (
     ComponentType,
     ComponentTypeType,

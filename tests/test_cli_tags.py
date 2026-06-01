@@ -9,9 +9,7 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._models import Tag, TagType
-from nextlabs_sdk._cloudaz._tags import TagService
+from nextlabs_sdk.cloudaz import CloudAzClient, Tag, TagService, TagType
 from nextlabs_sdk._pagination import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 

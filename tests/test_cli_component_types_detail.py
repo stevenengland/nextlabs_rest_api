@@ -6,6 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _component_types_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
+from nextlabs_sdk.cloudaz import Tag, TagType
 from nextlabs_sdk._cloudaz._component_type_models import (
     ActionConfig,
     AttributeConfig,
@@ -15,7 +16,6 @@ from nextlabs_sdk._cloudaz._component_type_models import (
     ObligationConfig,
     ObligationRunAt,
 )
-from nextlabs_sdk._cloudaz._models import Tag, TagType
 
 
 def test_component_type_detail_renders_all_scalar_fields() -> None:
