@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.8.0 - 2026-06-01
+
+### nextlabs-sdk 0.8.0
+
+#### Features
+
+- feat(pdp): add __all__ to PDP facade + verification test @stevenengland ([#150](https://github.com/stevenengland/nextlabs_rest_api/pull/150))
+- feat(cloudaz): re-export missing models and services via public facade @stevenengland ([#149](https://github.com/stevenengland/nextlabs_rest_api/pull/149))
+
+#### Bug Fixes
+
+- fix(PRD): #<!---->143 cleanup — capstone findings @stevenengland ([#154](https://github.com/stevenengland/nextlabs_rest_api/pull/154))
+
+#### Documentation
+
+- docs(adr): add public API surface decision record (#<!---->146) @stevenengland ([#151](https://github.com/stevenengland/nextlabs_rest_api/pull/151))
+
+#### Maintenance
+
+- refactor(tests): migrate test imports to public facades (#<!---->148) @stevenengland ([#153](https://github.com/stevenengland/nextlabs_rest_api/pull/153))
+- refactor(sdk): import clients from public facades + __all__ + export test @stevenengland ([#152](https://github.com/stevenengland/nextlabs_rest_api/pull/152))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.7.0...0.8.0
+
 ## 0.7.0 - 2026-05-30
 
 ### nextlabs-sdk 0.7.0
