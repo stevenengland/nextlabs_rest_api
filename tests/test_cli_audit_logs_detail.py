@@ -6,7 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _audit_logs_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
-from nextlabs_sdk._cloudaz._audit_log_models import AuditLogEntry
+from nextlabs_sdk.cloudaz import AuditLogEntry
 
 
 def test_audit_log_entry_detail_renders_scalar_fields() -> None:

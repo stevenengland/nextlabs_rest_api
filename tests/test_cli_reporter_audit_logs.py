@@ -9,10 +9,9 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
 from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
 from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk.cloudaz import CloudAzClient, ReporterAuditLogEntry
 from nextlabs_sdk.exceptions import NextLabsError
 
 runner = CliRunner()

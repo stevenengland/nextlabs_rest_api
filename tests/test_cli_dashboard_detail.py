@@ -6,7 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _dashboard_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
-from nextlabs_sdk._cloudaz._dashboard_models import PolicyActivity, PolicyDayBucket
+from nextlabs_sdk.cloudaz import PolicyActivity, PolicyDayBucket
 
 
 def _console() -> tuple[Console, io.StringIO]:

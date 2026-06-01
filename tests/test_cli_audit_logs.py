@@ -10,10 +10,9 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._audit_log_models import AuditLogEntry
 from nextlabs_sdk._cloudaz._audit_logs import EntityAuditLogService
-from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk.cloudaz import AuditLogEntry, CloudAzClient
 
 runner = CliRunner()
 
@@ -161,7 +160,7 @@ def test_search_missing_required_dates():
 
 
 def test_audit_logs_export_with_ids(stubbed_audit: Any, tmp_path: Any) -> None:
-    from nextlabs_sdk._cloudaz._audit_log_models import ExportAuditLogsRequest
+    from nextlabs_sdk.cloudaz import ExportAuditLogsRequest
 
     when(stubbed_audit).export(
         ExportAuditLogsRequest(ids=[1, 2], query=None),
@@ -223,7 +222,7 @@ def test_audit_logs_export_requires_input(stubbed_audit: Any, tmp_path: Any) -> 
 
 
 def test_audit_logs_list_users(stubbed_audit: Any) -> None:
-    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogUser
+    from nextlabs_sdk.cloudaz import AuditLogUser
 
     when(stubbed_audit).list_users().thenReturn(
         [
@@ -254,7 +253,7 @@ def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> int:
 def test_search_accepts_relative_start_date(
     stubbed_audit: Any, frozen_clock: int
 ) -> None:
-    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+    from nextlabs_sdk.cloudaz import AuditLogQuery
 
     expected = AuditLogQuery(
         start_date=frozen_clock - 5 * 60 * 1000,
@@ -278,7 +277,7 @@ def test_search_accepts_relative_start_date(
 def test_search_applies_default_sort_and_page_size(
     stubbed_audit: Any, frozen_clock: int
 ) -> None:
-    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+    from nextlabs_sdk.cloudaz import AuditLogQuery
 
     expected = AuditLogQuery(
         start_date=frozen_clock - 5 * 60 * 1000,
@@ -300,7 +299,7 @@ def test_search_applies_default_sort_and_page_size(
 
 
 def test_search_accepts_iso_dates(stubbed_audit: Any) -> None:
-    from nextlabs_sdk._cloudaz._audit_log_models import AuditLogQuery
+    from nextlabs_sdk.cloudaz import AuditLogQuery
 
     # 2024-01-15T00:00:00Z = 1705276800000; 2024-01-16T00:00:00Z = 1705363200000
     expected = AuditLogQuery(

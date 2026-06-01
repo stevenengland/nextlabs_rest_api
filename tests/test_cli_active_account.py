@@ -13,8 +13,8 @@ from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cli._context import CliContext
-from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk.cloudaz import CloudAzClient
 
 runner = CliRunner()
 

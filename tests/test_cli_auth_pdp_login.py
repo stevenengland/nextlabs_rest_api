@@ -20,8 +20,8 @@ from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
 from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
-from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk.cloudaz import CloudAzClient
 
 runner = CliRunner()
 
