@@ -75,8 +75,9 @@ Each facade package (`nextlabs_sdk.cloudaz`, `nextlabs_sdk.pdp`) owns an
    treat them as public re-exports.
 
 The top-level `nextlabs_sdk.__init__` remains intentionally thin — it exports
-only cross-cutting symbols (auth strategies, exceptions) that are not
-service-specific.
+cross-cutting symbols (auth strategies, exceptions, HTTP configuration) and
+convenience re-exports of the main service clients (`CloudAzClient`,
+`PdpClient`, and their async variants).
 
 ## Consequences
 
