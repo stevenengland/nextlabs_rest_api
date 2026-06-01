@@ -7,12 +7,13 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._component_models import (
+from nextlabs_sdk.cloudaz import (
+    AsyncComponentSearchService,
     ComponentLite,
-    ComponentNameEntry,
+    SavedSearch,
+    SearchCriteria,
 )
-from nextlabs_sdk._cloudaz._component_search import AsyncComponentSearchService
-from nextlabs_sdk._cloudaz._search import SavedSearch, SearchCriteria
+from nextlabs_sdk._cloudaz._component_models import ComponentNameEntry
 from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

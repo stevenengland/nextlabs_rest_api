@@ -7,7 +7,7 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._audit_log_models import (
+from nextlabs_sdk.cloudaz import (
     AuditLogEntry,
     AuditLogQuery,
     AuditLogUser,

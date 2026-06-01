@@ -6,12 +6,12 @@ from typing import Any, Callable, Coroutine, TypeVar
 import httpx
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._activity_log_query_models import (
+from nextlabs_sdk.cloudaz import (
     ActivityLogAttribute,
     ActivityLogQuery,
+    EnforcementEntry,
 )
 from nextlabs_sdk._cloudaz._activity_logs_service import AsyncReportActivityLogService
-from nextlabs_sdk._cloudaz._report_models import EnforcementEntry
 from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

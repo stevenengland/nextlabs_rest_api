@@ -6,8 +6,7 @@ from typing import Any, Callable, Coroutine, TypeVar
 import httpx
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._models import Tag, TagType
-from nextlabs_sdk._cloudaz._tags import AsyncTagService
+from nextlabs_sdk.cloudaz import AsyncTagService, Tag, TagType
 from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

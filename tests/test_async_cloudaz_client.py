@@ -8,16 +8,18 @@ import pytest
 from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
-from nextlabs_sdk._cloudaz._async_client import AsyncCloudAzClient
-from nextlabs_sdk._cloudaz._component_search import AsyncComponentSearchService
+from nextlabs_sdk.cloudaz import (
+    AsyncCloudAzClient,
+    AsyncComponentSearchService,
+    AsyncComponentService,
+    AsyncPolicySearchService,
+    AsyncPolicyService,
+    AsyncTagService,
+)
 from nextlabs_sdk._cloudaz._component_type_search import AsyncComponentTypeSearchService
 from nextlabs_sdk._cloudaz._component_types import AsyncComponentTypeService
-from nextlabs_sdk._cloudaz._components import AsyncComponentService
 from nextlabs_sdk._cloudaz._operators import AsyncOperatorService
-from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
-from nextlabs_sdk._cloudaz._policy_search import AsyncPolicySearchService
 from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogService
-from nextlabs_sdk._cloudaz._tags import AsyncTagService
 from nextlabs_sdk._config import HttpConfig
 
 T = TypeVar("T")
