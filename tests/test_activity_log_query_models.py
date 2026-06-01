@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._cloudaz._activity_log_query_models import (
-    ActivityLogAttribute,
-    ActivityLogQuery,
-)
+from nextlabs_sdk.cloudaz import ActivityLogAttribute, ActivityLogQuery
 
 
 def _required() -> dict[str, object]:

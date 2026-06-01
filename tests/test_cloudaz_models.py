@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk._cloudaz._models import Operator, Tag, TagType
+from nextlabs_sdk.cloudaz import Operator, Tag, TagType
 
 
 def test_operator_from_api_payload() -> None:

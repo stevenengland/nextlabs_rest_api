@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nextlabs_sdk._cloudaz._system_config_models import SystemConfig
+from nextlabs_sdk.cloudaz import SystemConfig
 
 
 def test_system_config_from_response_roundtrips_settings():

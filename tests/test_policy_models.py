@@ -5,15 +5,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk._cloudaz._models import TagType
+from nextlabs_sdk.cloudaz import Policy, PolicyLite, TagType
 from nextlabs_sdk._cloudaz._policy_models import (
     ComponentGroup,
     EnvironmentConfig,
     ExportOptions,
     ImportResult,
-    Policy,
     PolicyComponentRef,
-    PolicyLite,
     PolicyObligation,
 )
 

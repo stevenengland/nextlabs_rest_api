@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._cloudaz._dashboard_models import (
+from nextlabs_sdk.cloudaz import (
     ActivityByEntity,
     Alert,
     MonitorTagAlert,
