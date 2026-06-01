@@ -5,12 +5,16 @@ from mockito import mock, when
 import pytest
 
 from nextlabs_sdk._cloudaz._component_models import (
-    ComponentLite,
     ComponentNameEntry,
     ComponentStatus,
 )
-from nextlabs_sdk._cloudaz._component_search import ComponentSearchService
-from nextlabs_sdk._cloudaz._search import SavedSearch, SavedSearchType, SearchCriteria
+from nextlabs_sdk._cloudaz._search import SavedSearchType
+from nextlabs_sdk.cloudaz import (
+    ComponentLite,
+    ComponentSearchService,
+    SavedSearch,
+    SearchCriteria,
+)
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

@@ -7,7 +7,7 @@ import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._dashboard import DashboardService
-from nextlabs_sdk._cloudaz._dashboard_models import (
+from nextlabs_sdk.cloudaz import (
     ActivityByEntity,
     Alert,
     MonitorTagAlert,

@@ -6,8 +6,8 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._models import Operator
 from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk.cloudaz import Operator
 
 BASE_URL = "https://cloudaz.example.com"
 _LIST_ALL = "/console/api/v1/config/dataType/list"

@@ -4,7 +4,8 @@ import httpx
 from mockito import mock, when
 import pytest
 
-from nextlabs_sdk._cloudaz._report_models import (
+from nextlabs_sdk._cloudaz._reports import PolicyActivityReportService
+from nextlabs_sdk.cloudaz import (
     ApplicationUser,
     AttributeMappings,
     CachedPolicy,
@@ -22,7 +23,6 @@ from nextlabs_sdk._cloudaz._report_models import (
     UserGroup,
     WidgetData,
 )
-from nextlabs_sdk._cloudaz._reports import PolicyActivityReportService
 from nextlabs_sdk._pagination import SyncPaginator
 from nextlabs_sdk.exceptions import ServerError
 

@@ -5,7 +5,7 @@ import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._system_config import SystemConfigService
-from nextlabs_sdk._cloudaz._system_config_models import SystemConfig
+from nextlabs_sdk.cloudaz import SystemConfig
 from nextlabs_sdk.exceptions import ServerError
 
 BASE_URL = "https://cloudaz.example.com"
