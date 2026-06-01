@@ -20,4 +20,5 @@ docker/*.tar.gz
 .worktrees/
 docs/*/
 !docs/cast/
+!docs/adr/
 AGENTS_PRIVATE_INSTRUCTIONS.md
