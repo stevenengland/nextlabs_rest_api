@@ -71,8 +71,11 @@ Each facade package (`nextlabs_sdk.cloudaz`, `nextlabs_sdk.pdp`) owns an
 1. Declares `__all__` with alphabetical ordering within logical groups
    (Clients, Models, Services, Enums/Types).
 2. Uses group comments (e.g. `# Clients`, `# Models`) for readability.
-3. Re-exports every symbol with the explicit `X as X` syntax so type checkers
-   treat them as public re-exports.
+3. Re-exports symbols via explicit `X as X` imports from the corresponding
+   internal package namespace (`_cloudaz`, `_pdp`), whose own `__all__` serves
+   as the canonical export registry. Facade imports are decoupled from internal
+   submodule structure — they reference only the internal package, not its
+   individual modules.
 
 The top-level `nextlabs_sdk.__init__` remains intentionally thin — it exports
 cross-cutting symbols (auth strategies, exceptions, HTTP configuration) and
