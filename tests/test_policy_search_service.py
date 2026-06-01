@@ -6,9 +6,13 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._policy_models import PolicyLite
-from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
-from nextlabs_sdk._cloudaz._search import SavedSearch, SavedSearchType, SearchCriteria
+from nextlabs_sdk._cloudaz._search import SavedSearchType
+from nextlabs_sdk.cloudaz import (
+    PolicyLite,
+    PolicySearchService,
+    SavedSearch,
+    SearchCriteria,
+)
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

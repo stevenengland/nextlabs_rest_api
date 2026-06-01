@@ -32,14 +32,12 @@ class _Entry:
 def _entries() -> list[_Entry]:
     # Lazy imports — importing this module during collection must not
     # pull in every SDK submodule.
+    from nextlabs_sdk.cloudaz import Component, Policy, Tag
     from nextlabs_sdk._cloudaz._component_models import (
-        Component,
         Dependency,
         DeploymentResult,
     )
     from nextlabs_sdk._cloudaz._component_type_models import ComponentType
-    from nextlabs_sdk._cloudaz._models import Tag
-    from nextlabs_sdk._cloudaz._policy_models import Policy
 
     return [
         _Entry(

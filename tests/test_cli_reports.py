@@ -9,8 +9,8 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._report_models import (
+from nextlabs_sdk.cloudaz import (
+    CloudAzClient,
     EnforcementEntry,
     PolicyActivityReport,
     PolicyActivityReportDetail,
@@ -582,7 +582,7 @@ def test_reports_generate_export(mock_reports: Any, tmp_path: Any) -> None:
 
 
 def test_reports_list_cached_users(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import CachedUser
+    from nextlabs_sdk.cloudaz import CachedUser
 
     when(mock_reports).list_cached_users().thenReturn(
         [
@@ -599,7 +599,7 @@ def test_reports_list_cached_users(mock_reports: Any) -> None:
 
 
 def test_reports_list_cached_policies(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import CachedPolicy
+    from nextlabs_sdk.cloudaz import CachedPolicy
 
     when(mock_reports).list_cached_policies().thenReturn(
         [CachedPolicy.model_validate({"name": "P1", "fullName": "Root/P1"})],
@@ -612,7 +612,7 @@ def test_reports_list_cached_policies(mock_reports: Any) -> None:
 
 
 def test_reports_resource_actions(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import ResourceActions
+    from nextlabs_sdk.cloudaz import ResourceActions
 
     when(mock_reports).get_resource_actions().thenReturn(
         ResourceActions.model_validate(
@@ -633,10 +633,7 @@ def test_reports_resource_actions(mock_reports: Any) -> None:
 
 
 def test_reports_mappings(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import (
-        AttributeMapping,
-        AttributeMappings,
-    )
+    from nextlabs_sdk.cloudaz import AttributeMapping, AttributeMappings
 
     mapping = AttributeMapping.model_validate(
         {
@@ -659,7 +656,7 @@ def test_reports_mappings(mock_reports: Any) -> None:
 
 
 def test_reports_list_user_groups(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import UserGroup
+    from nextlabs_sdk.cloudaz import UserGroup
 
     when(mock_reports).list_user_groups().thenReturn(
         [UserGroup(id=5, title="Admins")],
@@ -672,7 +669,7 @@ def test_reports_list_user_groups(mock_reports: Any) -> None:
 
 
 def test_reports_list_application_users(mock_reports: Any) -> None:
-    from nextlabs_sdk._cloudaz._report_models import ApplicationUser
+    from nextlabs_sdk.cloudaz import ApplicationUser
 
     when(mock_reports).list_application_users().thenReturn(
         [

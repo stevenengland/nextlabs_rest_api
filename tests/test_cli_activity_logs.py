@@ -10,14 +10,14 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._activity_log_query_models import (
+from nextlabs_sdk._cloudaz._activity_logs_service import ReportActivityLogService
+from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk.cloudaz import (
     ActivityLogAttribute,
     ActivityLogQuery,
+    CloudAzClient,
+    EnforcementEntry,
 )
-from nextlabs_sdk._cloudaz._activity_logs_service import ReportActivityLogService
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._report_models import EnforcementEntry
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NextLabsError
 
 runner = CliRunner()

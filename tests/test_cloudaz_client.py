@@ -6,16 +6,18 @@ from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._config import HttpConfig
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._component_search import ComponentSearchService
+from nextlabs_sdk.cloudaz import (
+    CloudAzClient,
+    ComponentSearchService,
+    ComponentService,
+    PolicySearchService,
+    PolicyService,
+    TagService,
+)
 from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchService
 from nextlabs_sdk._cloudaz._component_types import ComponentTypeService
-from nextlabs_sdk._cloudaz._components import ComponentService
 from nextlabs_sdk._cloudaz._operators import OperatorService
-from nextlabs_sdk._cloudaz._policies import PolicyService
-from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
 from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
-from nextlabs_sdk._cloudaz._tags import TagService
 
 BASE_URL = "https://cloudaz.example.com"
 

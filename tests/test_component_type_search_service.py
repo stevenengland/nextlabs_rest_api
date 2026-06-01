@@ -8,7 +8,8 @@ from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._component_type_models import ComponentType
 from nextlabs_sdk._cloudaz._component_type_search import ComponentTypeSearchService
-from nextlabs_sdk._cloudaz._search import SavedSearch, SavedSearchType, SearchCriteria
+from nextlabs_sdk.cloudaz import SavedSearch, SearchCriteria
+from nextlabs_sdk._cloudaz._search import SavedSearchType
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

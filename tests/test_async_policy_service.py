@@ -7,16 +7,9 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._component_models import (
-    Dependency,
-    DeploymentResult,
-)
-from nextlabs_sdk._cloudaz._policies import AsyncPolicyService
-from nextlabs_sdk._cloudaz._policy_models import (
-    ExportOptions,
-    ImportResult,
-    Policy,
-)
+from nextlabs_sdk.cloudaz import AsyncPolicyService, Policy
+from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
+from nextlabs_sdk._cloudaz._policy_models import ExportOptions, ImportResult
 from nextlabs_sdk.exceptions import NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"

@@ -10,11 +10,11 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._dashboard import DashboardService
-from nextlabs_sdk._cloudaz._dashboard_models import (
+from nextlabs_sdk.cloudaz import (
     ActivityByEntity,
     Alert,
+    CloudAzClient,
     PolicyActivity,
     PolicyDayBucket,
 )
@@ -220,7 +220,7 @@ def test_top_policies_custom_decision():
 
 
 def _make_tag_alert(tag: str = "red", count: int = 3) -> Any:
-    from nextlabs_sdk._cloudaz._dashboard_models import MonitorTagAlert
+    from nextlabs_sdk.cloudaz import MonitorTagAlert
 
     return MonitorTagAlert.model_validate(
         {"tagValue": tag, "monitorName": "Mon", "alertCount": count},

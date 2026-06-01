@@ -7,12 +7,8 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._component_models import (
-    Component,
-    Dependency,
-    DeploymentResult,
-)
-from nextlabs_sdk._cloudaz._components import AsyncComponentService
+from nextlabs_sdk.cloudaz import AsyncComponentService, Component
+from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
 
 BASE_URL = "https://cloudaz.example.com"
 

@@ -10,12 +10,11 @@ from nextlabs_sdk._cloudaz._component_models import (
     Dependency,
     DeploymentResult,
 )
-from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_models import (
     ExportOptions,
     ImportResult,
-    Policy,
 )
+from nextlabs_sdk.cloudaz import Policy, PolicyService
 from nextlabs_sdk.exceptions import NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"

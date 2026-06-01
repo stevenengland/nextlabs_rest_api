@@ -3,10 +3,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from nextlabs_sdk.cloudaz import SavedSearch, SearchCriteria
 from nextlabs_sdk._cloudaz._search import (
-    SavedSearch,
     SavedSearchType,
-    SearchCriteria,
     SearchField,
     SearchFieldType,
     SortField,

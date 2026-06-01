@@ -6,13 +6,13 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._audit_log_models import (
+from nextlabs_sdk._cloudaz._audit_logs import EntityAuditLogService
+from nextlabs_sdk.cloudaz import (
     AuditLogEntry,
     AuditLogQuery,
     AuditLogUser,
     ExportAuditLogsRequest,
 )
-from nextlabs_sdk._cloudaz._audit_logs import EntityAuditLogService
 from nextlabs_sdk._pagination import SyncPaginator
 from nextlabs_sdk.exceptions import ServerError
 

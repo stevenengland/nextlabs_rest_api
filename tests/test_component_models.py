@@ -3,12 +3,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from nextlabs_sdk.cloudaz import Component, ComponentLite, TagType
 from nextlabs_sdk._cloudaz._component_models import (
     Authority,
-    Component,
     ComponentCondition,
     ComponentGroupType,
-    ComponentLite,
     ComponentNameData,
     ComponentNameEntry,
     ComponentStatus,
@@ -20,7 +19,6 @@ from nextlabs_sdk._cloudaz._component_models import (
     PredicateData,
     PushResult,
 )
-from nextlabs_sdk._cloudaz._models import TagType
 
 
 def _deployment_request_data() -> dict[str, object]:

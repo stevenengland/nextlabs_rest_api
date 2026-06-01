@@ -16,7 +16,7 @@ from nextlabs_sdk._cli._output import (
     render_table,
 )
 from nextlabs_sdk._cli._output_format import OutputFormat
-from nextlabs_sdk._cloudaz._models import Tag, TagType
+from nextlabs_sdk.cloudaz import Tag, TagType
 
 
 def _make_tag() -> Tag:

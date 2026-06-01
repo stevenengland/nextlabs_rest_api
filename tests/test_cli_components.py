@@ -10,16 +10,18 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._cloudaz._component_models import (
+from nextlabs_sdk.cloudaz import (
+    CloudAzClient,
     Component,
-    ComponentGroupType,
     ComponentLite,
+    ComponentSearchService,
+    ComponentService,
+)
+from nextlabs_sdk._cloudaz._component_models import (
+    ComponentGroupType,
     ComponentStatus,
     DeploymentResult,
 )
-from nextlabs_sdk._cloudaz._component_search import ComponentSearchService
-from nextlabs_sdk._cloudaz._components import ComponentService
 from nextlabs_sdk._pagination import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 

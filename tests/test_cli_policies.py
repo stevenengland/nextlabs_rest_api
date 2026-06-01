@@ -10,11 +10,15 @@ from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
-from nextlabs_sdk._cloudaz._client import CloudAzClient
+from nextlabs_sdk.cloudaz import (
+    CloudAzClient,
+    Policy,
+    PolicyLite,
+    PolicySearchService,
+    PolicyService,
+)
 from nextlabs_sdk._cloudaz._component_models import DeploymentResult
-from nextlabs_sdk._cloudaz._policies import PolicyService
-from nextlabs_sdk._cloudaz._policy_models import ImportResult, Policy, PolicyLite
-from nextlabs_sdk._cloudaz._policy_search import PolicySearchService
+from nextlabs_sdk._cloudaz._policy_models import ImportResult
 from nextlabs_sdk._pagination import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 

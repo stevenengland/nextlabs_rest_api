@@ -14,7 +14,7 @@ from nextlabs_sdk._cloudaz._component_type_models import (
     OperatorConfig,
     ParameterConfig,
 )
-from nextlabs_sdk._cloudaz._models import TagType
+from nextlabs_sdk.cloudaz import TagType
 
 
 @pytest.mark.parametrize(

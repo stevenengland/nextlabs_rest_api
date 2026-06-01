@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from nextlabs_sdk._cloudaz._report_models import (
+from nextlabs_sdk.cloudaz import (
     ApplicationUser,
     AttributeMapping,
     AttributeMappings,
@@ -25,8 +25,8 @@ from nextlabs_sdk._cloudaz._report_models import (
     ReportFilters,
     ReportOrderBy,
     ReportWidget,
-    SaveInfo,
     ResourceActions,
+    SaveInfo,
     UserGroup,
     WidgetData,
 )

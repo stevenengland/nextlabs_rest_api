@@ -9,11 +9,12 @@ import pytest
 from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
-from nextlabs_sdk._pdp._async_client import AsyncPdpClient
-from nextlabs_sdk._pdp._enums import ContentType, Decision
-from nextlabs_sdk._pdp._request_models import (
+from nextlabs_sdk.pdp import (
     Action,
     Application,
+    AsyncPdpClient,
+    ContentType,
+    Decision,
     EvalRequest,
     PermissionsRequest,
     Resource,

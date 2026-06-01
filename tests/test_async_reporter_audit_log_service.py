@@ -6,7 +6,7 @@ from typing import TypeVar
 import httpx
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
+from nextlabs_sdk.cloudaz import ReporterAuditLogEntry
 from nextlabs_sdk._cloudaz._reporter_audit_logs import AsyncReporterAuditLogService
 from nextlabs_sdk._pagination import AsyncPaginator
 

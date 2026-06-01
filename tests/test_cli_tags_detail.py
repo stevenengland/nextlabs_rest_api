@@ -6,7 +6,7 @@ from rich.console import Console
 
 from nextlabs_sdk._cli import _tags_cmd
 from nextlabs_sdk._cli._detail_renderers import render_detail
-from nextlabs_sdk._cloudaz._models import Tag, TagType
+from nextlabs_sdk.cloudaz import Tag, TagType
 
 
 def test_tag_detail_renderer_registered_and_renders_fields() -> None:

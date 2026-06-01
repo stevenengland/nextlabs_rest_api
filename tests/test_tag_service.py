@@ -4,8 +4,7 @@ import httpx
 from mockito import mock, when
 import pytest
 
-from nextlabs_sdk._cloudaz._models import Tag, TagType
-from nextlabs_sdk._cloudaz._tags import TagService
+from nextlabs_sdk.cloudaz import Tag, TagService, TagType
 from nextlabs_sdk._pagination import SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 

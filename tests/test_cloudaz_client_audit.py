@@ -5,12 +5,11 @@ import pytest
 from mockito import any as any_value, mock, when
 
 from nextlabs_sdk import _http_transport as transport_mod
-from nextlabs_sdk._cloudaz._async_client import AsyncCloudAzClient
+from nextlabs_sdk.cloudaz import AsyncCloudAzClient, CloudAzClient
 from nextlabs_sdk._cloudaz._audit_logs import (
     AsyncEntityAuditLogService,
     EntityAuditLogService,
 )
-from nextlabs_sdk._cloudaz._client import CloudAzClient
 from nextlabs_sdk._cloudaz._system_config import (
     AsyncSystemConfigService,
     SystemConfigService,

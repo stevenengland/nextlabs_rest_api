@@ -5,10 +5,10 @@ from xml.etree import ElementTree as ET
 import httpx
 import pytest
 
-from nextlabs_sdk._pdp._enums import Decision
-from nextlabs_sdk._pdp._request_models import (
+from nextlabs_sdk.pdp import (
     Action,
     Application,
+    Decision,
     EvalRequest,
     PermissionsRequest,
     Resource,

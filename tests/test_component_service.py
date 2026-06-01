@@ -7,12 +7,11 @@ import pytest
 from mockito import mock, when
 
 from nextlabs_sdk._cloudaz._component_models import (
-    Component,
     ComponentGroupType,
     Dependency,
     DeploymentResult,
 )
-from nextlabs_sdk._cloudaz._components import ComponentService
+from nextlabs_sdk.cloudaz import Component, ComponentService
 from nextlabs_sdk.exceptions import NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"

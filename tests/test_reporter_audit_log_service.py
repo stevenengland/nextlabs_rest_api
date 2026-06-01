@@ -4,8 +4,8 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
 from nextlabs_sdk._cloudaz._reporter_audit_logs import ReporterAuditLogService
+from nextlabs_sdk.cloudaz import ReporterAuditLogEntry
 from nextlabs_sdk._pagination import SyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

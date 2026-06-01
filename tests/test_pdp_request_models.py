@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk._pdp._enums import ResourceDimension
-from nextlabs_sdk._pdp._request_models import (
+from nextlabs_sdk.pdp import (
     Action,
     Application,
     Environment,
     EvalRequest,
     PermissionsRequest,
     Resource,
+    ResourceDimension,
     Subject,
 )
 

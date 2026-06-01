@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from nextlabs_sdk._cloudaz._reporter_audit_log_models import ReporterAuditLogEntry
+from nextlabs_sdk.cloudaz import ReporterAuditLogEntry
 
 
 def test_reporter_audit_log_entry_parses_api_payload() -> None:

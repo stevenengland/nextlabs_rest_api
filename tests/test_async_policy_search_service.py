@@ -6,9 +6,12 @@ from typing import Any, Awaitable, TypeVar
 import httpx
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._policy_models import PolicyLite
-from nextlabs_sdk._cloudaz._policy_search import AsyncPolicySearchService
-from nextlabs_sdk._cloudaz._search import SavedSearch, SearchCriteria
+from nextlabs_sdk.cloudaz import (
+    AsyncPolicySearchService,
+    PolicyLite,
+    SavedSearch,
+    SearchCriteria,
+)
 from nextlabs_sdk._pagination import AsyncPaginator
 
 BASE_URL = "https://cloudaz.example.com"

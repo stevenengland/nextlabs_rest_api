@@ -5,21 +5,22 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from nextlabs_sdk._pdp._enums import Decision, ResourceDimension
+from nextlabs_sdk.pdp import (
+    Action,
+    Application,
+    Decision,
+    Environment,
+    EvalRequest,
+    PermissionsRequest,
+    Resource,
+    ResourceDimension,
+    Subject,
+)
 from nextlabs_sdk._pdp._json_serializer import (
     deserialize_eval_response,
     deserialize_permissions_response,
     serialize_eval_request,
     serialize_permissions_request,
-)
-from nextlabs_sdk._pdp._request_models import (
-    Action,
-    Application,
-    Environment,
-    EvalRequest,
-    PermissionsRequest,
-    Resource,
-    Subject,
 )
 from nextlabs_sdk._pdp import _urns as urns
 from nextlabs_sdk.exceptions import PdpStatusError

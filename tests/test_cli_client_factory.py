@@ -16,8 +16,8 @@ from nextlabs_sdk._cli._cache_key import cache_key_for
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._pdp_auth_source import PdpAuthSource
-from nextlabs_sdk._cloudaz._client import CloudAzClient
-from nextlabs_sdk._pdp._client import PdpClient
+from nextlabs_sdk.cloudaz import CloudAzClient
+from nextlabs_sdk.pdp import PdpClient
 
 
 def _make_ctx(

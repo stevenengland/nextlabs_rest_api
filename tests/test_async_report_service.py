@@ -7,7 +7,7 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk._cloudaz._report_models import (
+from nextlabs_sdk.cloudaz import (
     ApplicationUser,
     AttributeMappings,
     CachedPolicy,

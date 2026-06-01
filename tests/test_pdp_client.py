@@ -9,12 +9,13 @@ from mockito import any as any_value, mock, verify, when
 
 from nextlabs_sdk import _http_transport as transport_mod
 from nextlabs_sdk._config import HttpConfig, RetryConfig
-from nextlabs_sdk._pdp._client import PdpClient
-from nextlabs_sdk._pdp._enums import ContentType, Decision
-from nextlabs_sdk._pdp._request_models import (
+from nextlabs_sdk.pdp import (
     Action,
     Application,
+    ContentType,
+    Decision,
     EvalRequest,
+    PdpClient,
     PermissionsRequest,
     Resource,
     Subject,
