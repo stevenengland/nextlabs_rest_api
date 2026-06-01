@@ -1,5 +1,36 @@
 """NextLabs PDP API client — XACML policy evaluation."""
 
+__all__: list[str] = [
+    # Clients
+    "AsyncPdpClient",
+    "PdpClient",
+    # Enums/Types
+    "ContentType",
+    "Decision",
+    "ResourceDimension",
+    # Models
+    "Action",
+    "ActionPermission",
+    "Application",
+    "Environment",
+    "EvalRequest",
+    "EvalResponse",
+    "EvalResult",
+    "Obligation",
+    "ObligationAttribute",
+    "PermissionsRequest",
+    "PermissionsResponse",
+    "PolicyRef",
+    "Resource",
+    "Status",
+    "Subject",
+    # Payload
+    "LoadedPayload",
+    "PayloadFormat",
+    "load_eval_payload",
+    "load_permissions_payload",
+]
+
 from nextlabs_sdk._pdp._async_client import AsyncPdpClient as AsyncPdpClient
 from nextlabs_sdk._pdp._client import PdpClient as PdpClient
 from nextlabs_sdk._pdp._enums import ContentType as ContentType
@@ -28,3 +59,11 @@ from nextlabs_sdk._pdp._response_models import (
 )
 from nextlabs_sdk._pdp._response_models import PolicyRef as PolicyRef
 from nextlabs_sdk._pdp._response_models import Status as Status
+from nextlabs_sdk._pdp._payload._format import LoadedPayload as LoadedPayload
+from nextlabs_sdk._pdp._payload._format import PayloadFormat as PayloadFormat
+from nextlabs_sdk._pdp._payload._loader import (
+    load_eval_payload as load_eval_payload,
+)
+from nextlabs_sdk._pdp._payload._loader import (
+    load_permissions_payload as load_permissions_payload,
+)
