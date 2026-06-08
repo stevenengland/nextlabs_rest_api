@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.1 - 2026-06-08
+
+### nextlabs-sdk 0.9.1
+
+#### Bug Fixes
+
+- fix(cloudaz): accept null owner/modifier metadata on Component/Policy models @stevenengland ([#166](https://github.com/stevenengland/nextlabs_rest_api/pull/166))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.9.0...0.9.1
+
 ## 0.9.0 - 2026-06-08
 
 ### nextlabs-sdk 0.9.0
