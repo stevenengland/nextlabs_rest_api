@@ -479,3 +479,26 @@ def test_policy_component_ref_accepts_member_object_conditions():
     )
     assert ref.member_conditions[0].member == {"id": 7}
     assert ref.member_conditions[0].not_found is False
+
+
+def test_policy_accepts_null_owner_display_name():
+    data = _make_full_policy_data()
+    data["ownerDisplayName"] = None
+    policy = Policy.model_validate(data)
+    assert policy.owner_display_name is None
+
+
+def test_policy_accepts_null_modified_by():
+    data = _make_full_policy_data()
+    data["modifiedBy"] = None
+    policy = Policy.model_validate(data)
+    assert policy.modified_by is None
+
+
+def test_policy_lite_accepts_null_owner_and_modifier_metadata():
+    data = _make_policy_lite_data()
+    data["ownerDisplayName"] = None
+    data["modifiedBy"] = None
+    lite = PolicyLite.model_validate(data)
+    assert lite.owner_display_name is None
+    assert lite.modified_by is None
