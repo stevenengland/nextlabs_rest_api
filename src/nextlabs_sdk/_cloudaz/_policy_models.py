@@ -27,7 +27,7 @@ class PolicyComponentRef(BaseModel):
         default=None,
         alias="policyModel",
     )
-    actions: list[dict[str, Any]] = Field(default_factory=list)
+    actions: list[str | dict[str, Any]] = Field(default_factory=list)
     conditions: list[ComponentCondition] = Field(default_factory=list)
     member_conditions: list[ComponentCondition] = Field(
         default_factory=list,
@@ -175,7 +175,7 @@ class Policy(BaseModel):
         alias="denyObligations",
     )
     sub_policy: bool = Field(default=False, alias="subPolicy")
-    sub_policy_refs: list[dict[str, Any]] = Field(
+    sub_policy_refs: list[str | dict[str, Any]] = Field(
         default_factory=list,
         alias="subPolicyRefs",
     )
