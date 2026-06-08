@@ -1,12 +1,26 @@
 # Changelog
 
+## 0.9.0 - 2026-06-08
+
+### nextlabs-sdk 0.9.0
+
+#### Features
+
+- feat(cloudaz): interpret no-data envelope by call shape (#<!---->159) @stevenengland ([#161](https://github.com/stevenengland/nextlabs_rest_api/pull/161))
+
+#### Bug Fixes
+
+- fix(cloudaz): accept live API shapes for Component/Policy fields @stevenengland ([#163](https://github.com/stevenengland/nextlabs_rest_api/pull/163))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.8.0...0.9.0
+
 ## 0.8.0 - 2026-06-01
 
 ### nextlabs-sdk 0.8.0
 
 #### Features
 
-- feat(pdp): add __all__ to PDP facade + verification test @stevenengland ([#150](https://github.com/stevenengland/nextlabs_rest_api/pull/150))
+- feat(pdp): add **all** to PDP facade + verification test @stevenengland ([#150](https://github.com/stevenengland/nextlabs_rest_api/pull/150))
 - feat(cloudaz): re-export missing models and services via public facade @stevenengland ([#149](https://github.com/stevenengland/nextlabs_rest_api/pull/149))
 
 #### Bug Fixes
@@ -20,7 +34,7 @@
 #### Maintenance
 
 - refactor(tests): migrate test imports to public facades (#<!---->148) @stevenengland ([#153](https://github.com/stevenengland/nextlabs_rest_api/pull/153))
-- refactor(sdk): import clients from public facades + __all__ + export test @stevenengland ([#152](https://github.com/stevenengland/nextlabs_rest_api/pull/152))
+- refactor(sdk): import clients from public facades + **all** + export test @stevenengland ([#152](https://github.com/stevenengland/nextlabs_rest_api/pull/152))
 
 **Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.7.0...0.8.0
 
