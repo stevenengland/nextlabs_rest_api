@@ -31,11 +31,13 @@ class PolicyModelRef(BaseModel):
 class ComponentCondition(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
-    attribute: str
+    attribute: str | None = None
     operator: str
-    value: str  # noqa: WPS110
+    value: str | None = None  # noqa: WPS110
     rhs_type: str | None = Field(default=None, alias="rhsType")
     rhsvalue: str | None = None
+    member: dict[str, Any] | None = None
+    not_found: bool | None = Field(default=None, alias="notFound")
 
 
 class Authority(BaseModel):
@@ -68,7 +70,7 @@ class Component(BaseModel):
         default=None,
         alias="policyModel",
     )
-    actions: list[dict[str, Any]] = Field(default_factory=list)
+    actions: list[str | dict[str, Any]] = Field(default_factory=list)
     conditions: list[ComponentCondition] = Field(default_factory=list)
     member_conditions: list[ComponentCondition] = Field(
         default_factory=list,
