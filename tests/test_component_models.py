@@ -245,6 +245,34 @@ def test_component_condition_minimal():
     assert cond.rhsvalue is None
 
 
+def test_component_condition_accepts_member_object_shape():
+    cond = ComponentCondition.model_validate(
+        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
+    )
+    assert cond.operator == "IN"
+    assert cond.attribute is None
+    assert cond.value is None
+    assert cond.member == {"id": 7, "name": "Eng"}
+    assert cond.not_found is False
+
+
+def test_component_accepts_member_object_member_conditions():
+    data = _make_full_component_data()
+    data["memberConditions"] = [
+        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
+    ]
+    comp = Component.model_validate(data)
+    assert comp.member_conditions[0].member == {"id": 7, "name": "Eng"}
+    assert comp.member_conditions[0].not_found is False
+
+
+def test_component_accepts_string_actions():
+    data = _make_full_component_data()
+    data["actions"] = ["DELETE", "CONFIGURE"]
+    comp = Component.model_validate(data)
+    assert comp.actions == ["DELETE", "CONFIGURE"]
+
+
 def test_authority_from_api_payload():
     auth = Authority.model_validate({"authority": "VIEW_COMPONENT"})
     assert auth.authority == "VIEW_COMPONENT"

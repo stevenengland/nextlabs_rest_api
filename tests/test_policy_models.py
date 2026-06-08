@@ -452,3 +452,30 @@ def test_policy_lite_minimal():
     assert pl.parent_policy is None
     assert pl.component_ids is None
     assert pl.obligation_model_ids is None
+
+
+def test_policy_accepts_string_sub_policy_refs():
+    data = _make_full_policy_data()
+    data["subPolicyRefs"] = ["ABC Sub-Policy"]
+    policy = Policy.model_validate(data)
+    assert policy.sub_policy_refs == ["ABC Sub-Policy"]
+
+
+def test_policy_component_ref_accepts_string_actions():
+    ref = PolicyComponentRef.model_validate(
+        {"id": 42, "actions": ["DELETE", "CONFIGURE"]},
+    )
+    assert ref.actions == ["DELETE", "CONFIGURE"]
+
+
+def test_policy_component_ref_accepts_member_object_conditions():
+    ref = PolicyComponentRef.model_validate(
+        {
+            "id": 42,
+            "memberConditions": [
+                {"operator": "IN", "member": {"id": 7}, "notFound": False},
+            ],
+        },
+    )
+    assert ref.member_conditions[0].member == {"id": 7}
+    assert ref.member_conditions[0].not_found is False

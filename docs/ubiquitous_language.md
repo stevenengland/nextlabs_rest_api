@@ -44,7 +44,7 @@
 | **Component** | A reusable predicate over **Subjects**, **Resources**, or **Actions**, grouped into **ComponentGroups** inside a **Policy**. | element |
 | **ComponentGroup** | A boolean grouping (with an `operator`) of **Components** of a single **ComponentGroupType**. | group |
 | **ComponentGroupType** | The role a **ComponentGroup** plays: `SUBJECT`, `RESOURCE`, or `ACTION`. | category, kind |
-| **ComponentCondition** | An `attribute operator value` predicate inside a **Component**. | rule, expression |
+| **ComponentCondition** | A predicate inside a **Component**. Often an `attribute operator value` triple, but may instead be member-object shaped (`operator` + `member` + `notFound`, with no top-level `attribute`/`value`). | rule, expression |
 | **PolicyObligation** | A named side-effect parameterized by a **Policy Model**, attached to allow/deny outcomes of a **Policy**. | obligation rule |
 | **Tag** | A typed label (`POLICY_MODEL`, `COMPONENT`, `POLICY`, `FOLDER`) attached to policy artifacts for organization. | label |
 | **Folder** | The hierarchical container in which **Policies** and **Components** live. | directory |
