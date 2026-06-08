@@ -502,3 +502,26 @@ def test_component_name_entry_without_data():
     cne = ComponentNameEntry.model_validate({"id": 1, "name": "X", "status": "DRAFT"})
     assert cne.data is None
     assert cne.empty is False
+
+
+def test_component_accepts_null_owner_display_name():
+    data = _make_full_component_data()
+    data["ownerDisplayName"] = None
+    comp = Component.model_validate(data)
+    assert comp.owner_display_name is None
+
+
+def test_component_accepts_null_modified_by():
+    data = _make_full_component_data()
+    data["modifiedBy"] = None
+    comp = Component.model_validate(data)
+    assert comp.modified_by is None
+
+
+def test_component_lite_accepts_null_owner_and_modifier_metadata():
+    data = _make_component_lite_data()
+    data["ownerDisplayName"] = None
+    data["modifiedBy"] = None
+    lite = ComponentLite.model_validate(data)
+    assert lite.owner_display_name is None
+    assert lite.modified_by is None
