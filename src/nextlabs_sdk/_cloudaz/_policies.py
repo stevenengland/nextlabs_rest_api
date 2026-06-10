@@ -15,7 +15,7 @@ from nextlabs_sdk._cloudaz._policy_models import (
     PolicyHistoryEntry,
 )
 from nextlabs_sdk._cloudaz._response import build_page, parse_data
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
 _DELETE_METHOD = "DELETE"
@@ -239,6 +239,14 @@ class AsyncPolicyService:  # noqa: WPS214
         )
         return Policy.model_validate(parse_data(resp))
 
+    def list_history(
+        self,
+        policy_id: int,
+    ) -> AsyncPaginator[PolicyHistoryEntry]:
+        return AsyncPaginator(
+            fetch_page=functools.partial(self._fetch_history_page, policy_id),
+        )
+
     async def create(self, payload: dict[str, object]) -> int:
         resp = await self._client.post(
             "/console/api/v1/policy/mgmt/add",
@@ -400,3 +408,14 @@ class AsyncPolicyService:  # noqa: WPS214
             json=payload,
         )
         raise_for_status(resp)
+
+    async def _fetch_history_page(
+        self,
+        policy_id: int,
+        page_no: int,
+    ) -> PageResult[PolicyHistoryEntry]:
+        resp = await self._client.get(
+            f"/console/api/v1/policy/mgmt/history/{policy_id}",
+            params={"pageNo": page_no},
+        )
+        return build_page(resp, PolicyHistoryEntry, page_no)
