@@ -32,6 +32,7 @@ __all__: list[str] = [
     "PolicyActivityReportDetail",
     "PolicyActivityReportRequest",
     "PolicyDayBucket",
+    "PolicyHistoryEntry",
     "PolicyLite",
     "PolicyModelAction",
     "ReportCriteria",
@@ -101,6 +102,9 @@ from nextlabs_sdk._cloudaz._policies import (
 )
 from nextlabs_sdk._cloudaz._policies import PolicyService as PolicyService
 from nextlabs_sdk._cloudaz._policy_models import Policy as Policy
+from nextlabs_sdk._cloudaz._policy_models import (
+    PolicyHistoryEntry as PolicyHistoryEntry,
+)
 from nextlabs_sdk._cloudaz._policy_models import PolicyLite as PolicyLite
 from nextlabs_sdk._cloudaz._policy_search import (
     AsyncPolicySearchService as AsyncPolicySearchService,

@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk.cloudaz import Policy, PolicyLite, TagType
+from nextlabs_sdk.cloudaz import Policy, PolicyHistoryEntry, PolicyLite, TagType
 from nextlabs_sdk._cloudaz._policy_models import (
     ComponentGroup,
     EnvironmentConfig,
@@ -502,3 +502,43 @@ def test_policy_lite_accepts_null_owner_and_modifier_metadata():
     lite = PolicyLite.model_validate(data)
     assert lite.owner_display_name is None
     assert lite.modified_by is None
+
+
+def _entry_data() -> dict[str, object]:
+    return {
+        "id": 770,
+        "revision": "3",
+        "name": "ROOT_42/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": None,
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": "UN",
+    }
+
+
+def test_policy_history_entry_parses_and_is_frozen():
+    # given / when
+    entry = PolicyHistoryEntry.model_validate(_entry_data())
+
+    # then — camelCase aliases populate, revision coerced to int
+    assert entry.id == 770
+    assert entry.revision == 3
+    assert entry.active_from == 1761133292235
+    assert entry.created_by == "me"
+    assert entry.action_type == "UN"
+    # actionType is a plain str, timestamps are int
+    assert isinstance(entry.action_type, str)
+    assert isinstance(entry.last_updated_date, int)
+    # no embedded policy on the list view
+    assert "policyDetail" not in PolicyHistoryEntry.model_fields
+    assert "policy_detail" not in PolicyHistoryEntry.model_fields
+    # frozen
+    with pytest.raises(ValidationError):
+        entry.name = "changed"  # type: ignore[misc]
