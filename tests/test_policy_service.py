@@ -79,6 +79,25 @@ def _make_policy_data() -> dict[str, Any]:
     }
 
 
+def _history_entry_data() -> dict[str, Any]:
+    return {
+        "id": 770,
+        "revision": "3",
+        "name": "ROOT_42/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": None,
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": "UN",
+    }
+
+
 @pytest.fixture
 def client_service() -> tuple[Any, PolicyService]:
     client = mock(httpx.Client)
@@ -419,6 +438,52 @@ def test_get_raises_not_found(client_service: tuple[Any, PolicyService]):
 
     with pytest.raises(NotFoundError):
         service.get(999)
+
+
+def test_list_history_returns_paginator(client_service: tuple[Any, PolicyService]):
+    from nextlabs_sdk._pagination import SyncPaginator
+    from nextlabs_sdk.cloudaz import PolicyHistoryEntry
+
+    client, service = client_service
+    when(client).get(
+        f"{MGMT}/history/42",
+        params={"pageNo": 0},
+    ).thenReturn(_make_envelope(data=[_history_entry_data()]))
+
+    paginator = service.list_history(42)
+
+    assert isinstance(paginator, SyncPaginator)
+    results = list(paginator)
+    assert len(results) == 1
+    assert isinstance(results[0], PolicyHistoryEntry)
+    assert results[0].revision == 3
+    assert results[0].action_type == "UN"
+
+
+def test_list_history_paginates_multiple_pages(
+    client_service: tuple[Any, PolicyService],
+):
+    client, service = client_service
+    entry1 = _history_entry_data()
+    entry2 = {**_history_entry_data(), "id": 769, "revision": "2", "actionType": "DE"}
+    page0 = _make_envelope(data=[entry1], page_no=0, total_pages=2, total_records=2)
+    page1 = _make_envelope(data=[entry2], page_no=1, total_pages=2, total_records=2)
+    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(page0)
+    when(client).get(f"{MGMT}/history/42", params={"pageNo": 1}).thenReturn(page1)
+
+    results = list(service.list_history(42))
+
+    assert [e.revision for e in results] == [3, 2]
+
+
+def test_list_history_raises_not_found(client_service: tuple[Any, PolicyService]):
+    client, service = client_service
+    when(client).get(f"{MGMT}/history/999", params={"pageNo": 0}).thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+
+    with pytest.raises(NotFoundError):
+        list(service.list_history(999))
 
 
 @pytest.mark.parametrize(
