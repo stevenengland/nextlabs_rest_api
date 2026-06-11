@@ -1,33 +1,21 @@
 {
   "name": "Python 3.12",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": "..",
-    "args": {
-      "http_proxy": "${localEnv:http_proxy}",
-      "https_proxy": "${localEnv:https_proxy}"
-    }
-  },
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.override.yml"],
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/nextlabs_rest_api",
   "remoteEnv": {
     "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
     "no_proxy": "${localEnv:no_proxy},host.docker.internal",
     "NO_PROXY": "${localEnv:NO_PROXY},host.docker.internal"
   },
-  "runArgs": ["--add-host=host.docker.internal:host-gateway"],
 
   "features": {
     "ghcr.io/devcontainers/features/git:latest": {},
     "ghcr.io/devcontainers/features/github-cli:latest": {},
     "ghcr.io/devcontainers/features/docker-outside-of-docker:latest": {},
     "ghcr.io/devcontainers/features/node:latest": {},
-    "ghcr.io/anthropics/devcontainer-features/claude-code:latest": {},
     "ghcr.io/devcontainers/features/copilot-cli:latest": {}
   },
-  "mounts": [
-    "source=claude-config,target=/home/vscode/.claude,type=volume",
-    "source=copilot-config,target=/home/vscode/.copilot,type=volume",
-    "source=vscode-server,target=/home/vscode/.vscode-server,type=volume"
-  ],
 
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": ".devcontainer/post-create.sh",

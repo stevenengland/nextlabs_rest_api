@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# chowns the entire home directory recursively. Catches everything including future volumes
+# Needed to ensure that vscode user has permissions to write to mounts from the compose files
+sudo chown -R vscode:vscode /home/vscode/
+
 # System packages that help agent tooling keep tool output small.
 # ripgrep (rg) respects .gitignore by default; the `grep` tool in Copilot
 # CLI / Claude Code uses it under the hood — installing it keeps `rg`

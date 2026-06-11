@@ -1,0 +1,24 @@
+services:
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      args:
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+    volumes:
+      - ..:/workspaces/nextlabs_rest_api:cached
+      - claude-config:/home/vscode/.claude
+      - copilot-config:/home/vscode/.copilot
+      - vscode-server:/home/vscode/.vscode-server
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    command: sleep infinity
+
+volumes:
+  claude-config:
+    name: claude-config
+  copilot-config:
+    name: copilot-config
+  vscode-server:
+    name: vscode-server

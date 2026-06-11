@@ -52,10 +52,11 @@ RUN mkdir -p /etc/apt/keyrings \
     && rm -rf /var/lib/apt/lists/*
 
 # Create workspace directory
-WORKDIR /workspace
+WORKDIR /workspaces/nextlabs_rest_api
 
 # Copy the rest of the project files (excluding files in .dockerignore)
-COPY . .
+# Mounted in via "volumes: - ..:/workspaces/nextlabs_rest_api:cached" in docker compose
+# COPY . .
 
 # Create a non-root user (if not already created by base image)
 ARG USERNAME=vscode
