@@ -12,6 +12,11 @@ from nextlabs_sdk._cloudaz._component_models import (
 )
 from nextlabs_sdk._cloudaz._models import Tag
 
+_CREATED_DATE_ALIAS = "createdDate"
+_MODIFIED_BY_ALIAS = "modifiedBy"
+_LAST_UPDATED_DATE_ALIAS = "lastUpdatedDate"
+_ACTION_TYPE_ALIAS = "actionType"
+
 
 class PolicyComponentRef(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
@@ -42,17 +47,17 @@ class PolicyComponentRef(BaseModel):
     parent_name: str | None = Field(default=None, alias="parentName")
     deployment_time: int = Field(default=0, alias="deploymentTime")
     deployed: bool = False
-    action_type: str | None = Field(default=None, alias="actionType")
+    action_type: str | None = Field(default=None, alias=_ACTION_TYPE_ALIAS)
     revision_count: int = Field(default=0, alias="revisionCount")
     owner_id: int = Field(default=0, alias="ownerId")
     owner_display_name: str | None = Field(
         default=None,
         alias="ownerDisplayName",
     )
-    created_date: int = Field(default=0, alias="createdDate")
+    created_date: int = Field(default=0, alias=_CREATED_DATE_ALIAS)
     modified_by_id: int = Field(default=0, alias="modifiedById")
-    modified_by: str | None = Field(default=None, alias="modifiedBy")
-    last_updated_date: int = Field(default=0, alias="lastUpdatedDate")
+    modified_by: str | None = Field(default=None, alias=_MODIFIED_BY_ALIAS)
+    last_updated_date: int = Field(default=0, alias=_LAST_UPDATED_DATE_ALIAS)
     skip_validate: bool = Field(default=False, alias="skipValidate")
     re_index_all_now: bool = Field(default=True, alias="reIndexAllNow")
     hidden: bool = False
@@ -182,14 +187,14 @@ class Policy(BaseModel):
     attributes: list[str] = Field(default_factory=list)
     deployment_time: int = Field(default=0, alias="deploymentTime")
     deployed: bool = False
-    action_type: str | None = Field(default=None, alias="actionType")
+    action_type: str | None = Field(default=None, alias=_ACTION_TYPE_ALIAS)
     revision_count: int = Field(default=0, alias="revisionCount")
     owner_id: int = Field(default=0, alias="ownerId")
     owner_display_name: str | None = Field(default=None, alias="ownerDisplayName")
-    created_date: int = Field(default=0, alias="createdDate")
+    created_date: int = Field(default=0, alias=_CREATED_DATE_ALIAS)
     modified_by_id: int = Field(default=0, alias="modifiedById")
-    modified_by: str | None = Field(default=None, alias="modifiedBy")
-    last_updated_date: int = Field(default=0, alias="lastUpdatedDate")
+    modified_by: str | None = Field(default=None, alias=_MODIFIED_BY_ALIAS)
+    last_updated_date: int = Field(default=0, alias=_LAST_UPDATED_DATE_ALIAS)
     skip_validate: bool = Field(default=False, alias="skipValidate")
     re_index_now: bool = Field(default=True, alias="reIndexNow")
     skip_adding_true_allow_attribute: bool = Field(
@@ -235,14 +240,14 @@ class PolicyLite(BaseModel):
     description: str | None = None
     status: str
     effect_type: str = Field(alias="effectType")
-    last_updated_date: int = Field(alias="lastUpdatedDate")
-    created_date: int = Field(alias="createdDate")
+    last_updated_date: int = Field(alias=_LAST_UPDATED_DATE_ALIAS)
+    created_date: int = Field(alias=_CREATED_DATE_ALIAS)
     has_parent: bool = Field(default=False, alias="hasParent")
     has_sub_policies: bool = Field(default=False, alias="hasSubPolicies")
     owner_id: int = Field(default=0, alias="ownerId")
     owner_display_name: str | None = Field(default=None, alias="ownerDisplayName")
     modified_by_id: int = Field(default=0, alias="modifiedById")
-    modified_by: str | None = Field(default=None, alias="modifiedBy")
+    modified_by: str | None = Field(default=None, alias=_MODIFIED_BY_ALIAS)
     tags: list[Tag] = Field(default_factory=list)
     no_of_tags: int = Field(default=0, alias="noOfTags")
     parent_policy: dict[str, Any] | None = Field(
@@ -261,7 +266,7 @@ class PolicyLite(BaseModel):
     manual_deploy: bool = Field(default=False, alias="manualDeploy")
     deployment_time: int = Field(default=0, alias="deploymentTime")
     deployed: bool = False
-    action_type: str | None = Field(default=None, alias="actionType")
+    action_type: str | None = Field(default=None, alias=_ACTION_TYPE_ALIAS)
     active_workflow_id: int | None = Field(
         default=None,
         alias="activeWorkflowId",
@@ -286,3 +291,21 @@ class PolicyLite(BaseModel):
     )
     hide_more_details: bool = Field(default=False, alias="hideMoreDetails")
     deployment_pending: bool = Field(default=False, alias="deploymentPending")
+
+
+class PolicyHistoryEntry(BaseModel):
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    revision: int
+    name: str | None = None
+    description: str | None = None
+    active_from: int | None = Field(default=None, alias="activeFrom")
+    active_to: int | None = Field(default=None, alias="activeTo")
+    created_date: int | None = Field(default=None, alias=_CREATED_DATE_ALIAS)
+    created_by: str | None = Field(default=None, alias="createdBy")
+    modified_by: str | None = Field(default=None, alias=_MODIFIED_BY_ALIAS)
+    last_updated_date: int | None = Field(default=None, alias=_LAST_UPDATED_DATE_ALIAS)
+    submitted_by: str | None = Field(default=None, alias="submittedBy")
+    submitted_date: int | None = Field(default=None, alias="submittedDate")
+    action_type: str | None = Field(default=None, alias=_ACTION_TYPE_ALIAS)

@@ -40,6 +40,7 @@
 | --- | --- | --- |
 | **Policy** | A named rule, owned and versioned, that combines **Components** to permit or deny **Actions** on **Resources** for **Subjects**. | rule, policy doc |
 | **PolicyLite** | A trimmed listing projection of a **Policy** (search/index views), without full component bodies. | policy summary |
+| **Policy revision history** | The ordered list of past revisions of a **Policy**, each a `PolicyHistoryEntry` of revision metadata (no full policy body). Read via `list_history`. | audit trail, version log |
 | **Policy Model** | The schema/template a **Component** or **Policy Obligation** conforms to. | template |
 | **Component** | A reusable predicate over **Subjects**, **Resources**, or **Actions**, grouped into **ComponentGroups** inside a **Policy**. | element |
 | **ComponentGroup** | A boolean grouping (with an `operator`) of **Components** of a single **ComponentGroupType**. | group |

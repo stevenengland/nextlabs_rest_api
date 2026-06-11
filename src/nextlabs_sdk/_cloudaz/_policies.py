@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import functools
+
 import httpx
 
 from nextlabs_sdk._cloudaz._component_models import (
@@ -10,8 +12,10 @@ from nextlabs_sdk._cloudaz._policy_models import (
     ExportOptions,
     ImportResult,
     Policy,
+    PolicyHistoryEntry,
 )
-from nextlabs_sdk._cloudaz._response import parse_data
+from nextlabs_sdk._cloudaz._response import build_page, parse_data
+from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
 _DELETE_METHOD = "DELETE"
@@ -35,6 +39,14 @@ class PolicyService:  # noqa: WPS214
             f"/console/api/v1/policy/mgmt/active/{policy_id}",
         )
         return Policy.model_validate(parse_data(response))
+
+    def list_history(
+        self,
+        policy_id: int,
+    ) -> SyncPaginator[PolicyHistoryEntry]:
+        return SyncPaginator(
+            fetch_page=functools.partial(self._fetch_history_page, policy_id),
+        )
 
     def create(self, payload: dict[str, object]) -> int:
         response = self._client.post(
@@ -198,6 +210,17 @@ class PolicyService:  # noqa: WPS214
         )
         raise_for_status(response)
 
+    def _fetch_history_page(
+        self,
+        policy_id: int,
+        page_no: int,
+    ) -> PageResult[PolicyHistoryEntry]:
+        response = self._client.get(
+            f"/console/api/v1/policy/mgmt/history/{policy_id}",
+            params={"pageNo": page_no},
+        )
+        return build_page(response, PolicyHistoryEntry, page_no)
+
 
 class AsyncPolicyService:  # noqa: WPS214
 
@@ -215,6 +238,14 @@ class AsyncPolicyService:  # noqa: WPS214
             f"/console/api/v1/policy/mgmt/active/{policy_id}",
         )
         return Policy.model_validate(parse_data(resp))
+
+    def list_history(
+        self,
+        policy_id: int,
+    ) -> AsyncPaginator[PolicyHistoryEntry]:
+        return AsyncPaginator(
+            fetch_page=functools.partial(self._fetch_history_page, policy_id),
+        )
 
     async def create(self, payload: dict[str, object]) -> int:
         resp = await self._client.post(
@@ -377,3 +408,14 @@ class AsyncPolicyService:  # noqa: WPS214
             json=payload,
         )
         raise_for_status(resp)
+
+    async def _fetch_history_page(
+        self,
+        policy_id: int,
+        page_no: int,
+    ) -> PageResult[PolicyHistoryEntry]:
+        resp = await self._client.get(
+            f"/console/api/v1/policy/mgmt/history/{policy_id}",
+            params={"pageNo": page_no},
+        )
+        return build_page(resp, PolicyHistoryEntry, page_no)

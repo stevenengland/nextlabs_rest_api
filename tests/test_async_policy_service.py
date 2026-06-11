@@ -25,17 +25,24 @@ def _make_request(path: str = "/api") -> httpx.Request:
     return httpx.Request("GET", f"{BASE_URL}{path}")
 
 
-def _make_envelope(data: object, status_code: int = 200) -> httpx.Response:
+def _make_envelope(
+    data: object,
+    status_code: int = 200,
+    page_no: int = 0,
+    page_size: int = 10,
+    total_pages: int = 1,
+    total_records: int = 1,
+) -> httpx.Response:
     return httpx.Response(
         status_code,
         json={
             "statusCode": "1003",
             "message": "Data found successfully",
             "data": data,
-            "pageNo": 0,
-            "pageSize": 10,
-            "totalPages": 1,
-            "totalNoOfRecords": 1,
+            "pageNo": page_no,
+            "pageSize": page_size,
+            "totalPages": total_pages,
+            "totalNoOfRecords": total_records,
             "additionalAttributes": None,
         },
         request=_make_request(),
@@ -74,6 +81,13 @@ def _make_policy_data() -> dict[str, Any]:
 
 def _run(coro: Awaitable[T]) -> T:
     return asyncio.run(coro)  # type: ignore[arg-type]
+
+
+def _collect(paginator: Any) -> list[Any]:
+    async def gather() -> list[Any]:
+        return [item async for item in paginator]
+
+    return asyncio.run(gather())
 
 
 @pytest.fixture
@@ -427,3 +441,77 @@ def test_async_retrieve_all_policies_returns_filename(
     ).thenReturn(_make_envelope(data=filename))
 
     assert _run(service.retrieve_all_policies(**kwargs)) == filename
+
+
+def test_async_list_history_returns_paginator(client_and_service):
+    from nextlabs_sdk._pagination import AsyncPaginator
+    from nextlabs_sdk.cloudaz import PolicyHistoryEntry
+
+    client, service = client_and_service
+    data = {
+        "id": 770,
+        "revision": "3",
+        "name": "ROOT_42/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": None,
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": "UN",
+    }
+    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(
+        _make_envelope(data=[data]),
+    )
+
+    paginator = service.list_history(42)
+
+    assert isinstance(paginator, AsyncPaginator)
+    results = _collect(paginator)
+    assert len(results) == 1
+    assert isinstance(results[0], PolicyHistoryEntry)
+    assert results[0].revision == 3
+    assert results[0].action_type == "UN"
+
+
+def test_async_list_history_paginates_multiple_pages(client_and_service):
+    client, service = client_and_service
+    base = {
+        "id": 770,
+        "revision": "3",
+        "name": "p",
+        "description": None,
+        "activeFrom": 1,
+        "activeTo": 1,
+        "policyDetail": None,
+        "createdDate": 1,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1,
+        "submittedBy": "me",
+        "submittedDate": 1,
+        "actionType": "UN",
+    }
+    entry2 = {**base, "id": 769, "revision": "2", "actionType": "DE"}
+    page0 = _make_envelope(data=[base], page_no=0, total_pages=2, total_records=2)
+    page1 = _make_envelope(data=[entry2], page_no=1, total_pages=2, total_records=2)
+    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(page0)
+    when(client).get(f"{MGMT}/history/42", params={"pageNo": 1}).thenReturn(page1)
+
+    results = _collect(service.list_history(42))
+
+    assert [e.revision for e in results] == [3, 2]
+
+
+def test_async_list_history_raises_not_found(client_and_service):
+    client, service = client_and_service
+    when(client).get(f"{MGMT}/history/999", params={"pageNo": 0}).thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+
+    with pytest.raises(NotFoundError):
+        _collect(service.list_history(999))
