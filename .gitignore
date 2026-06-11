@@ -1,3 +1,4 @@
+.devcontainer/docker-compose.override.yml
 data/config/config.toml
 data/database/*
 data/logs/*.log*
