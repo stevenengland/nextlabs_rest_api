@@ -141,7 +141,7 @@ class AsyncComponentService:  # noqa: WPS214
         resp = await self._client.get(
             f"/console/api/v1/component/mgmt/{component_id}",
         )
-        return Component.model_validate(parse_data(resp))
+        return Component.model_validate(parse_data(resp))  # noqa: WPS204
 
     async def get_active(self, component_id: int) -> Component:
         resp = await self._client.get(
@@ -212,3 +212,15 @@ class AsyncComponentService:  # noqa: WPS214
         )
         raw = parse_data(resp)
         return [Dependency.model_validate(entry) for entry in raw]
+
+    async def list_history(self, component_id: int) -> list[ComponentHistoryEntry]:
+        resp = await self._client.get(
+            f"/console/api/v1/component/mgmt/history/{component_id}",
+        )
+        return _component_history_entries(resp)
+
+    async def get_revision(self, revision_id: int, revision: int) -> ComponentRevision:
+        resp = await self._client.get(
+            f"/console/api/v1/component/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return ComponentRevision.model_validate(parse_data(resp))

@@ -7,10 +7,17 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk.cloudaz import AsyncComponentService, Component
+from nextlabs_sdk.cloudaz import (
+    AsyncComponentService,
+    Component,
+    ComponentHistoryEntry,
+    ComponentRevision,
+)
 from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
+from nextlabs_sdk.exceptions import ApiError, NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"
+MGMT = "/console/api/v1/component/mgmt"
 
 T = TypeVar("T")
 
@@ -60,6 +67,56 @@ def _component_data() -> dict[str, object]:
         "modifiedById": 0,
         "modifiedBy": "Administrator",
         "lastUpdatedDate": 1713171640252,
+    }
+
+
+def _paginated_envelope(
+    data: object,
+    page_size: int = 10,
+    total_pages: int = 1,
+    total_records: int = 1,
+) -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "statusCode": "1003",
+            "message": "Data found successfully",
+            "data": data,
+            "pageNo": 1,
+            "pageSize": page_size,
+            "totalPages": total_pages,
+            "totalNoOfRecords": total_records,
+            "additionalAttributes": None,
+        },
+        request=_make_request(),
+    )
+
+
+def _history_entry_data() -> dict[str, object]:
+    return {
+        "id": 770,
+        "revision": "3",
+        "name": "ROOT_101/pentest_component",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "componentDetail": None,
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": "UN",
+    }
+
+
+def _revision_data() -> dict[str, object]:
+    return {
+        **_history_entry_data(),
+        "id": 555,
+        "revision": "1",
+        "componentDetail": _component_data(),
     }
 
 
@@ -209,3 +266,62 @@ def test_async_find_dependencies_returns_list(ctx):
     deps: list[Dependency] = _run(service.find_dependencies([101]))
     assert len(deps) == 1
     assert deps[0].name == "Security Vulnerabilities"
+
+
+def test_async_list_history_returns_all_entries(ctx):
+    client, service = ctx
+    e1 = _history_entry_data()
+    e2 = {**_history_entry_data(), "id": 769, "revision": "2", "actionType": "DE"}
+    e3 = {**_history_entry_data(), "id": 768, "revision": "1", "actionType": "DE"}
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _paginated_envelope([e1, e2, e3], page_size=3, total_pages=3, total_records=3),
+    )
+
+    results = _run(service.list_history(42))
+
+    assert [entry.revision for entry in results] == [3, 2, 1]
+    assert isinstance(results[0], ComponentHistoryEntry)
+    assert results[0].action_type == "UN"
+
+
+def test_async_list_history_raises_when_records_exceed_returned(ctx):
+    client, service = ctx
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _paginated_envelope(
+            [_history_entry_data()], page_size=1, total_pages=180, total_records=180
+        ),
+    )
+    with pytest.raises(ApiError):
+        _run(service.list_history(42))
+
+
+def test_async_list_history_raises_not_found(ctx):
+    client, service = ctx
+    when(client).get(f"{MGMT}/history/999").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+    with pytest.raises(NotFoundError):
+        _run(service.list_history(999))
+
+
+def test_async_get_revision_returns_component_revision(ctx):
+    client, service = ctx
+    when(client).get(f"{MGMT}/viewRevision/555/1").thenReturn(
+        _envelope(_revision_data())
+    )
+
+    rev = _run(service.get_revision(555, 1))
+
+    assert isinstance(rev, ComponentRevision)
+    assert rev.revision == 1
+    assert isinstance(rev.component_detail, Component)
+    assert rev.component_detail.id == _component_data()["id"]
+
+
+def test_async_get_revision_raises_not_found(ctx):
+    client, service = ctx
+    when(client).get(f"{MGMT}/viewRevision/999/1").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+    with pytest.raises(NotFoundError):
+        _run(service.get_revision(999, 1))
