@@ -246,6 +246,12 @@ class AsyncPolicyService:  # noqa: WPS214
         )
         return Policy.model_validate(parse_data(resp))
 
+    async def get_revision(self, revision_id: int, revision: int) -> PolicyRevision:
+        resp = await self._client.get(
+            f"/console/api/v1/policy/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return PolicyRevision.model_validate(parse_data(resp))
+
     def list_history(
         self,
         policy_id: int,
