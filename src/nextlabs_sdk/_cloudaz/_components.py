@@ -4,11 +4,38 @@ import httpx
 
 from nextlabs_sdk._cloudaz._component_models import (
     Component,
+    ComponentHistoryEntry,
+    ComponentRevision,
     Dependency,
     DeploymentResult,
 )
-from nextlabs_sdk._cloudaz._response import parse_data
-from nextlabs_sdk.exceptions import raise_for_status
+from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
+from nextlabs_sdk.exceptions import ApiError, raise_for_status
+
+
+def _history_entries(response: httpx.Response) -> list[ComponentHistoryEntry]:
+    """Parse a component-history response into the full list of revision entries.
+
+    The CloudAz history endpoint does not paginate: it ignores page query
+    params and returns every revision in a single response, reporting
+    ``pageSize``, ``totalPages``, and ``totalNoOfRecords`` all equal to the
+    record count (see ``docs/vendor_gaps.md``). The SDK therefore fetches once
+    and returns the whole list.
+
+    The guard covers the day the vendor ever introduces real pagination: if the
+    envelope reports more total records than it returned, returning the short
+    list would silently truncate, so we raise instead. The returned count is
+    then the page size that pagination support must be built around.
+    """
+    raw_items, _total_pages, total_records, _page_size = parse_paginated(response)
+    entries = [ComponentHistoryEntry.model_validate(entry) for entry in raw_items]
+    if total_records > len(entries):
+        raise ApiError(
+            f"history endpoint returned {len(entries)} of {total_records} "
+            "records — it now paginates; SDK pagination support is required",
+            status_code=response.status_code,
+        )
+    return entries
 
 
 class ComponentService:  # noqa: WPS214
@@ -20,7 +47,7 @@ class ComponentService:  # noqa: WPS214
         response = self._client.get(
             f"/console/api/v1/component/mgmt/{component_id}",
         )
-        return Component.model_validate(parse_data(response))
+        return Component.model_validate(parse_data(response))  # noqa: WPS204
 
     def get_active(self, component_id: int) -> Component:
         response = self._client.get(
@@ -92,6 +119,18 @@ class ComponentService:  # noqa: WPS214
         raw = parse_data(response)
         return [Dependency.model_validate(entry) for entry in raw]
 
+    def list_history(self, component_id: int) -> list[ComponentHistoryEntry]:
+        response = self._client.get(
+            f"/console/api/v1/component/mgmt/history/{component_id}",
+        )
+        return _history_entries(response)
+
+    def get_revision(self, revision_id: int, revision: int) -> ComponentRevision:
+        response = self._client.get(
+            f"/console/api/v1/component/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return ComponentRevision.model_validate(parse_data(response))
+
 
 class AsyncComponentService:  # noqa: WPS214
 
@@ -102,7 +141,7 @@ class AsyncComponentService:  # noqa: WPS214
         resp = await self._client.get(
             f"/console/api/v1/component/mgmt/{component_id}",
         )
-        return Component.model_validate(parse_data(resp))
+        return Component.model_validate(parse_data(resp))  # noqa: WPS204
 
     async def get_active(self, component_id: int) -> Component:
         resp = await self._client.get(
@@ -173,3 +212,15 @@ class AsyncComponentService:  # noqa: WPS214
         )
         raw = parse_data(resp)
         return [Dependency.model_validate(entry) for entry in raw]
+
+    async def list_history(self, component_id: int) -> list[ComponentHistoryEntry]:
+        resp = await self._client.get(
+            f"/console/api/v1/component/mgmt/history/{component_id}",
+        )
+        return _history_entries(resp)
+
+    async def get_revision(self, revision_id: int, revision: int) -> ComponentRevision:
+        resp = await self._client.get(
+            f"/console/api/v1/component/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return ComponentRevision.model_validate(parse_data(resp))

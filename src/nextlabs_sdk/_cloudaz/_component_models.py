@@ -221,3 +221,44 @@ class ComponentNameEntry(BaseModel):
     empty: bool = False
     status: str
     data: ComponentNameData | None = None  # noqa: WPS110
+
+
+class ComponentHistoryEntry(BaseModel):
+    """A single entry in a component's revision history (list view).
+
+    Returned by ``GET /console/api/v1/component/mgmt/history/{component_id}``.
+    This view carries revision metadata only; ``componentDetail`` is ``null``
+    here and is deliberately not a field (see :class:`ComponentRevision` for
+    the detail view that embeds the full component).
+
+    ``revision`` arrives from the API as a JSON string (e.g. ``"3"``) and is
+    normalized to ``int`` on load, so consumers always receive an integer.
+    """
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
+
+    id: int  # noqa: WPS125
+    revision: int
+    name: str | None = None
+    description: str | None = None
+    active_from: int | None = Field(default=None, alias="activeFrom")
+    active_to: int | None = Field(default=None, alias="activeTo")
+    created_date: int | None = Field(default=None, alias="createdDate")
+    created_by: str | None = Field(default=None, alias="createdBy")
+    modified_by: str | None = Field(default=None, alias="modifiedBy")
+    last_updated_date: int | None = Field(default=None, alias="lastUpdatedDate")
+    submitted_by: str | None = Field(default=None, alias="submittedBy")
+    submitted_date: int | None = Field(default=None, alias="submittedDate")
+    action_type: str | None = Field(default=None, alias="actionType")
+
+
+class ComponentRevision(ComponentHistoryEntry):
+    """A component revision detail view: history metadata plus the embedded component.
+
+    Returned by
+    ``GET /console/api/v1/component/mgmt/viewRevision/{revision_id}/{revision}``.
+    Inherits every metadata field and the frozen config from
+    ``ComponentHistoryEntry`` and adds the embedded :class:`Component`.
+    """
+
+    component_detail: Component = Field(alias="componentDetail")
