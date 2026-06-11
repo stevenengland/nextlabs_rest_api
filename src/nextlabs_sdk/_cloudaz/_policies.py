@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import functools
-
 import httpx
 
 from nextlabs_sdk._cloudaz._component_models import (
@@ -15,13 +13,37 @@ from nextlabs_sdk._cloudaz._policy_models import (
     PolicyHistoryEntry,
     PolicyRevision,
 )
-from nextlabs_sdk._cloudaz._response import build_page, parse_data
-from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
-from nextlabs_sdk.exceptions import raise_for_status
+from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
+from nextlabs_sdk.exceptions import ApiError, raise_for_status
 
 _DELETE_METHOD = "DELETE"
 _PLAIN_MODE = "PLAIN"
 _EXPORT_MODE_PARAM = "exportMode"
+
+
+def _history_entries(response: httpx.Response) -> list[PolicyHistoryEntry]:
+    """Parse a policy-history response into the full list of revision entries.
+
+    The CloudAz history endpoint does not paginate: it ignores page query
+    params and returns every revision in a single response, reporting
+    ``pageSize``, ``totalPages``, and ``totalNoOfRecords`` all equal to the
+    record count (see ``docs/vendor_gaps.md``). The SDK therefore fetches once
+    and returns the whole list.
+
+    The guard covers the day the vendor ever introduces real pagination: if the
+    envelope reports more total records than it returned, returning the short
+    list would silently truncate, so we raise instead. The returned count is
+    then the page size that pagination support must be built around.
+    """
+    raw_items, _total_pages, total_records, _page_size = parse_paginated(response)
+    entries = [PolicyHistoryEntry.model_validate(entry) for entry in raw_items]
+    if total_records > len(entries):
+        raise ApiError(
+            f"history endpoint returned {len(entries)} of {total_records} "
+            "records — it now paginates; SDK pagination support is required",
+            status_code=response.status_code,
+        )
+    return entries
 
 
 class PolicyService:  # noqa: WPS214
@@ -47,13 +69,11 @@ class PolicyService:  # noqa: WPS214
         )
         return PolicyRevision.model_validate(parse_data(response))
 
-    def list_history(
-        self,
-        policy_id: int,
-    ) -> SyncPaginator[PolicyHistoryEntry]:
-        return SyncPaginator(
-            fetch_page=functools.partial(self._fetch_history_page, policy_id),
+    def list_history(self, policy_id: int) -> list[PolicyHistoryEntry]:
+        response = self._client.get(
+            f"/console/api/v1/policy/mgmt/history/{policy_id}",
         )
+        return _history_entries(response)
 
     def create(self, payload: dict[str, object]) -> int:
         response = self._client.post(
@@ -217,17 +237,6 @@ class PolicyService:  # noqa: WPS214
         )
         raise_for_status(response)
 
-    def _fetch_history_page(
-        self,
-        policy_id: int,
-        page_no: int,
-    ) -> PageResult[PolicyHistoryEntry]:
-        response = self._client.get(
-            f"/console/api/v1/policy/mgmt/history/{policy_id}",
-            params={"pageNo": page_no},
-        )
-        return build_page(response, PolicyHistoryEntry, page_no)
-
 
 class AsyncPolicyService:  # noqa: WPS214
 
@@ -252,13 +261,11 @@ class AsyncPolicyService:  # noqa: WPS214
         )
         return PolicyRevision.model_validate(parse_data(resp))
 
-    def list_history(
-        self,
-        policy_id: int,
-    ) -> AsyncPaginator[PolicyHistoryEntry]:
-        return AsyncPaginator(
-            fetch_page=functools.partial(self._fetch_history_page, policy_id),
+    async def list_history(self, policy_id: int) -> list[PolicyHistoryEntry]:
+        resp = await self._client.get(
+            f"/console/api/v1/policy/mgmt/history/{policy_id}",
         )
+        return _history_entries(resp)
 
     async def create(self, payload: dict[str, object]) -> int:
         resp = await self._client.post(
@@ -421,14 +428,3 @@ class AsyncPolicyService:  # noqa: WPS214
             json=payload,
         )
         raise_for_status(resp)
-
-    async def _fetch_history_page(
-        self,
-        policy_id: int,
-        page_no: int,
-    ) -> PageResult[PolicyHistoryEntry]:
-        resp = await self._client.get(
-            f"/console/api/v1/policy/mgmt/history/{policy_id}",
-            params={"pageNo": page_no},
-        )
-        return build_page(resp, PolicyHistoryEntry, page_no)

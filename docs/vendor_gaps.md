@@ -9,13 +9,23 @@ published contract does not describe.
 ## Endpoint — policy revision history
 
 `GET /console/api/v1/policy/mgmt/history/{policyId}` is not present in the
-vendor OpenAPI spec. It returns the standard paginated envelope
-(`pageNo` / `pageSize` / `totalPages` / `totalNoOfRecords`) wrapping a list of
-revision-metadata objects. On this list view `policyDetail` is always `null`;
-only the per-revision metadata is populated.
+vendor OpenAPI spec. Although the response is wrapped in the standard paginated
+envelope (`pageNo` / `pageSize` / `totalPages` / `totalNoOfRecords`), the
+endpoint does **not** actually paginate: it ignores the `pageNo` / `pageSize`
+query params and returns every revision in a single response. The three count
+fields are all reported equal to the total record count — `pageSize`,
+`totalPages`, and `totalNoOfRecords` move together (verified live up to 180
+revisions returned in one shot). Treating them as real pagination cursors
+causes the same body to be refetched once per record.
 
-Consumed by `PolicyService.list_history` / `AsyncPolicyService.list_history`,
-which deserialize each entry into `PolicyHistoryEntry`.
+Because of this, `PolicyService.list_history` /
+`AsyncPolicyService.list_history` issue a single GET with no query params and
+return a plain `list[PolicyHistoryEntry]`. As a guard against the vendor ever
+introducing real pagination, the SDK raises `ApiError` if a response ever
+reports more `totalNoOfRecords` than it returned — at which point that returned
+count reveals the page size that genuine pagination support must be built
+around. On this list view `policyDetail` is always `null`; only the
+per-revision metadata is populated.
 
 ## Endpoint — policy revision detail
 
