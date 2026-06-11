@@ -17,6 +17,16 @@ only the per-revision metadata is populated.
 Consumed by `PolicyService.list_history` / `AsyncPolicyService.list_history`,
 which deserialize each entry into `PolicyHistoryEntry`.
 
+## Endpoint — policy revision detail
+
+`GET /console/api/v1/policy/mgmt/viewRevision/{revision_id}/{revision}` is not
+present in the vendor OpenAPI spec. It returns the full revision detail object,
+including the `policyDetail` payload, for a single revision identified by its
+`revision_id` and `revision` number.
+
+Consumed by `PolicyService.get_revision` / `AsyncPolicyService.get_revision`,
+which deserialize the response into `PolicyRevision`.
+
 ## Opaque `actionType` codes
 
 Revision entries carry an `actionType` string whose code meanings are
