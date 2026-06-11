@@ -44,6 +44,8 @@
 | **Policy revision** | A single snapshot of a **Policy** at a specific revision number, represented as `PolicyRevision` (inherits all `PolicyHistoryEntry` metadata and adds the full `policy_detail` body). Read via `get_revision(revision_id, revision)`. | policy snapshot, policy version |
 | **Policy Model** | The schema/template a **Component** or **Policy Obligation** conforms to. | template |
 | **Component** | A reusable predicate over **Subjects**, **Resources**, or **Actions**, grouped into **ComponentGroups** inside a **Policy**. | element |
+| **Component revision history** | The ordered list of past revisions of a **Component**, each a `ComponentHistoryEntry` of revision metadata (no full component body). Read via `list_history`. | audit trail, version log |
+| **Component revision** | A single snapshot of a **Component** at a specific revision number, represented as `ComponentRevision` (inherits all `ComponentHistoryEntry` metadata and adds the full `component_detail` body). Read via `get_revision(revision_id, revision)`. | component snapshot, component version |
 | **ComponentGroup** | A boolean grouping (with an `operator`) of **Components** of a single **ComponentGroupType**. | group |
 | **ComponentGroupType** | The role a **ComponentGroup** plays: `SUBJECT`, `RESOURCE`, or `ACTION`. | category, kind |
 | **ComponentCondition** | A predicate inside a **Component**. Often an `attribute operator value` triple, but may instead be member-object shaped (`operator` + `member` + `notFound`, with no top-level `attribute`/`value`). | rule, expression |
