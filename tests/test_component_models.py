@@ -525,3 +525,82 @@ def test_component_lite_accepts_null_owner_and_modifier_metadata():
     lite = ComponentLite.model_validate(data)
     assert lite.owner_display_name is None
     assert lite.modified_by is None
+
+
+def _entry_data() -> dict[str, object]:
+    return {
+        "id": 770,
+        "revision": "3",
+        "name": "ROOT_42/pentest_component",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "componentDetail": None,
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": "UN",
+    }
+
+
+def test_component_history_entry_parses_and_is_frozen():
+    from nextlabs_sdk.cloudaz import ComponentHistoryEntry
+
+    entry = ComponentHistoryEntry.model_validate(_entry_data())
+
+    assert entry.id == 770
+    assert entry.revision == 3  # API sends string "3"; coerced to int
+    assert entry.active_from == 1761133292235
+    assert entry.created_by == "me"
+    assert entry.action_type == "UN"
+    assert isinstance(entry.action_type, str)
+    assert isinstance(entry.last_updated_date, int)
+    # list view carries no embedded component
+    assert "componentDetail" not in ComponentHistoryEntry.model_fields
+    assert "component_detail" not in ComponentHistoryEntry.model_fields
+    with pytest.raises(ValidationError):
+        entry.name = "changed"  # type: ignore[misc]
+
+
+def _make_revision_data() -> dict[str, object]:
+    return {
+        "id": 555,
+        "revision": "1",
+        "name": "ROOT_101/pentest_component",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "componentDetail": _make_full_component_data(),
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": None,
+    }
+
+
+def test_component_revision_from_api_payload():
+    from nextlabs_sdk.cloudaz import ComponentRevision
+
+    rev = ComponentRevision.model_validate(_make_revision_data())
+
+    assert rev.id == 555
+    assert rev.revision == 1  # API sends string "1"; coerced to int (AC5)
+    assert rev.action_type is None
+    assert isinstance(rev.component_detail, Component)
+    assert rev.component_detail.id == _make_full_component_data()["id"]
+
+
+def test_component_revision_mirrors_history_entry():
+    from nextlabs_sdk.cloudaz import ComponentHistoryEntry, ComponentRevision
+
+    assert set(ComponentHistoryEntry.model_fields) <= set(
+        ComponentRevision.model_fields
+    )
+    assert "component_detail" in ComponentRevision.model_fields
+    assert issubclass(ComponentRevision, ComponentHistoryEntry)

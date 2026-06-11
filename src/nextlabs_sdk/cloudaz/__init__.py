@@ -21,7 +21,9 @@ __all__: list[str] = [
     "CachedPolicy",
     "CachedUser",
     "Component",
+    "ComponentHistoryEntry",
     "ComponentLite",
+    "ComponentRevision",
     "DeleteReportsRequest",
     "EnforcementEntry",
     "EnforcementTimeBucket",
@@ -94,7 +96,9 @@ from nextlabs_sdk._cloudaz import CachedPolicy as CachedPolicy
 from nextlabs_sdk._cloudaz import CachedUser as CachedUser
 from nextlabs_sdk._cloudaz import CloudAzClient as CloudAzClient
 from nextlabs_sdk._cloudaz import Component as Component
+from nextlabs_sdk._cloudaz import ComponentHistoryEntry as ComponentHistoryEntry
 from nextlabs_sdk._cloudaz import ComponentLite as ComponentLite
+from nextlabs_sdk._cloudaz import ComponentRevision as ComponentRevision
 from nextlabs_sdk._cloudaz import ComponentSearchService as ComponentSearchService
 from nextlabs_sdk._cloudaz import ComponentService as ComponentService
 from nextlabs_sdk._cloudaz import DeleteReportsRequest as DeleteReportsRequest
