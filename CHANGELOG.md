@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.10.0 - 2026-06-11
+
+### nextlabs-sdk 0.10.0
+
+#### Features
+
+- feat(cloudaz): add get_revision + PolicyRevision (#<!---->173) @stevenengland ([#176](https://github.com/stevenengland/nextlabs_rest_api/pull/176))
+- feat(cloudaz): add policy revision history (list_history) (#<!---->172) @stevenengland ([#175](https://github.com/stevenengland/nextlabs_rest_api/pull/175))
+
+#### Bug Fixes
+
+- fix(PRD): #<!---->170 cleanup — capstone findings @stevenengland ([#180](https://github.com/stevenengland/nextlabs_rest_api/pull/180))
+
+#### Documentation
+
+- docs(cloudaz): record viewRevision endpoint in vendor_gaps @stevenengland ([#177](https://github.com/stevenengland/nextlabs_rest_api/pull/177))
+
+#### Maintenance
+
+- build(devcontainer): migrate to docker-compose style @stevenengland ([#181](https://github.com/stevenengland/nextlabs_rest_api/pull/181))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.9.1...0.10.0
+
 ## 0.9.1 - 2026-06-08
 
 ### nextlabs-sdk 0.9.1
