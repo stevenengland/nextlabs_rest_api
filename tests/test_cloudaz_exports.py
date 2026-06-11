@@ -16,7 +16,7 @@ class TestCloudazModelImports:
 
     @pytest.mark.parametrize(
         "symbol",
-        ["Policy", "PolicyLite", "Component", "ComponentLite"],
+        ["Policy", "PolicyLite", "PolicyRevision", "Component", "ComponentLite"],
     )
     def test_model_importable(self, symbol: str) -> None:
         mod = _cloudaz_module()

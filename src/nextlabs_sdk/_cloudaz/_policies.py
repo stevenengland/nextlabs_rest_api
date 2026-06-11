@@ -13,6 +13,7 @@ from nextlabs_sdk._cloudaz._policy_models import (
     ImportResult,
     Policy,
     PolicyHistoryEntry,
+    PolicyRevision,
 )
 from nextlabs_sdk._cloudaz._response import build_page, parse_data
 from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
@@ -39,6 +40,12 @@ class PolicyService:  # noqa: WPS214
             f"/console/api/v1/policy/mgmt/active/{policy_id}",
         )
         return Policy.model_validate(parse_data(response))
+
+    def get_revision(self, revision_id: int, revision: int) -> PolicyRevision:
+        response = self._client.get(
+            f"/console/api/v1/policy/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return PolicyRevision.model_validate(parse_data(response))
 
     def list_history(
         self,
@@ -238,6 +245,12 @@ class AsyncPolicyService:  # noqa: WPS214
             f"/console/api/v1/policy/mgmt/active/{policy_id}",
         )
         return Policy.model_validate(parse_data(resp))
+
+    async def get_revision(self, revision_id: int, revision: int) -> PolicyRevision:
+        resp = await self._client.get(
+            f"/console/api/v1/policy/mgmt/viewRevision/{revision_id}/{revision}",
+        )
+        return PolicyRevision.model_validate(parse_data(resp))
 
     def list_history(
         self,

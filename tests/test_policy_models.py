@@ -5,7 +5,13 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk.cloudaz import Policy, PolicyHistoryEntry, PolicyLite, TagType
+from nextlabs_sdk.cloudaz import (
+    Policy,
+    PolicyHistoryEntry,
+    PolicyLite,
+    PolicyRevision,
+    TagType,
+)
 from nextlabs_sdk._cloudaz._policy_models import (
     ComponentGroup,
     EnvironmentConfig,
@@ -177,6 +183,7 @@ def _import_result_data() -> dict[str, Any]:
         pytest.param(ImportResult, None, "total_policies", 99, id="import-result"),
         pytest.param(Policy, None, "name", "changed", id="policy"),
         pytest.param(PolicyLite, None, "name", "changed", id="policy-lite"),
+        pytest.param(PolicyRevision, None, "revision", 99, id="policy-revision"),
     ],
 )
 def test_model_is_frozen(model, data, field, new_value):
@@ -185,6 +192,8 @@ def test_model_is_frozen(model, data, field, new_value):
             data = _make_full_policy_data()
         elif model is PolicyLite:
             data = _make_policy_lite_data()
+        elif model is PolicyRevision:
+            data = _make_revision_data()
         else:
             data = _import_result_data()
     instance = model.model_validate(data)
@@ -542,3 +551,41 @@ def test_policy_history_entry_parses_and_is_frozen():
     # frozen
     with pytest.raises(ValidationError):
         entry.name = "changed"  # type: ignore[misc]
+
+
+def _make_revision_data() -> dict[str, Any]:
+    return {
+        "id": 555,
+        "revision": "3",
+        "name": "ROOT_82/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": _make_full_policy_data(),
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": None,
+    }
+
+
+def test_policy_revision_from_api_payload():
+    rev = PolicyRevision.model_validate(_make_revision_data())
+
+    assert rev.id == 555
+    assert rev.revision == 3  # API sends the string "3"; coerced to int
+    assert rev.active_from == 1761133292235
+    assert rev.action_type is None
+    assert rev.description is None
+    assert isinstance(rev.policy_detail, Policy)
+    assert rev.policy_detail.id == 82
+
+
+def test_policy_revision_mirrors_history_entry():
+    # AC4: every PolicyHistoryEntry metadata field is present, plus policy_detail.
+    assert set(PolicyHistoryEntry.model_fields) <= set(PolicyRevision.model_fields)
+    assert "policy_detail" in PolicyRevision.model_fields
+    assert issubclass(PolicyRevision, PolicyHistoryEntry)

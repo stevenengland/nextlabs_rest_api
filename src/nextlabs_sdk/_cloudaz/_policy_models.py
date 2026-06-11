@@ -309,3 +309,15 @@ class PolicyHistoryEntry(BaseModel):
     submitted_by: str | None = Field(default=None, alias="submittedBy")
     submitted_date: int | None = Field(default=None, alias="submittedDate")
     action_type: str | None = Field(default=None, alias=_ACTION_TYPE_ALIAS)
+
+
+class PolicyRevision(PolicyHistoryEntry):
+    """A policy revision detail view: history metadata plus the embedded policy.
+
+    Returned by
+    ``GET /console/api/v1/policy/mgmt/viewRevision/{revision_id}/{revision}``.
+    Inherits every metadata field and the frozen config from
+    ``PolicyHistoryEntry`` and adds the embedded :class:`Policy`.
+    """
+
+    policy_detail: Policy = Field(alias="policyDetail")

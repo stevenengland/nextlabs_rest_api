@@ -7,7 +7,7 @@ import httpx
 import pytest
 from mockito import mock, when
 
-from nextlabs_sdk.cloudaz import AsyncPolicyService, Policy
+from nextlabs_sdk.cloudaz import AsyncPolicyService, Policy, PolicyRevision
 from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
 from nextlabs_sdk._cloudaz._policy_models import ExportOptions, ImportResult
 from nextlabs_sdk.exceptions import NotFoundError
@@ -76,6 +76,25 @@ def _make_policy_data() -> dict[str, Any]:
         "lastUpdatedDate": 1713171640252,
         "authorities": [],
         "deploymentTargets": [],
+    }
+
+
+def _make_revision_data() -> dict[str, Any]:
+    return {
+        "id": 555,
+        "revision": "3",
+        "name": "ROOT_82/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": _make_policy_data(),
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": None,
     }
 
 
@@ -515,3 +534,27 @@ def test_async_list_history_raises_not_found(client_and_service):
 
     with pytest.raises(NotFoundError):
         _collect(service.list_history(999))
+
+
+def test_async_get_revision_returns_policy_revision(client_and_service):
+    client, service = client_and_service
+    when(client).get(f"{MGMT}/viewRevision/555/3").thenReturn(
+        _make_envelope(data=_make_revision_data()),
+    )
+
+    rev = _run(service.get_revision(555, 3))
+
+    assert isinstance(rev, PolicyRevision)
+    assert rev.revision == 3
+    assert isinstance(rev.policy_detail, Policy)
+    assert rev.policy_detail.id == 82
+
+
+def test_async_get_revision_raises_not_found(client_and_service):
+    client, service = client_and_service
+    when(client).get(f"{MGMT}/viewRevision/999/1").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+
+    with pytest.raises(NotFoundError):
+        _run(service.get_revision(999, 1))

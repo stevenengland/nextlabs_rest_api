@@ -38,6 +38,7 @@ __all__: list[str] = [
     "PolicyHistoryEntry",
     "PolicyLite",
     "PolicyModelAction",
+    "PolicyRevision",
     "ReportCriteria",
     "ReportFilterGeneral",
     "ReportFilters",
@@ -117,6 +118,7 @@ from nextlabs_sdk._cloudaz import PolicyDayBucket as PolicyDayBucket
 from nextlabs_sdk._cloudaz import PolicyHistoryEntry as PolicyHistoryEntry
 from nextlabs_sdk._cloudaz import PolicyLite as PolicyLite
 from nextlabs_sdk._cloudaz import PolicyModelAction as PolicyModelAction
+from nextlabs_sdk._cloudaz import PolicyRevision as PolicyRevision
 from nextlabs_sdk._cloudaz import PolicySearchService as PolicySearchService
 from nextlabs_sdk._cloudaz import PolicyService as PolicyService
 from nextlabs_sdk._cloudaz import ReportCriteria as ReportCriteria
