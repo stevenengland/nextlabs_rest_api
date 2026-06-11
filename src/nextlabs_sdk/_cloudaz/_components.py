@@ -13,7 +13,7 @@ from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
 from nextlabs_sdk.exceptions import ApiError, raise_for_status
 
 
-def _component_history_entries(response: httpx.Response) -> list[ComponentHistoryEntry]:
+def _history_entries(response: httpx.Response) -> list[ComponentHistoryEntry]:
     """Parse a component-history response into the full list of revision entries.
 
     The CloudAz history endpoint does not paginate: it ignores page query
@@ -123,7 +123,7 @@ class ComponentService:  # noqa: WPS214
         response = self._client.get(
             f"/console/api/v1/component/mgmt/history/{component_id}",
         )
-        return _component_history_entries(response)
+        return _history_entries(response)
 
     def get_revision(self, revision_id: int, revision: int) -> ComponentRevision:
         response = self._client.get(
@@ -217,7 +217,7 @@ class AsyncComponentService:  # noqa: WPS214
         resp = await self._client.get(
             f"/console/api/v1/component/mgmt/history/{component_id}",
         )
-        return _component_history_entries(resp)
+        return _history_entries(resp)
 
     async def get_revision(self, revision_id: int, revision: int) -> ComponentRevision:
         resp = await self._client.get(
