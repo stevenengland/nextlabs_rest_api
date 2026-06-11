@@ -14,7 +14,7 @@ from nextlabs_sdk._cloudaz._policy_models import (
     ExportOptions,
     ImportResult,
 )
-from nextlabs_sdk.cloudaz import Policy, PolicyService
+from nextlabs_sdk.cloudaz import Policy, PolicyRevision, PolicyService
 from nextlabs_sdk.exceptions import NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"
@@ -76,6 +76,25 @@ def _make_policy_data() -> dict[str, Any]:
         "lastUpdatedDate": 1713171640252,
         "authorities": [],
         "deploymentTargets": [],
+    }
+
+
+def _make_revision_data() -> dict[str, Any]:
+    return {
+        "id": 555,
+        "revision": "3",
+        "name": "ROOT_82/pentest_policy",
+        "description": None,
+        "activeFrom": 1761133292235,
+        "activeTo": 1761133292235,
+        "policyDetail": _make_policy_data(),
+        "createdDate": 1761133292266,
+        "createdBy": "me",
+        "modifiedBy": "me",
+        "lastUpdatedDate": 1761133292250,
+        "submittedBy": "me",
+        "submittedDate": 1761133292266,
+        "actionType": None,
     }
 
 
@@ -508,3 +527,27 @@ def test_retrieve_all_policies_returns_filename(
     ).thenReturn(_make_envelope(data=expected))
 
     assert service.retrieve_all_policies(**kwargs) == expected
+
+
+def test_get_revision_returns_policy_revision(client_service):
+    client, service = client_service
+    when(client).get(f"{MGMT}/viewRevision/555/3").thenReturn(
+        _make_envelope(data=_make_revision_data()),
+    )
+
+    rev = service.get_revision(555, 3)
+
+    assert isinstance(rev, PolicyRevision)
+    assert rev.revision == 3
+    assert isinstance(rev.policy_detail, Policy)
+    assert rev.policy_detail.id == 82
+
+
+def test_get_revision_raises_not_found(client_service):
+    client, service = client_service
+    when(client).get(f"{MGMT}/viewRevision/999/1").thenReturn(
+        httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
+    )
+
+    with pytest.raises(NotFoundError):
+        service.get_revision(999, 1)
