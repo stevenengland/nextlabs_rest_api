@@ -15,7 +15,7 @@ from nextlabs_sdk._cloudaz._policy_models import (
     ImportResult,
 )
 from nextlabs_sdk.cloudaz import Policy, PolicyRevision, PolicyService
-from nextlabs_sdk.exceptions import NotFoundError
+from nextlabs_sdk.exceptions import ApiError, NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"
 MGMT = "/console/api/v1/policy/mgmt"
@@ -459,50 +459,61 @@ def test_get_raises_not_found(client_service: tuple[Any, PolicyService]):
         service.get(999)
 
 
-def test_list_history_returns_paginator(client_service: tuple[Any, PolicyService]):
-    from nextlabs_sdk._pagination import SyncPaginator
+def test_list_history_returns_all_entries(client_service: tuple[Any, PolicyService]):
     from nextlabs_sdk.cloudaz import PolicyHistoryEntry
 
     client, service = client_service
-    when(client).get(
-        f"{MGMT}/history/42",
-        params={"pageNo": 0},
-    ).thenReturn(_make_envelope(data=[_history_entry_data()]))
+    entry1 = _history_entry_data()
+    entry2 = {**_history_entry_data(), "id": 769, "revision": "2", "actionType": "DE"}
+    entry3 = {**_history_entry_data(), "id": 768, "revision": "1", "actionType": "DE"}
+    # The history endpoint returns every revision in one shot and reports its
+    # three count fields all equal to the record count (#169: 3 records,
+    # totalPages 3). A real paginator would refetch and yield 9; we expect 3.
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _make_envelope(
+            data=[entry1, entry2, entry3],
+            page_no=1,
+            page_size=3,
+            total_pages=3,
+            total_records=3,
+        ),
+    )
 
-    paginator = service.list_history(42)
+    results = service.list_history(42)
 
-    assert isinstance(paginator, SyncPaginator)
-    results = list(paginator)
-    assert len(results) == 1
+    assert isinstance(results, list)
+    assert [entry.revision for entry in results] == [3, 2, 1]
     assert isinstance(results[0], PolicyHistoryEntry)
-    assert results[0].revision == 3
     assert results[0].action_type == "UN"
 
 
-def test_list_history_paginates_multiple_pages(
+def test_list_history_raises_when_records_exceed_returned(
     client_service: tuple[Any, PolicyService],
 ):
     client, service = client_service
-    entry1 = _history_entry_data()
-    entry2 = {**_history_entry_data(), "id": 769, "revision": "2", "actionType": "DE"}
-    page0 = _make_envelope(data=[entry1], page_no=0, total_pages=2, total_records=2)
-    page1 = _make_envelope(data=[entry2], page_no=1, total_pages=2, total_records=2)
-    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(page0)
-    when(client).get(f"{MGMT}/history/42", params={"pageNo": 1}).thenReturn(page1)
+    # The day the vendor introduces real pagination, a page returns fewer
+    # entries than totalNoOfRecords — the SDK must refuse to silently truncate.
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _make_envelope(
+            data=[_history_entry_data()],
+            page_size=1,
+            total_pages=180,
+            total_records=180,
+        ),
+    )
 
-    results = list(service.list_history(42))
-
-    assert [e.revision for e in results] == [3, 2]
+    with pytest.raises(ApiError):
+        service.list_history(42)
 
 
 def test_list_history_raises_not_found(client_service: tuple[Any, PolicyService]):
     client, service = client_service
-    when(client).get(f"{MGMT}/history/999", params={"pageNo": 0}).thenReturn(
+    when(client).get(f"{MGMT}/history/999").thenReturn(
         httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
     )
 
     with pytest.raises(NotFoundError):
-        list(service.list_history(999))
+        service.list_history(999)
 
 
 @pytest.mark.parametrize(

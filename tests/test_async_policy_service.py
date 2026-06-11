@@ -10,7 +10,7 @@ from mockito import mock, when
 from nextlabs_sdk.cloudaz import AsyncPolicyService, Policy, PolicyRevision
 from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
 from nextlabs_sdk._cloudaz._policy_models import ExportOptions, ImportResult
-from nextlabs_sdk.exceptions import NotFoundError
+from nextlabs_sdk.exceptions import ApiError, NotFoundError
 
 BASE_URL = "https://cloudaz.example.com"
 MGMT = "/console/api/v1/policy/mgmt"
@@ -100,13 +100,6 @@ def _make_revision_data() -> dict[str, Any]:
 
 def _run(coro: Awaitable[T]) -> T:
     return asyncio.run(coro)  # type: ignore[arg-type]
-
-
-def _collect(paginator: Any) -> list[Any]:
-    async def gather() -> list[Any]:
-        return [item async for item in paginator]
-
-    return asyncio.run(gather())
 
 
 @pytest.fixture
@@ -462,12 +455,8 @@ def test_async_retrieve_all_policies_returns_filename(
     assert _run(service.retrieve_all_policies(**kwargs)) == filename
 
 
-def test_async_list_history_returns_paginator(client_and_service):
-    from nextlabs_sdk._pagination import AsyncPaginator
-    from nextlabs_sdk.cloudaz import PolicyHistoryEntry
-
-    client, service = client_and_service
-    data = {
+def _history_entry(**overrides: Any) -> dict[str, Any]:
+    base = {
         "id": 770,
         "revision": "3",
         "name": "ROOT_42/pentest_policy",
@@ -483,57 +472,59 @@ def test_async_list_history_returns_paginator(client_and_service):
         "submittedDate": 1761133292266,
         "actionType": "UN",
     }
-    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(
-        _make_envelope(data=[data]),
+    return {**base, **overrides}
+
+
+def test_async_list_history_returns_all_entries(client_and_service):
+    from nextlabs_sdk.cloudaz import PolicyHistoryEntry
+
+    client, service = client_and_service
+    entry1 = _history_entry()
+    entry2 = _history_entry(id=769, revision="2", actionType="DE")
+    entry3 = _history_entry(id=768, revision="1", actionType="DE")
+    # One-shot endpoint: three count fields all equal the record count
+    # (#169: 3 records, totalPages 3). A real paginator would yield 9; expect 3.
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _make_envelope(
+            data=[entry1, entry2, entry3],
+            page_no=1,
+            page_size=3,
+            total_pages=3,
+            total_records=3,
+        ),
     )
 
-    paginator = service.list_history(42)
+    results = _run(service.list_history(42))
 
-    assert isinstance(paginator, AsyncPaginator)
-    results = _collect(paginator)
-    assert len(results) == 1
+    assert isinstance(results, list)
+    assert [entry.revision for entry in results] == [3, 2, 1]
     assert isinstance(results[0], PolicyHistoryEntry)
-    assert results[0].revision == 3
     assert results[0].action_type == "UN"
 
 
-def test_async_list_history_paginates_multiple_pages(client_and_service):
+def test_async_list_history_raises_when_records_exceed_returned(client_and_service):
     client, service = client_and_service
-    base = {
-        "id": 770,
-        "revision": "3",
-        "name": "p",
-        "description": None,
-        "activeFrom": 1,
-        "activeTo": 1,
-        "policyDetail": None,
-        "createdDate": 1,
-        "createdBy": "me",
-        "modifiedBy": "me",
-        "lastUpdatedDate": 1,
-        "submittedBy": "me",
-        "submittedDate": 1,
-        "actionType": "UN",
-    }
-    entry2 = {**base, "id": 769, "revision": "2", "actionType": "DE"}
-    page0 = _make_envelope(data=[base], page_no=0, total_pages=2, total_records=2)
-    page1 = _make_envelope(data=[entry2], page_no=1, total_pages=2, total_records=2)
-    when(client).get(f"{MGMT}/history/42", params={"pageNo": 0}).thenReturn(page0)
-    when(client).get(f"{MGMT}/history/42", params={"pageNo": 1}).thenReturn(page1)
+    when(client).get(f"{MGMT}/history/42").thenReturn(
+        _make_envelope(
+            data=[_history_entry()],
+            page_size=1,
+            total_pages=180,
+            total_records=180,
+        ),
+    )
 
-    results = _collect(service.list_history(42))
-
-    assert [e.revision for e in results] == [3, 2]
+    with pytest.raises(ApiError):
+        _run(service.list_history(42))
 
 
 def test_async_list_history_raises_not_found(client_and_service):
     client, service = client_and_service
-    when(client).get(f"{MGMT}/history/999", params={"pageNo": 0}).thenReturn(
+    when(client).get(f"{MGMT}/history/999").thenReturn(
         httpx.Response(404, json={"message": "Not found"}, request=_make_request()),
     )
 
     with pytest.raises(NotFoundError):
-        _collect(service.list_history(999))
+        _run(service.list_history(999))
 
 
 def test_async_get_revision_returns_policy_revision(client_and_service):
