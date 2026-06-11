@@ -294,6 +294,17 @@ class PolicyLite(BaseModel):
 
 
 class PolicyHistoryEntry(BaseModel):
+    """A single entry in a policy's revision history (list view).
+
+    Returned by ``GET /console/api/v1/policy/mgmt/history/{policy_id}``. This
+    view carries revision metadata only; ``policyDetail`` is ``null`` here and
+    is deliberately not a field (see :class:`PolicyRevision` for the detail
+    view that embeds the full policy).
+
+    ``revision`` arrives from the API as a JSON string (e.g. ``"3"``) and is
+    normalized to ``int`` on load, so consumers always receive an integer.
+    """
+
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     id: int  # noqa: WPS125
