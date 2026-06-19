@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from io import StringIO
+
 from rich.console import Console
 
 from nextlabs_sdk._cli._diff._inline import highlight_inline
@@ -54,7 +56,9 @@ def test_render_semantic_shows_inplace_scalar_change():
         ),
         hidden_noise_count=2,
     )
-    console = Console()
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
     with console.capture() as capture:
         render_semantic(result, console=console)
     output = capture.get()
