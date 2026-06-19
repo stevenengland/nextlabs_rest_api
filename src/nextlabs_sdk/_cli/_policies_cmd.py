@@ -138,7 +138,7 @@ def history(
 def view_revision(
     ctx: typer.Context,
     revision_id: Annotated[int, typer.Argument(help="Revision ID")],
-    revision: Annotated[int, typer.Argument(help="Revision number")],
+    revision: Annotated[int, typer.Argument(help="Revision number")] = 0,
 ) -> None:
     """View a specific revision of a policy."""
     cli_ctx: CliContext = ctx.obj

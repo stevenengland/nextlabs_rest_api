@@ -769,6 +769,21 @@ def test_policies_view_revision_json(stub: tuple[Any, Any, Any]) -> None:
     assert parsed["policy_detail"]["name"] == "Allow IT Access"
 
 
+def test_policies_view_revision_defaults_revision_to_zero(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    """Given only a revision_id, when `view-revision` is invoked without a
+    revision number, then revision defaults to 0."""
+    _, mock_policies, _ = stub
+    when(mock_policies).get_revision(10, 0).thenReturn(_make_policy_revision())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "view-revision", "10"])
+
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "admin" in output
+
+
 # --- error handling (history + view-revision) ---
 
 
