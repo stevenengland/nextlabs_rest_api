@@ -228,7 +228,7 @@ auth             login | logout | status | test | accounts | use
 tags             list (positional <tag_type>) | get | create | delete
 components       search | get | create | update | delete
 component-types  list | get | create | update | delete
-policies         search | get | export-all | tags
+policies         search | get | diff | export-all | tags
 audit-logs       search (--start-date / --end-date in epoch-ms)
 reports          ...
 dashboard        ...
@@ -302,7 +302,14 @@ NEXTLABS_TOKEN="$(vault kv get -field=token secret/nextlabs/ci)" \
 `NEXTLABS_TOKEN` (or `--token`) bypasses the OIDC login flow **and** the
 token cache — nothing is read from or written to disk.
 
-**6. Templated extraction with `jq`.**
+**6. Review a policy before deploy — diff the two most recent deployed revisions.**
+
+```bash
+nextlabs policies diff 17
+nextlabs policies diff 17 --from 3 --to 5
+```
+
+**7. Templated extraction with `jq`.**
 
 ```bash
 nextlabs -o json components search | jq '.[].id'
