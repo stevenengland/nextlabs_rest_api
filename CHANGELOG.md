@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0 - 2026-06-11
+
+### nextlabs-sdk 0.11.0
+
+#### Features
+
+- feat(cloudaz): add component revision history (list_history + get_revision) @stevenengland ([#187](https://github.com/stevenengland/nextlabs_rest_api/pull/187))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.10.0...0.11.0
+
 ## 0.10.0 - 2026-06-11
 
 ### nextlabs-sdk 0.10.0
