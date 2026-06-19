@@ -60,6 +60,69 @@ def _revision(
     )
 
 
+def _component(component_id: int, name: str, version: int = 1) -> dict[str, Any]:
+    return {"id": component_id, "name": name, "version": version, "subComponents": []}
+
+
+def _revision_with_subjects(
+    revision: int, components: list[dict[str, Any]]
+) -> PolicyRevision:
+    policy = Policy.model_validate(
+        {
+            "id": 82,
+            "name": "P",
+            "status": "DRAFT",
+            "effectType": "ALLOW",
+            "subjectComponents": [{"operator": "AND", "components": components}],
+        }
+    )
+    return PolicyRevision(
+        id=10, revision=revision, action_type="DE", policy_detail=policy
+    )
+
+
+def test_edited_component_renders_single_modified_entry(stub: tuple[Any, Any]) -> None:
+    """Given two revisions where a subject component's version is bumped, when
+    running diff, then it shows a single modified entry by name and id, not a
+    remove-plus-add."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subjects(2, [_component(5, "Engineers", version=1)])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subjects(3, [_component(5, "Engineers", version=2)])
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Engineers (id=5)" in output
+    assert "v1" in output and "v2" in output
+    assert "- subjectComponents" not in output
+    assert "+ subjectComponents" not in output
+
+
+def test_added_and_removed_components_render_by_name_and_id(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions where a subject component is replaced, when running
+    diff, then both the added and removed components are shown by name and
+    id."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subjects(2, [_component(5, "Engineers")])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subjects(3, [_component(6, "Operations")])
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Engineers (id=5)" in output
+    assert "Operations (id=6)" in output
+
+
 def test_diff_default_renders_semantic_report(stub: tuple[Any, Any]) -> None:
     """Given two deployed revisions differing in description, when running diff
     with no flags, then it succeeds and shows the changed scalar."""

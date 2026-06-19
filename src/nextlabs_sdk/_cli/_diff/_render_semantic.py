@@ -4,12 +4,61 @@ from __future__ import annotations
 
 from rich.console import Console
 
+from nextlabs_sdk._cli._diff._identity import ComponentSummary
 from nextlabs_sdk._cli._diff._inline import highlight_inline
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
 _GLYPH_ADD = "[green]+[/green]"
 _GLYPH_REMOVE = "[red]-[/red]"
 _GLYPH_CHANGE = "[yellow]~[/yellow]"
+
+
+def _format_component(summary: ComponentSummary | None) -> str:
+    """Render a component summary as ``name (id=N)`` for display."""
+    if summary is None:
+        return "?"
+    label = summary.name or "?"
+    if summary.component_id is None:
+        return label
+    return f"{label} (id={summary.component_id})"
+
+
+def _version_of(summary: ComponentSummary | None) -> int | None:
+    if summary is None:
+        return None
+    return summary.version
+
+
+def _format_version_bump(
+    previous: ComponentSummary | None, summary: ComponentSummary | None
+) -> str:
+    return f"v{_version_of(previous)} \u2192 v{_version_of(summary)}"
+
+
+def _render_component_change(con: Console, field: str, change: FieldChange) -> None:
+    """Print a component-slot change identified by name and id."""
+    summary = change.new if isinstance(change.new, ComponentSummary) else None
+    previous = change.old if isinstance(change.old, ComponentSummary) else None
+    if change.kind == "add":
+        con.print(f"  {_GLYPH_ADD} {field}: {_format_component(summary)}")
+    elif change.kind == "remove":
+        con.print(f"  {_GLYPH_REMOVE} {field}: {_format_component(previous)}")
+    else:
+        bump = _format_version_bump(previous, summary)
+        con.print(f"  {_GLYPH_CHANGE} {field}: {_format_component(summary)} {bump}")
+
+
+def _render_scalar_change(con: Console, field: str, change: FieldChange) -> None:
+    """Print a non-component FieldChange row to *con*."""
+    if change.kind == "add":
+        con.print(f"  {_GLYPH_ADD} {field}: {change.new}")
+    elif change.kind == "remove":
+        con.print(f"  {_GLYPH_REMOVE} {field}: {change.old}")
+    elif isinstance(change.old, str) and isinstance(change.new, str):
+        highlighted = highlight_inline(change.old, change.new)
+        con.print(f"  {_GLYPH_CHANGE} {field}: {highlighted}")
+    else:
+        con.print(f"  {_GLYPH_CHANGE} {field}: {change.old!r} \u2192 {change.new!r}")
 
 
 def _render_change(con: Console, field: str, change: FieldChange) -> None:
@@ -20,15 +69,12 @@ def _render_change(con: Console, field: str, change: FieldChange) -> None:
         field: Dot-joined path string for display.
         change: The field change to render.
     """
-    if change.kind == "add":
-        con.print(f"  {_GLYPH_ADD} {field}: {change.new}")
-    elif change.kind == "remove":
-        con.print(f"  {_GLYPH_REMOVE} {field}: {change.old}")
-    elif isinstance(change.old, str) and isinstance(change.new, str):
-        highlighted = highlight_inline(change.old, change.new)
-        con.print(f"  {_GLYPH_CHANGE} {field}: {highlighted}")
+    if isinstance(change.old, ComponentSummary) or isinstance(
+        change.new, ComponentSummary
+    ):
+        _render_component_change(con, field, change)
     else:
-        con.print(f"  {_GLYPH_CHANGE} {field}: {change.old!r} \u2192 {change.new!r}")
+        _render_scalar_change(con, field, change)
 
 
 def render_semantic(diff: DiffResult, *, console: Console | None = None) -> None:
