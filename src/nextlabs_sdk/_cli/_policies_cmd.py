@@ -26,10 +26,11 @@ policies_app = typer.Typer(help="Policy management commands")
 
 _ID_FIELD = "id"
 _ID_COLUMN = ColumnDef("ID", _ID_FIELD)
+_NAME_COLUMN = ColumnDef("Name", "name")
 
 _POLICY_COLUMNS = (
     _ID_COLUMN,
-    ColumnDef("Name", "name"),
+    _NAME_COLUMN,
     ColumnDef("Status", "status"),
     ColumnDef("Effect", "effect_type"),
     ColumnDef("Deployed", "deployed"),
@@ -46,7 +47,7 @@ _DEPENDENCY_COLUMNS = (
     _ID_COLUMN,
     ColumnDef("Type", "type"),
     ColumnDef("Group", "group"),
-    ColumnDef("Name", "name"),
+    _NAME_COLUMN,
     ColumnDef("Folder Path", "folder_path"),
 )
 
@@ -60,6 +61,30 @@ _IMPORT_RESULT_COLUMNS = (
     ColumnDef("Components", "total_components"),
     ColumnDef("Policy Models", "total_policy_models"),
     ColumnDef("Non-Blocking Error", "non_blocking_error"),
+)
+
+_HISTORY_COLUMNS = (
+    ColumnDef("Revision", "revision"),
+    ColumnDef("Action", "action_type"),
+    ColumnDef("Created By", "created_by"),
+    ColumnDef("Modified By", "modified_by"),
+    ColumnDef("Active From", "active_from"),
+    ColumnDef("Active To", "active_to"),
+)
+
+_HISTORY_WIDE_COLUMNS: tuple[ColumnDef, ...] = (
+    _ID_COLUMN,
+    ColumnDef("Submitted By", "submitted_by"),
+    ColumnDef("Submitted Date", "submitted_date"),
+)
+
+_REVISION_COLUMNS = (
+    _ID_COLUMN,
+    ColumnDef("Revision", "revision"),
+    _NAME_COLUMN,
+    ColumnDef("Action", "action_type"),
+    ColumnDef("Created By", "created_by"),
+    ColumnDef("Modified By", "modified_by"),
 )
 
 
@@ -87,6 +112,39 @@ def get_active(  # noqa: WPS463
     client = _client_factory.make_cloudaz_client(cli_ctx)
     policy = client.policies.get_active(policy_id)
     render(cli_ctx, policy, _POLICY_COLUMNS, wide_columns=_POLICY_WIDE_COLUMNS)
+
+
+@policies_app.command()
+@cli_error_handler
+def history(
+    ctx: typer.Context,
+    policy_id: Annotated[int, typer.Argument(help="Policy ID")],
+) -> None:
+    """List the revision history of a policy."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    entries = client.policies.list_history(policy_id)
+    render(
+        cli_ctx,
+        entries,
+        _HISTORY_COLUMNS,
+        title="Policy History",
+        wide_columns=_HISTORY_WIDE_COLUMNS,
+    )
+
+
+@policies_app.command(name="view-revision")
+@cli_error_handler
+def view_revision(
+    ctx: typer.Context,
+    revision_id: Annotated[int, typer.Argument(help="Revision ID")],
+    revision: Annotated[int, typer.Argument(help="Revision number")],
+) -> None:
+    """View a specific revision of a policy."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    rev = client.policies.get_revision(revision_id, revision)
+    render(cli_ctx, rev, _REVISION_COLUMNS)
 
 
 @policies_app.command(name="create-sub")
