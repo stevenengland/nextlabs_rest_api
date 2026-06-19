@@ -13,7 +13,9 @@ from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.cloudaz import (
     CloudAzClient,
     Policy,
+    PolicyHistoryEntry,
     PolicyLite,
+    PolicyRevision,
     PolicySearchService,
     PolicyService,
 )
@@ -663,3 +665,153 @@ def test_policies_validate_obligations(
 
     assert result.exit_code == 0, result.output
     assert "valid" in result.output
+
+
+# --- history helpers ---
+
+
+def _make_history_entry(
+    revision: int = 3,
+    action_type: str = "DEPLOY",
+) -> PolicyHistoryEntry:
+    return PolicyHistoryEntry(
+        id=10,
+        revision=revision,
+        action_type=action_type,
+        created_by="admin",
+        modified_by="editor",
+        active_from=1700000000,
+        active_to=1700003600,
+    )
+
+
+def _make_policy_revision() -> PolicyRevision:
+    return PolicyRevision(
+        id=10,
+        revision=3,
+        action_type="DEPLOY",
+        created_by="admin",
+        modified_by="editor",
+        active_from=1700000000,
+        active_to=1700003600,
+        policy_detail=_make_policy(),
+    )
+
+
+# --- history (table vs json) ---
+
+
+def test_policies_history_table(stub: tuple[Any, Any, Any]) -> None:
+    """Given a policy with revision history, when `history` is invoked in
+    table mode, then a titled table shows audit-relevant fields."""
+    _, mock_policies, _ = stub
+    entries = [_make_history_entry()]
+    when(mock_policies).list_history(10).thenReturn(entries)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "history", "10"])
+
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "DEPLOY" in output
+    assert "admin" in output
+    assert "editor" in output
+
+
+def test_policies_history_json(stub: tuple[Any, Any, Any]) -> None:
+    """Given a policy with revision history, when `history --output json`
+    is invoked, then the raw list of history entries is emitted as JSON."""
+    _, mock_policies, _ = stub
+    entries = [_make_history_entry()]
+    when(mock_policies).list_history(10).thenReturn(entries)
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "history", "10"]
+    )
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, list)
+    assert parsed[0]["revision"] == 3
+    assert parsed[0]["action_type"] == "DEPLOY"
+
+
+# --- view-revision (table vs json) ---
+
+
+def test_policies_view_revision_table(stub: tuple[Any, Any, Any]) -> None:
+    """Given a valid revision, when `view-revision` is invoked in table
+    mode, then key identifying fields are rendered as a table."""
+    _, mock_policies, _ = stub
+    when(mock_policies).get_revision(10, 3).thenReturn(_make_policy_revision())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "view-revision", "10", "3"])
+
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "DEPLOY" in output
+    assert "admin" in output
+
+
+def test_policies_view_revision_json(stub: tuple[Any, Any, Any]) -> None:
+    """Given a valid revision, when `view-revision --output json` is
+    invoked, then the full PolicyRevision including policyDetail is emitted."""
+    _, mock_policies, _ = stub
+    when(mock_policies).get_revision(10, 3).thenReturn(_make_policy_revision())
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "view-revision", "10", "3"]
+    )
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["revision"] == 3
+    assert "policy_detail" in parsed
+    assert parsed["policy_detail"]["name"] == "Allow IT Access"
+
+
+def test_policies_view_revision_defaults_revision_to_zero(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    """Given only a revision_id, when `view-revision` is invoked without a
+    revision number, then revision defaults to 0."""
+    _, mock_policies, _ = stub
+    when(mock_policies).get_revision(10, 0).thenReturn(_make_policy_revision())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "view-revision", "10"])
+
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "admin" in output
+
+
+# --- error handling (history + view-revision) ---
+
+
+def test_policies_history_not_found(stub: tuple[Any, Any, Any]) -> None:
+    """Given a non-existent policy ID, when `history` is invoked, then
+    the error handler surfaces a non-zero exit code with no traceback."""
+    _, mock_policies, _ = stub
+    when(mock_policies).list_history(999).thenRaise(NotFoundError(message="HTTP 404"))
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "history", "999"])
+
+    assert result.exit_code == 1
+    assert "Not found" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_policies_view_revision_not_found(stub: tuple[Any, Any, Any]) -> None:
+    """Given a non-existent revision, when `view-revision` is invoked, then
+    the error handler surfaces a non-zero exit code with no traceback."""
+    _, mock_policies, _ = stub
+    when(mock_policies).get_revision(999, 1).thenRaise(
+        NotFoundError(message="HTTP 404")
+    )
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "view-revision", "999", "1"]
+    )
+
+    assert result.exit_code == 1
+    assert "Not found" in result.output
+    assert "Traceback" not in result.output
