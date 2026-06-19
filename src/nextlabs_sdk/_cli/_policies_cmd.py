@@ -12,6 +12,12 @@ from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
+from nextlabs_sdk._cli._diff._engine import diff_payloads
+from nextlabs_sdk._cli._diff._render_semantic import render_semantic
+from nextlabs_sdk._cli._diff._revision_select import (
+    InsufficientRevisionsError,
+    select_revisions,
+)
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
 from nextlabs_sdk._cli._payload_loader import (
@@ -592,3 +598,34 @@ def _render_policy_detail(model: BaseModel, console: Console) -> None:
 
 
 register_detail_renderer(Policy, _render_policy_detail)
+
+
+@policies_app.command()
+@cli_error_handler
+def diff(
+    ctx: typer.Context,
+    policy_id: Annotated[int, typer.Argument(help="Policy ID")],
+    from_rev: Annotated[
+        int | None, typer.Option("--from", help="Override the 'from' revision")
+    ] = None,
+    to_rev: Annotated[
+        int | None, typer.Option("--to", help="Override the 'to' revision")
+    ] = None,
+    show_all: Annotated[
+        bool, typer.Option("--show-all", help="Reveal ordering + noise differences")
+    ] = False,
+) -> None:
+    """Show a semantic diff between two revisions of a policy."""
+    cli_ctx: CliContext = ctx.obj
+    client = _client_factory.make_cloudaz_client(cli_ctx)
+    try:
+        old, new = select_revisions(
+            client.policies, policy_id, from_rev=from_rev, to_rev=to_rev
+        )
+    except InsufficientRevisionsError as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+    old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)
+    new_payload = new.policy_detail.model_dump(mode="json", by_alias=True)
+    diff_result = diff_payloads(old_payload, new_payload, show_all=show_all)
+    render_semantic(diff_result)
