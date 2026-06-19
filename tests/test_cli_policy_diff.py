@@ -98,7 +98,6 @@ def test_diff_from_to_override_fetches_those_revisions(stub: tuple[Any, Any]) ->
     """Given explicit from/to revisions, when overriding both sides, then it
     succeeds using the overridden revisions."""
     _, mock_policies = stub
-    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
     when(mock_policies).get_revision(10, 1).thenReturn(
         _revision(1, description="allow read access")
     )

@@ -1,12 +1,15 @@
+"""Revision selection logic for the policy diff command."""
+
 from __future__ import annotations
 
 from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_models import PolicyRevision
+from nextlabs_sdk.exceptions import NextLabsError
 
 DEPLOYED_ACTION_TYPE = "DE"
 
 
-class InsufficientRevisionsError(Exception):
+class InsufficientRevisionsError(NextLabsError):
     """Raised when fewer than two comparable revisions exist for a policy."""
 
 

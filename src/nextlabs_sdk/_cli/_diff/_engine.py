@@ -39,7 +39,6 @@ def diff_payloads(
         noise-field differences.
     """
     changes: list[FieldChange] = []
-    hidden_noise_count = 0
 
     _diff_dicts(old, new, path=(), show_all=show_all, changes=changes)
 
