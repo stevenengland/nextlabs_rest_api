@@ -4,8 +4,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from typing import Literal
 
+from nextlabs_sdk._cli._diff._identity import (
+    COMPONENT_SLOT_FIELDS,
+    ComponentSummary,
+    flatten_slot,
+)
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
+
+_KIND_ADD: Literal["add"] = "add"
+_KIND_REMOVE: Literal["remove"] = "remove"
+_KIND_CHANGE: Literal["change"] = "change"
 
 _NOISE_FIELDS: frozenset[str] = frozenset(
     (
@@ -68,18 +78,56 @@ def _diff_dicts(
     all_keys = old.keys() | new.keys()
     for key in all_keys:
         child_path = path + (key,)
+        if not show_all and key in COMPONENT_SLOT_FIELDS:
+            _diff_component_slot(
+                old.get(key), new.get(key), path=child_path, changes=changes
+            )
+            continue
         if key not in old:
             changes.append(
-                FieldChange(path=child_path, kind="add", old=None, new=new[key])
+                FieldChange(path=child_path, kind=_KIND_ADD, old=None, new=new[key])
             )
         elif key not in new:
             changes.append(
-                FieldChange(path=child_path, kind="remove", old=old[key], new=None)
+                FieldChange(path=child_path, kind=_KIND_REMOVE, old=old[key], new=None)
             )
         else:
             _diff_values(
                 old[key], new[key], path=child_path, show_all=show_all, changes=changes
             )
+
+
+def _diff_component_slot(
+    old_value: object,
+    new_value: object,
+    *,
+    path: tuple[str, ...],
+    changes: list[FieldChange],
+) -> None:
+    old_components = flatten_slot(old_value)
+    new_components = flatten_slot(new_value)
+    for key in old_components.keys() | new_components.keys():
+        change = _classify_component(
+            path, old_components.get(key), new_components.get(key)
+        )
+        if change is not None:
+            changes.append(change)
+
+
+def _classify_component(
+    path: tuple[str, ...],
+    old_summary: ComponentSummary | None,
+    new_summary: ComponentSummary | None,
+) -> FieldChange | None:
+    if old_summary is not None and new_summary is not None:
+        if old_summary == new_summary:
+            return None
+        return FieldChange(
+            path=path, kind=_KIND_CHANGE, old=old_summary, new=new_summary
+        )
+    if new_summary is not None:
+        return FieldChange(path=path, kind=_KIND_ADD, old=None, new=new_summary)
+    return FieldChange(path=path, kind=_KIND_REMOVE, old=old_summary, new=None)
 
 
 def _diff_values(
@@ -95,7 +143,7 @@ def _diff_values(
     elif isinstance(old, list) and isinstance(new, list):
         _diff_lists(old, new, path=path, show_all=show_all, changes=changes)
     elif old != new:
-        changes.append(FieldChange(path=path, kind="change", old=old, new=new))
+        changes.append(FieldChange(path=path, kind=_KIND_CHANGE, old=old, new=new))
 
 
 def _canonical(elem: object) -> str:
@@ -112,10 +160,10 @@ def _diff_lists(
 ) -> None:
     if show_all:
         if old != new:
-            changes.append(FieldChange(path=path, kind="change", old=old, new=new))
+            changes.append(FieldChange(path=path, kind=_KIND_CHANGE, old=old, new=new))
         return
 
     old_set = {_canonical(elem) for elem in old}
     new_set = {_canonical(elem) for elem in new}
     if old_set != new_set:
-        changes.append(FieldChange(path=path, kind="change", old=old, new=new))
+        changes.append(FieldChange(path=path, kind=_KIND_CHANGE, old=old, new=new))
