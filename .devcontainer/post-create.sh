@@ -25,3 +25,5 @@ python -m pre_commit install
 
 
 .devcontainer/install-skills.sh
+
+echo "Setup complete. To require a password for sudo, run: .devcontainer/harden-sudo.sh"
