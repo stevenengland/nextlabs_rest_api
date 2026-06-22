@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.12.0 - 2026-06-22
+
+### nextlabs-sdk 0.12.0
+
+#### Features
+
+- feat(cli-diff): semantic policy-diff legibility (#<!---->212) @stevenengland ([#213](https://github.com/stevenengland/nextlabs_rest_api/pull/213))
+- feat(cli): show help instead of error for incomplete commands @stevenengland ([#206](https://github.com/stevenengland/nextlabs_rest_api/pull/206))
+- feat(cli): json delta output and --exit-code for policies diff (#<!---->199) @stevenengland ([#204](https://github.com/stevenengland/nextlabs_rest_api/pull/204))
+- feat(cli): add --format option with unified diff for policies diff @stevenengland ([#203](https://github.com/stevenengland/nextlabs_rest_api/pull/203))
+- feat(cli): compare allow and deny obligations in policy diff @stevenengland ([#202](https://github.com/stevenengland/nextlabs_rest_api/pull/202))
+- feat(cli): match policy component slots by schema-type identity (194/2) @stevenengland ([#201](https://github.com/stevenengland/nextlabs_rest_api/pull/201))
+- feat(cli): policies diff — end-to-end semantic diff (194/1) @stevenengland ([#200](https://github.com/stevenengland/nextlabs_rest_api/pull/200))
+- feat(cli): add policies history and view-revision commands (#<!---->191) @stevenengland ([#193](https://github.com/stevenengland/nextlabs_rest_api/pull/193))
+
+#### Bug Fixes
+
+- fix(cli): fetch policy diff revisions by entry id (#<!---->209) @stevenengland ([#210](https://github.com/stevenengland/nextlabs_rest_api/pull/210))
+- fix(PRD): #<!---->194 cleanup — capstone findings @stevenengland ([#205](https://github.com/stevenengland/nextlabs_rest_api/pull/205))
+- fix(deps): bump actions/checkout from 6 to 7 @[dependabot[bot]](https://github.com/apps/dependabot) ([#190](https://github.com/stevenengland/nextlabs_rest_api/pull/190))
+
+#### Dependencies
+
+- fix(deps): bump actions/checkout from 6 to 7 @[dependabot[bot]](https://github.com/apps/dependabot) ([#190](https://github.com/stevenengland/nextlabs_rest_api/pull/190))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.11.0...0.12.0
+
 ## 0.11.0 - 2026-06-11
 
 ### nextlabs-sdk 0.11.0
