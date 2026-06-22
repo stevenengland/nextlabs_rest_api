@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from nextlabs_sdk._cli._diff._identity import ComponentSummary
+from nextlabs_sdk._cli._diff._identity import ComponentSummary, ObligationSummary
 from nextlabs_sdk._cli._diff._inline import highlight_inline
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
@@ -61,6 +61,16 @@ def _render_scalar_change(con: Console, field: str, change: FieldChange) -> None
         con.print(f"  {_GLYPH_CHANGE} {field}: {change.old!r} \u2192 {change.new!r}")
 
 
+def _render_obligation_change(con: Console, field: str, change: FieldChange) -> None:
+    """Print an added or removed obligation identified by name."""
+    summary = change.new if isinstance(change.new, ObligationSummary) else change.old
+    label = summary.name if isinstance(summary, ObligationSummary) else "?"
+    if change.kind == "add":
+        con.print(f"  {_GLYPH_ADD} {field}: {label}")
+    else:
+        con.print(f"  {_GLYPH_REMOVE} {field}: {label}")
+
+
 def _render_change(con: Console, field: str, change: FieldChange) -> None:
     """Print a single FieldChange row to *con*.
 
@@ -69,7 +79,11 @@ def _render_change(con: Console, field: str, change: FieldChange) -> None:
         field: Dot-joined path string for display.
         change: The field change to render.
     """
-    if isinstance(change.old, ComponentSummary) or isinstance(
+    if isinstance(change.old, ObligationSummary) or isinstance(
+        change.new, ObligationSummary
+    ):
+        _render_obligation_change(con, field, change)
+    elif isinstance(change.old, ComponentSummary) or isinstance(
         change.new, ComponentSummary
     ):
         _render_component_change(con, field, change)

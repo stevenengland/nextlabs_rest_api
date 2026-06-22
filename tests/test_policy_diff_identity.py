@@ -7,9 +7,12 @@ import pytest
 from nextlabs_sdk._cli._diff._engine import diff_payloads
 from nextlabs_sdk._cli._diff._identity import (
     COMPONENT_SLOT_FIELDS,
+    OBLIGATION_FIELDS,
     ComponentSummary,
+    ObligationSummary,
     flatten_slot,
     identity_key,
+    pair_obligations,
 )
 
 
@@ -178,3 +181,139 @@ def test_component_slots_field_set_covers_all_five():
             "actionComponents",
         )
     )
+
+
+def _obl(
+    name: str,
+    params: dict[str, str],
+    policy_model_id: int = 0,
+    obligation_id: int | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": obligation_id,
+        "policyModelId": policy_model_id,
+        "name": name,
+        "params": params,
+    }
+
+
+def _obligation_changes(result: Any, field: str) -> list[Any]:
+    return [
+        change for change in result.changes if change.path and change.path[0] == field
+    ]
+
+
+def test_obligation_fields_cover_allow_and_deny():
+    """Given the obligation field registry.
+
+    When inspecting it.
+    Then it contains exactly the allow and deny obligation aliases.
+    """
+    assert OBLIGATION_FIELDS == frozenset(("allowObligations", "denyObligations"))
+
+
+def test_obligations_sharing_a_name_are_paired_positionally():
+    """Given two obligations with the same (name, policyModelId).
+
+    When pairing the old and new obligation lists.
+    Then they are matched positionally within the colliding group.
+    """
+    old = [_obl("data_masking", {"col": "ssn"}), _obl("data_masking", {"col": "dob"})]
+    new = [_obl("data_masking", {"col": "ssn2"}), _obl("data_masking", {"col": "dob2"})]
+
+    pairs = pair_obligations(old, new)
+
+    assert len(pairs) == 2
+    old_cols: list[object] = []
+    new_cols: list[object] = []
+    for old_obl, new_obl in pairs:
+        assert old_obl is not None and new_obl is not None
+        old_params = old_obl["params"]
+        new_params = new_obl["params"]
+        assert isinstance(old_params, dict) and isinstance(new_params, dict)
+        old_cols.append(old_params["col"])
+        new_cols.append(new_params["col"])
+    assert old_cols == ["ssn", "dob"]
+    assert new_cols == ["ssn2", "dob2"]
+
+
+def test_both_shared_name_obligations_have_their_param_changes_reported():
+    """Given two same-name obligations each with a changed param.
+
+    When diffing the two payloads.
+    Then both param changes are reported and none is dropped.
+    """
+    old = {
+        "allowObligations": [
+            _obl("data_masking", {"col": "ssn"}),
+            _obl("data_masking", {"col": "dob"}),
+        ]
+    }
+    new = {
+        "allowObligations": [
+            _obl("data_masking", {"col": "ssn_hash"}),
+            _obl("data_masking", {"col": "dob_hash"}),
+        ]
+    }
+
+    changes = _obligation_changes(diff_payloads(old, new), "allowObligations")
+    kinds = [change.kind for change in changes]
+
+    assert kinds == ["change", "change"]
+    assert sorted(change.new for change in changes) == ["dob_hash", "ssn_hash"]
+
+
+def test_changed_obligation_param_is_reported_as_a_scalar_string_change():
+    """Given an obligation whose param value changes.
+
+    When diffing the two payloads.
+    Then a scalar string change is produced for the changed param.
+    """
+    old = {"allowObligations": [_obl("redact", {"fields": "name email"})]}
+    new = {"allowObligations": [_obl("redact", {"fields": "name phone"})]}
+
+    changes = _obligation_changes(diff_payloads(old, new), "allowObligations")
+
+    assert [change.kind for change in changes] == ["change"]
+    assert changes[0].old == "name email"
+    assert changes[0].new == "name phone"
+    assert changes[0].path[-1] == "fields"
+
+
+def test_added_and_removed_obligations_are_reported():
+    """Given one obligation replaced by a differently-named obligation.
+
+    When diffing the two payloads.
+    Then one add and one remove are produced, each carrying the name.
+    """
+    old = {"denyObligations": [_obl("log", {"level": "info"})]}
+    new = {"denyObligations": [_obl("alert", {"channel": "ops"})]}
+
+    changes = _obligation_changes(diff_payloads(old, new), "denyObligations")
+    kinds = sorted(change.kind for change in changes)
+
+    assert kinds == ["add", "remove"]
+    added = next(change for change in changes if change.kind == "add")
+    removed = next(change for change in changes if change.kind == "remove")
+    assert added.new == ObligationSummary(name="alert")
+    assert removed.old == ObligationSummary(name="log")
+
+
+def test_extra_obligation_in_colliding_group_is_reported_as_added():
+    """Given a colliding-name group that gains an extra obligation.
+
+    When diffing the two payloads.
+    Then the unpaired obligation is reported as added, not a change.
+    """
+    old = {"allowObligations": [_obl("data_masking", {"col": "a"})]}
+    new = {
+        "allowObligations": [
+            _obl("data_masking", {"col": "a"}),
+            _obl("data_masking", {"col": "b"}),
+        ]
+    }
+
+    changes = _obligation_changes(diff_payloads(old, new), "allowObligations")
+
+    assert [change.kind for change in changes] == ["add"]
+    assert changes[0].new == ObligationSummary(name="data_masking")

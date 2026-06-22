@@ -13,6 +13,13 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import TypeAlias
+
+_Element: TypeAlias = Mapping[str, object]
+_ObligationPair: TypeAlias = "tuple[_Element | None, _Element | None]"
+_ObligationGroups: TypeAlias = "dict[Hashable, list[_Element]]"
+
+_NAME_FIELD = "name"
 
 COMPONENT_SLOT_FIELDS: frozenset[str] = frozenset(
     (
@@ -23,6 +30,15 @@ COMPONENT_SLOT_FIELDS: frozenset[str] = frozenset(
         "actionComponents",
     )
 )
+
+OBLIGATION_FIELDS: frozenset[str] = frozenset(("allowObligations", "denyObligations"))
+
+
+@dataclass(frozen=True)
+class ObligationSummary:
+    """An obligation reduced to the name used to identify it for display."""
+
+    name: str | None
 
 
 @dataclass(frozen=True)
@@ -38,9 +54,9 @@ def _component_dto_key(element: Mapping[str, object]) -> Hashable | None:
     component_id = element.get("id")
     if component_id is not None:
         return ("id", component_id)
-    name = element.get("name")
+    name = element.get(_NAME_FIELD)
     if name is not None:
-        return ("name", name)
+        return (_NAME_FIELD, name)
     return None
 
 
@@ -101,6 +117,56 @@ def flatten_slot(slot_value: object) -> dict[Hashable, ComponentSummary]:
         for component in _as_mappings(group.get("components")):
             _collect_component(component, collected)
     return collected
+
+
+def _obligation_group_key(element: Mapping[str, object]) -> Hashable:
+    return (element.get(_NAME_FIELD), element.get("policyModelId"))
+
+
+def pair_obligations(old_value: object, new_value: object) -> list[_ObligationPair]:
+    """Pair old and new obligations for comparison.
+
+    Obligations carry a null ``id`` and a non-unique ``name``, so they are
+    grouped by ``(name, policyModelId)`` and, within each colliding group,
+    paired positionally. Surplus obligations on either side are paired
+    against ``None`` so they surface as additions or removals.
+
+    Args:
+        old_value: The alias-keyed baseline obligation list.
+        new_value: The alias-keyed revised obligation list.
+
+    Returns:
+        A list of ``(old, new)`` pairs; either side is ``None`` when the
+        colliding group has no positional counterpart.
+    """
+    old_groups = _group_obligations(old_value)
+    new_groups = _group_obligations(new_value)
+    pairs: list[_ObligationPair] = []
+    for key in _ordered_keys(old_groups, new_groups):
+        olds = old_groups.get(key, [])
+        news = new_groups.get(key, [])
+        for index in range(max(len(olds), len(news))):
+            old_obl = olds[index] if index < len(olds) else None
+            new_obl = news[index] if index < len(news) else None
+            pairs.append((old_obl, new_obl))
+    return pairs
+
+
+def _group_obligations(value: object) -> _ObligationGroups:  # noqa: WPS110
+    grouped: _ObligationGroups = {}
+    for element in _as_mappings(value):
+        grouped.setdefault(_obligation_group_key(element), []).append(element)
+    return grouped
+
+
+def _ordered_keys(
+    old_groups: _ObligationGroups, new_groups: _ObligationGroups
+) -> list[Hashable]:
+    ordered = list(old_groups)
+    for key in new_groups:
+        if key not in old_groups:
+            ordered.append(key)
+    return ordered
 
 
 def _as_mappings(value: object) -> list[Mapping[str, object]]:  # noqa: WPS110

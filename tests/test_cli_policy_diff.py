@@ -186,3 +186,57 @@ def test_diff_too_few_revisions_exits_nonzero_without_traceback(
     output = strip_ansi(result.output)
     assert "Traceback" not in output
     assert "fewer than two" in output.lower()
+
+
+def _obligation(name: str, params: dict[str, str]) -> dict[str, Any]:
+    return {"id": None, "policyModelId": 0, "name": name, "params": params}
+
+
+def _revision_with_obligations(
+    revision: int, obligations: list[dict[str, Any]]
+) -> PolicyRevision:
+    policy = Policy.model_validate(
+        {
+            "id": 82,
+            "name": "P",
+            "status": "DRAFT",
+            "effectType": "ALLOW",
+            "allowObligations": obligations,
+        }
+    )
+    return PolicyRevision(
+        id=10, revision=revision, action_type="DE", policy_detail=policy
+    )
+
+
+def test_both_shared_name_obligations_report_changed_params(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions with two same-name obligations whose params each
+    change, when running diff, then both changed param values are shown so
+    neither obligation is silently dropped."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_obligations(
+            2,
+            [
+                _obligation("data_masking", {"col": "ssn"}),
+                _obligation("data_masking", {"col": "dob"}),
+            ],
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_obligations(
+            3,
+            [
+                _obligation("data_masking", {"col": "ssn_hash"}),
+                _obligation("data_masking", {"col": "dob_hash"}),
+            ],
+        )
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "ssn_hash" in output
+    assert "dob_hash" in output

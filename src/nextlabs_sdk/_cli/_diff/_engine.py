@@ -8,8 +8,11 @@ from typing import Literal
 
 from nextlabs_sdk._cli._diff._identity import (
     COMPONENT_SLOT_FIELDS,
+    OBLIGATION_FIELDS,
     ComponentSummary,
+    ObligationSummary,
     flatten_slot,
+    pair_obligations,
 )
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
@@ -78,10 +81,9 @@ def _diff_dicts(
     all_keys = old.keys() | new.keys()
     for key in all_keys:
         child_path = path + (key,)
-        if not show_all and key in COMPONENT_SLOT_FIELDS:
-            _diff_component_slot(
-                old.get(key), new.get(key), path=child_path, changes=changes
-            )
+        if not show_all and _diff_special_field(
+            key, old, new, path=child_path, changes=changes
+        ):
             continue
         if key not in old:
             changes.append(
@@ -95,6 +97,30 @@ def _diff_dicts(
             _diff_values(
                 old[key], new[key], path=child_path, show_all=show_all, changes=changes
             )
+
+
+def _diff_special_field(
+    key: str,
+    old: Mapping[str, object],
+    new: Mapping[str, object],
+    *,
+    path: tuple[str, ...],
+    changes: list[FieldChange],
+) -> bool:
+    """Dispatch identity-aware diffing for component-slot and obligation keys.
+
+    Returns:
+        True when *key* was handled by a specialised differ, otherwise False.
+    """
+    old_value = old.get(key)
+    new_value = new.get(key)
+    if key in COMPONENT_SLOT_FIELDS:
+        _diff_component_slot(old_value, new_value, path=path, changes=changes)
+        return True
+    if key in OBLIGATION_FIELDS:
+        _diff_obligation_field(old_value, new_value, path=path, changes=changes)
+        return True
+    return False
 
 
 def _diff_component_slot(
@@ -128,6 +154,50 @@ def _classify_component(
     if new_summary is not None:
         return FieldChange(path=path, kind=_KIND_ADD, old=None, new=new_summary)
     return FieldChange(path=path, kind=_KIND_REMOVE, old=old_summary, new=None)
+
+
+def _diff_obligation_field(
+    old_value: object,
+    new_value: object,
+    *,
+    path: tuple[str, ...],
+    changes: list[FieldChange],
+) -> None:
+    for old_obl, new_obl in pair_obligations(old_value, new_value):
+        label = _obligation_label(new_obl if old_obl is None else old_obl)
+        if old_obl is not None and new_obl is not None:
+            _diff_dicts(
+                old_obl,
+                new_obl,
+                path=path + (label,),
+                show_all=False,
+                changes=changes,
+            )
+        elif new_obl is None:
+            changes.append(
+                FieldChange(
+                    path=path,
+                    kind=_KIND_REMOVE,
+                    old=ObligationSummary(name=label),
+                    new=None,
+                )
+            )
+        else:
+            changes.append(
+                FieldChange(
+                    path=path,
+                    kind=_KIND_ADD,
+                    old=None,
+                    new=ObligationSummary(name=label),
+                )
+            )
+
+
+def _obligation_label(obligation: Mapping[str, object] | None) -> str:
+    if obligation is None:
+        return "?"
+    name = obligation.get("name")
+    return name if isinstance(name, str) else "?"
 
 
 def _diff_values(
