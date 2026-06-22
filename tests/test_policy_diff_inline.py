@@ -225,3 +225,30 @@ def test_render_semantic_nests_inplace_tag_field_change():
     # then
     assert "- ON" in output
     assert "+ OFF" in output
+
+
+def test_render_semantic_add_remove_stay_single_line():
+    """Test that add and remove scalar kinds render on a single line.
+
+    Given a delta with one added scalar and one removed scalar,
+    when rendering to a captured console,
+    then each renders as a single 'field: value' line (no separate old/new lines).
+    """
+    # given
+    result = DiffResult(
+        changes=(
+            FieldChange(path=("addedField",), kind="add", old=None, new="hello"),
+            FieldChange(path=("goneField",), kind="remove", old="bye", new=None),
+        ),
+        hidden_noise_count=0,
+    )
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
+    # when
+    with console.capture() as capture:
+        render_semantic(result, console=console)
+    output = capture.get()
+    # then
+    assert "+ addedField: hello" in output
+    assert "- goneField: bye" in output

@@ -589,3 +589,33 @@ def test_diff_json_emits_per_element_tag_changes(stub: tuple[Any, Any]) -> None:
     ]
     assert tag_entries
     assert tag_entries[0]["new"] == {"key": "adr6", "label": "ADR6"}
+
+
+def test_diff_unified_format_unaffected_by_tag_changes(stub: tuple[Any, Any]) -> None:
+    """Given two revisions differing by a tag change, when running diff with
+    --format unified, then the output is a git-style unified diff unaffected
+    by the semantic-path work.
+
+    Given two revisions where a tag is changed,
+    when running the diff command with --format unified,
+    then the output contains standard unified-diff markers (@@) and the changed
+    value appears on a '+' line.
+    """
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    # when
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "@@" in output
+    assert any(line.startswith("+") and "write" in line for line in output.splitlines())
