@@ -4,20 +4,26 @@ from __future__ import annotations
 
 from rich.console import Console
 
-from nextlabs_sdk._cli._diff._identity import ComponentSummary, ObligationSummary
-from nextlabs_sdk._cli._diff._inline import highlight_inline
+from nextlabs_sdk._cli._diff._identity import (
+    ComponentSummary,
+    ObligationSummary,
+    TagSummary,
+)
+from nextlabs_sdk._cli._diff._inline import highlight_pair
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
 _GLYPH_ADD = "[green]+[/green]"
 _GLYPH_REMOVE = "[red]-[/red]"
 _GLYPH_CHANGE = "[yellow]~[/yellow]"
+_KIND_ADD = "add"
+_UNKNOWN = "?"
 
 
 def _format_component(summary: ComponentSummary | None) -> str:
     """Render a component summary as ``name (id=N)`` for display."""
     if summary is None:
-        return "?"
-    label = summary.name or "?"
+        return _UNKNOWN
+    label = summary.name or _UNKNOWN
     if summary.component_id is None:
         return label
     return f"{label} (id={summary.component_id})"
@@ -39,7 +45,7 @@ def _render_component_change(con: Console, field: str, change: FieldChange) -> N
     """Print a component-slot change identified by name and id."""
     summary = change.new if isinstance(change.new, ComponentSummary) else None
     previous = change.old if isinstance(change.old, ComponentSummary) else None
-    if change.kind == "add":
+    if change.kind == _KIND_ADD:
         con.print(f"  {_GLYPH_ADD} {field}: {_format_component(summary)}")
     elif change.kind == "remove":
         con.print(f"  {_GLYPH_REMOVE} {field}: {_format_component(previous)}")
@@ -48,27 +54,63 @@ def _render_component_change(con: Console, field: str, change: FieldChange) -> N
         con.print(f"  {_GLYPH_CHANGE} {field}: {_format_component(summary)} {bump}")
 
 
+def _scalar_display(raw: object) -> str:
+    """Return the display string for a scalar value, with placeholders for empty/None."""
+    if raw is None:
+        return "[dim](none)[/dim]"
+    if raw == "":
+        return "[dim](empty)[/dim]"
+    return str(raw)
+
+
+def _render_scalar_change_lines(con: Console, field: str, change: FieldChange) -> None:
+    """Print the two-line header + old/new body for an in-place scalar change."""
+    con.print(f"  {_GLYPH_CHANGE} {field}:")
+    if isinstance(change.old, str) and isinstance(change.new, str):
+        old_markup, new_markup = highlight_pair(change.old, change.new)
+        old_display = "[dim](empty)[/dim]" if change.old == "" else old_markup
+        new_display = "[dim](empty)[/dim]" if change.new == "" else new_markup
+    else:
+        old_display = _scalar_display(change.old)
+        new_display = _scalar_display(change.new)
+    con.print(f"    {_GLYPH_REMOVE} {old_display}")
+    con.print(f"    {_GLYPH_ADD} {new_display}")
+
+
 def _render_scalar_change(con: Console, field: str, change: FieldChange) -> None:
     """Print a non-component FieldChange row to *con*."""
-    if change.kind == "add":
+    if change.kind == _KIND_ADD:
         con.print(f"  {_GLYPH_ADD} {field}: {change.new}")
     elif change.kind == "remove":
         con.print(f"  {_GLYPH_REMOVE} {field}: {change.old}")
-    elif isinstance(change.old, str) and isinstance(change.new, str):
-        highlighted = highlight_inline(change.old, change.new)
-        con.print(f"  {_GLYPH_CHANGE} {field}: {highlighted}")
     else:
-        con.print(f"  {_GLYPH_CHANGE} {field}: {change.old!r} \u2192 {change.new!r}")
+        _render_scalar_change_lines(con, field, change)
 
 
 def _render_obligation_change(con: Console, field: str, change: FieldChange) -> None:
     """Print an added or removed obligation identified by name."""
     summary = change.new if isinstance(change.new, ObligationSummary) else change.old
-    label = summary.name if isinstance(summary, ObligationSummary) else "?"
-    if change.kind == "add":
+    label = summary.name if isinstance(summary, ObligationSummary) else _UNKNOWN
+    if change.kind == _KIND_ADD:
         con.print(f"  {_GLYPH_ADD} {field}: {label}")
     else:
         con.print(f"  {_GLYPH_REMOVE} {field}: {label}")
+
+
+def _format_tag(summary: TagSummary) -> str:
+    key = summary.key or _UNKNOWN
+    label = summary.label or _UNKNOWN
+    return f"{key} ({label})"
+
+
+def _render_tag_change(con: Console, change: FieldChange) -> None:
+    """Print an added or removed tag as 'key (LABEL)' glyph line."""
+    summary = change.new if isinstance(change.new, TagSummary) else change.old
+    display = _format_tag(summary) if isinstance(summary, TagSummary) else _UNKNOWN
+    if change.kind == _KIND_ADD:
+        con.print(f"  {_GLYPH_ADD} {display}")
+    else:
+        con.print(f"  {_GLYPH_REMOVE} {display}")
 
 
 def _render_change(con: Console, field: str, change: FieldChange) -> None:
@@ -83,6 +125,8 @@ def _render_change(con: Console, field: str, change: FieldChange) -> None:
         change.new, ObligationSummary
     ):
         _render_obligation_change(con, field, change)
+    elif isinstance(change.old, TagSummary) or isinstance(change.new, TagSummary):
+        _render_tag_change(con, change)
     elif isinstance(change.old, ComponentSummary) or isinstance(
         change.new, ComponentSummary
     ):

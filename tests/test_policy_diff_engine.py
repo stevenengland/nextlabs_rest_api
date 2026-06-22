@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from nextlabs_sdk._cli._diff._engine import diff_payloads
 
 
@@ -20,16 +22,18 @@ def test_reordered_idless_array_yields_no_change():
 def test_dropped_duplicate_idless_element_is_reported():
     """Given two payloads where a duplicated id-less array element is removed.
 
-    When diffing without show_all, so the semantic path normalises the array.
-    Then the change is reported, because list multiplicity is significant and
-    matches the canonicalised array the unified renderer would emit.
+    When diffing without show_all, tags now route through identity-aware matching.
+    Then no change is reported, because both old entries share the same identity
+    key (``key="a"``) and the identity registry collapses them to one logical tag.
+    Duplicate tag keys are invalid domain data; the semantic diff correctly treats
+    dropping a duplicate of the same identity as a no-op.
     """
     old = {"name": "P", "tags": [{"key": "a"}, {"key": "a"}]}
     new = {"name": "P", "tags": [{"key": "a"}]}
 
     result = diff_payloads(old, new)
 
-    assert result.changes != ()
+    assert result.changes == ()
 
 
 def test_deployment_noise_excluded_by_default():
@@ -90,3 +94,63 @@ def test_show_all_reincludes_noise_and_ordering():
     result = diff_payloads(old, new, show_all=True)
 
     assert any(c.path == ("deploymentTime",) for c in result.changes)
+
+
+from nextlabs_sdk._cli._diff._identity import TagSummary
+from nextlabs_sdk._cli._diff._models import diff_result_to_dict
+
+
+def test_engine_emits_per_element_tag_changes():
+    """Given old/new payloads adding one tag, removing one, editing one in place.
+
+    When diffing.
+    Then there is a TagSummary add, a TagSummary remove, and a recursed scalar
+    change carrying the edited tag's field path.
+    """
+    # given
+    old = {
+        "name": "P",
+        "tags": [
+            {"key": "keep", "label": "KEEP", "status": "ON"},
+            {"key": "gone", "label": "GONE"},
+        ],
+    }
+    new = {
+        "name": "P",
+        "tags": [
+            {"key": "keep", "label": "KEEP", "status": "OFF"},
+            {"key": "fresh", "label": "FRESH"},
+        ],
+    }
+    # when
+    result = diff_payloads(old, new)
+    tag_changes = [c for c in result.changes if c.path and c.path[0] == "tags"]
+    # then
+    assert any(c.kind == "add" and isinstance(c.new, TagSummary) for c in tag_changes)
+    assert any(
+        c.kind == "remove" and isinstance(c.old, TagSummary) for c in tag_changes
+    )
+    assert any(
+        c.kind == "change" and c.old == "ON" and c.new == "OFF" for c in tag_changes
+    )
+
+
+def test_tag_changes_serialise_per_element():
+    """Given a payload that adds a single tag.
+
+    When diffing and serialising to a dict.
+    Then a per-element tag change with the TagSummary fields is emitted (not a whole-list entry).
+    """
+    # given
+    old = {"name": "P", "tags": []}
+    new = {"name": "P", "tags": [{"key": "fresh", "label": "FRESH"}]}
+    # when
+    payload = diff_result_to_dict(diff_payloads(old, new))
+    tag_entries = [
+        c
+        for c in cast(list[Any], payload["changes"])
+        if c["path"] and c["path"][0] == "tags"
+    ]
+    # then
+    assert tag_entries
+    assert tag_entries[0]["new"] == {"key": "fresh", "label": "FRESH"}
