@@ -12,8 +12,12 @@ from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
-from nextlabs_sdk._cli._diff._engine import diff_payloads
-from nextlabs_sdk._cli._diff._render_semantic import render_semantic
+from nextlabs_sdk._cli._diff import (
+    _engine,
+    _format,
+    _render_semantic,
+    _render_unified,
+)
 from nextlabs_sdk._cli._diff._revision_select import (
     InsufficientRevisionsError,
     select_revisions,
@@ -602,7 +606,7 @@ register_detail_renderer(Policy, _render_policy_detail)
 
 @policies_app.command()
 @cli_error_handler
-def diff(
+def diff(  # noqa: WPS211
     ctx: typer.Context,
     policy_id: Annotated[int, typer.Argument(help="Policy ID")],
     from_rev: Annotated[
@@ -614,8 +618,12 @@ def diff(
     show_all: Annotated[
         bool, typer.Option("--show-all", help="Reveal ordering + noise differences")
     ] = False,
+    diff_format: Annotated[
+        _format.DiffFormat,
+        typer.Option("--format", help="Human renderer: semantic (default) or unified"),
+    ] = _format.DiffFormat.SEMANTIC,
 ) -> None:
-    """Show a semantic diff between two revisions of a policy."""
+    """Show a diff between two revisions of a policy."""
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     try:
@@ -627,5 +635,13 @@ def diff(
         raise typer.Exit(code=1) from exc
     old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)
     new_payload = new.policy_detail.model_dump(mode="json", by_alias=True)
-    diff_result = diff_payloads(old_payload, new_payload, show_all=show_all)
-    render_semantic(diff_result)
+    if diff_format is _format.DiffFormat.UNIFIED:
+        _render_unified.render_unified(
+            old_payload,
+            new_payload,
+            labels=(f"revision {old.revision}", f"revision {new.revision}"),
+            show_all=show_all,
+        )
+        return
+    diff_result = _engine.diff_payloads(old_payload, new_payload, show_all=show_all)
+    _render_semantic.render_semantic(diff_result)

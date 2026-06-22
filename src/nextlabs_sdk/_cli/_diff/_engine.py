@@ -33,6 +33,51 @@ _NOISE_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def canonicalise(payload: Mapping[str, object], *, show_all: bool = False) -> object:
+    """Reduce a policy payload to a stable, comparison-ready form.
+
+    Arrays are sorted by their canonical content so element re-ordering is
+    erased, and deployment-noise fields are dropped. Dict keys are left for
+    the caller to sort at serialisation time. With show_all the noise filter
+    and array sort are disabled so every raw difference survives.
+
+    Args:
+        payload: The alias-keyed policy payload to canonicalise.
+        show_all: When True, keep noise fields and original array order.
+
+    Returns:
+        A JSON-serialisable structure with noise stripped and arrays sorted
+        (unless show_all is set).
+    """
+    return _canonicalise_value(payload, show_all=show_all)
+
+
+def _canonicalise_value(value: object, *, show_all: bool) -> object:  # noqa: WPS110
+    if isinstance(value, Mapping):
+        return _canonicalise_mapping(value, show_all=show_all)
+    if isinstance(value, list):
+        return _canonicalise_list(value, show_all=show_all)
+    return value
+
+
+def _canonicalise_mapping(
+    mapping: Mapping[str, object], *, show_all: bool
+) -> dict[str, object]:
+    kept: dict[str, object] = {}
+    for key, child in mapping.items():
+        if not show_all and key in _NOISE_FIELDS:
+            continue
+        kept[key] = _canonicalise_value(child, show_all=show_all)
+    return kept
+
+
+def _canonicalise_list(elements: list[object], *, show_all: bool) -> list[object]:
+    canonical = [_canonicalise_value(elem, show_all=show_all) for elem in elements]
+    if show_all:
+        return canonical
+    return sorted(canonical, key=_canonical)
+
+
 def diff_payloads(
     old: Mapping[str, object],
     new: Mapping[str, object],
