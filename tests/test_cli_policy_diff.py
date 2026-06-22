@@ -347,6 +347,56 @@ def test_output_json_delta_enumerates_path_kind_old_new(
     assert described["new"] == "allow write access"
 
 
+def test_output_json_serializes_component_version_bump(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions where a subject component's version is bumped, when
+    running diff with the global --output json, then the change entry's old and
+    new carry JSON objects describing the component identity and version."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subjects(2, [_component(5, "Engineers", version=1)])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subjects(3, [_component(5, "Engineers", version=2)])
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "diff", "10"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(strip_ansi(result.output))
+    component_change = next(
+        change for change in payload["changes"] if change["kind"] == "change"
+    )
+    assert component_change["old"]["version"] == 1
+    assert component_change["new"]["version"] == 2
+    assert component_change["new"]["name"] == "Engineers"
+
+
+def test_output_json_serializes_obligation_addition(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions where an obligation is added, when running diff with
+    the global --output json, then the added change entry's new carries a JSON
+    object identifying the obligation by name."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_obligations(2, [])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_obligations(3, [_obligation("data_masking", {"col": "ssn"})])
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "diff", "10"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(strip_ansi(result.output))
+    added = next(change for change in payload["changes"] if change["kind"] == "add")
+    assert added["new"]["name"] == "data_masking"
+
+
 def test_exit_code_flag_exits_nonzero_when_differences_exist(
     stub: tuple[Any, Any],
 ) -> None:
