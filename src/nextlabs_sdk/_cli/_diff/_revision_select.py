@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from nextlabs_sdk._cloudaz._policies import PolicyService
-from nextlabs_sdk._cloudaz._policy_models import PolicyRevision
+from nextlabs_sdk._cloudaz._policy_models import PolicyHistoryEntry, PolicyRevision
 from nextlabs_sdk.exceptions import NextLabsError
 
 DEPLOYED_ACTION_TYPE = "DE"
@@ -11,6 +11,10 @@ DEPLOYED_ACTION_TYPE = "DE"
 
 class InsufficientRevisionsError(NextLabsError):
     """Raised when fewer than two comparable revisions exist for a policy."""
+
+
+class UnknownRevisionError(NextLabsError):
+    """Raised when a requested revision number is absent from a policy's history."""
 
 
 def select_revisions(
@@ -21,6 +25,10 @@ def select_revisions(
     to_rev: int | None = None,
 ) -> tuple[PolicyRevision, PolicyRevision]:
     """Resolve the two policy revisions to compare.
+
+    Each side is fetched with the history entry's own ``id`` as the revision-ID
+    path segment, never the policy ID, because the server addresses a revision
+    by that entry ``id``.
 
     Args:
         policies: The policy service used to query history and fetch revisions.
@@ -34,40 +42,79 @@ def select_revisions(
         A ``(old, new)`` tuple where ``new`` is the newer/``to`` side.
 
     Raises:
-        InsufficientRevisionsError: When both sides cannot be resolved because
+        InsufficientRevisionsError: When a side cannot be auto-selected because
             fewer than two deployed revisions exist and overrides do not supply
-            both sides.
+            it.
+        UnknownRevisionError: When an explicitly overridden revision number is
+            absent from the policy's history.
     """
-    if from_rev is not None and to_rev is not None:
-        old = policies.get_revision(policy_id, from_rev)
-        new = policies.get_revision(policy_id, to_rev)
-        return old, new
-
     entries = policies.list_history(policy_id)
-    deployed = sorted(
+    by_revision = {entry.revision: entry for entry in entries}
+
+    resolved_to = _resolve_to(entries, policy_id, to_rev)
+    resolved_from = _resolve_from(entries, policy_id, from_rev, resolved_to)
+
+    old_entry = _require_entry(by_revision, policy_id, resolved_from)
+    new_entry = _require_entry(by_revision, policy_id, resolved_to)
+
+    old = policies.get_revision(old_entry.id, old_entry.revision)
+    new = policies.get_revision(new_entry.id, new_entry.revision)
+    return old, new
+
+
+def _deployed_newest_first(
+    entries: list[PolicyHistoryEntry],
+) -> list[PolicyHistoryEntry]:
+    return sorted(
         (entry for entry in entries if entry.action_type == DEPLOYED_ACTION_TYPE),
         key=lambda entry: entry.revision,
         reverse=True,
     )
 
-    resolved_to = to_rev
-    resolved_from = from_rev
 
-    if resolved_to is None:
-        if not deployed:
-            raise InsufficientRevisionsError(
-                f"Policy {policy_id} has fewer than two comparable revisions to diff."
-            )
-        resolved_to = deployed[0].revision
+def _resolve_to(
+    entries: list[PolicyHistoryEntry],
+    policy_id: int,
+    to_rev: int | None,
+) -> int:
+    if to_rev is not None:
+        return to_rev
+    deployed = _deployed_newest_first(entries)
+    if not deployed:
+        raise InsufficientRevisionsError(
+            f"Policy {policy_id} has fewer than two comparable revisions to diff."
+        )
+    return deployed[0].revision
 
-    if resolved_from is None:
-        remaining = [entry for entry in deployed if entry.revision != resolved_to]
-        if not remaining:
-            raise InsufficientRevisionsError(
-                f"Policy {policy_id} has fewer than two comparable revisions to diff."
-            )
-        resolved_from = remaining[0].revision
 
-    old = policies.get_revision(policy_id, resolved_from)
-    new = policies.get_revision(policy_id, resolved_to)
-    return old, new
+def _resolve_from(
+    entries: list[PolicyHistoryEntry],
+    policy_id: int,
+    from_rev: int | None,
+    resolved_to: int,
+) -> int:
+    if from_rev is not None:
+        return from_rev
+    remaining = [
+        entry
+        for entry in _deployed_newest_first(entries)
+        if entry.revision != resolved_to
+    ]
+    if not remaining:
+        raise InsufficientRevisionsError(
+            f"Policy {policy_id} has fewer than two comparable revisions to diff."
+        )
+    return remaining[0].revision
+
+
+def _require_entry(
+    by_revision: dict[int, PolicyHistoryEntry],
+    policy_id: int,
+    revision: int,
+) -> PolicyHistoryEntry:
+    entry = by_revision.get(revision)
+    if entry is None:
+        raise UnknownRevisionError(
+            f"Revision {revision} is not in policy {policy_id}'s history."
+        )
+    return entry
