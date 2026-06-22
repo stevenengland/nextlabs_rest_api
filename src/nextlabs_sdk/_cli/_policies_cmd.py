@@ -25,6 +25,7 @@ from nextlabs_sdk._cli._diff._revision_select import (
     select_revisions,
 )
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._payload_loader import (
@@ -35,7 +36,7 @@ from nextlabs_sdk._cli._payload_loader import (
 from nextlabs_sdk._cloudaz._policy_models import Policy
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
-policies_app = typer.Typer(help="Policy management commands")
+policies_app = make_group("Policy management commands")
 
 _ID_FIELD = "id"
 _ID_COLUMN = ColumnDef("ID", _ID_FIELD)

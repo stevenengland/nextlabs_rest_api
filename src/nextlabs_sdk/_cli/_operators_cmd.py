@@ -11,10 +11,11 @@ from rich.console import Console
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, render
 from nextlabs_sdk._cli._output_format import OutputFormat
 
-operators_app = typer.Typer(help="Operator (data-type) metadata commands.")
+operators_app = make_group("Operator (data-type) metadata commands.")
 
 _OPERATOR_COLUMNS = (
     ColumnDef("ID", "id"),

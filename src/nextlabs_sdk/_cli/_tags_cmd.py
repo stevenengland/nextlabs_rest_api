@@ -10,10 +10,11 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
 from nextlabs_sdk._cloudaz._models import Tag, TagType
 
-tags_app = typer.Typer(help="Tag management commands")
+tags_app = make_group("Tag management commands")
 
 _TAG_COLUMNS = (
     ColumnDef("ID", "id"),

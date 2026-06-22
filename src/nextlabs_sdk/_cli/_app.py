@@ -26,7 +26,7 @@ _DEFAULT_TIMEOUT_SECONDS = 30.0
 app = typer.Typer(
     name="nextlabs",
     help="NextLabs CloudAz SDK CLI",
-    invoke_without_command=True,
+    no_args_is_help=True,
 )
 
 app.add_typer(audit_logs_app, name="audit-logs")
@@ -162,5 +162,3 @@ def main(
         pdp_auth=pdp_auth,
         pdp_client_id=pdp_client_id,
     )
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())

@@ -13,6 +13,7 @@ from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, print_error, render
 from nextlabs_sdk._cli._payload_loader import load_payload
 from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
@@ -22,7 +23,7 @@ from nextlabs_sdk._cloudaz._audit_log_models import (
     ExportAuditLogsRequest,
 )
 
-audit_logs_app = typer.Typer(help="Entity audit log commands")
+audit_logs_app = make_group("Entity audit log commands")
 
 _AUDIT_LOG_COLUMNS = (
     ColumnDef("ID", "id"),
