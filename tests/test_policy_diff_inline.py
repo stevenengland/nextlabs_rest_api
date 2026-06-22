@@ -6,7 +6,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from nextlabs_sdk._cli._diff._inline import highlight_inline
+from nextlabs_sdk._cli._diff._inline import highlight_inline, highlight_pair
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 from nextlabs_sdk._cli._diff._render_semantic import render_semantic
 
@@ -36,6 +36,42 @@ def test_highlight_inline_unchanged_string_has_no_emphasis():
     text = "allow read access"
     markup = highlight_inline(text, text)
     assert "[bold yellow]" not in markup
+
+
+def test_highlight_pair_emphasises_removed_on_old_and_added_on_new():
+    """Test removed words emphasised on the old line, added on the new.
+
+    Given two multi-word strings differing by one word,
+    when building the dual-side highlight,
+    then the old markup emphasises the removed word and the new markup the added word,
+    while shared words stay plain on both sides.
+    """
+    # given
+    old = "allow read access"
+    new = "allow write access"
+    # when
+    old_markup, new_markup = highlight_pair(old, new)
+    # then
+    assert "[bold yellow]read[/bold yellow]" in old_markup
+    assert "[bold yellow]write[/bold yellow]" in new_markup
+    assert "[bold yellow]allow[/bold yellow]" not in old_markup
+    assert "[bold yellow]access[/bold yellow]" not in new_markup
+
+
+def test_highlight_pair_identical_strings_have_no_emphasis():
+    """Test that identical strings produce no emphasis on either side.
+
+    Given identical strings,
+    when building the dual-side highlight,
+    then neither side carries emphasis markup.
+    """
+    # given
+    text = "allow read access"
+    # when
+    old_markup, new_markup = highlight_pair(text, text)
+    # then
+    assert "[bold yellow]" not in old_markup
+    assert "[bold yellow]" not in new_markup
 
 
 def test_render_semantic_shows_inplace_scalar_change():
