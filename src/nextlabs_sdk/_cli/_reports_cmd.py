@@ -13,6 +13,7 @@ from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import (
     ColumnDef,
     print_success,
@@ -28,7 +29,7 @@ from nextlabs_sdk._cloudaz._report_models import (
     WidgetData,
 )
 
-reports_app = typer.Typer(help="Report management commands")
+reports_app = make_group("Report management commands")
 
 _REPORT_COLUMNS = (
     ColumnDef("ID", "id"),

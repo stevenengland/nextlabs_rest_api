@@ -14,6 +14,7 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import render_json
 from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._pdp_payload_helpers import (
@@ -45,7 +46,7 @@ from nextlabs_sdk._pdp._payload import (
     load_permissions_payload,
 )
 
-pdp_app = typer.Typer(help="PDP evaluation commands")
+pdp_app = make_group("PDP evaluation commands")
 
 _DECISION_COLORS: MappingProxyType[Decision, str] = MappingProxyType(
     {

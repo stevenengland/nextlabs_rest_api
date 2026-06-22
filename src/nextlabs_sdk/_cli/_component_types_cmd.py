@@ -12,12 +12,13 @@ from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, print_success, render
 from nextlabs_sdk._cli._payload_loader import reject_data_flag, require_payload
 from nextlabs_sdk._cloudaz._component_type_models import ComponentType
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 
-component_types_app = typer.Typer(help="Component type management commands")
+component_types_app = make_group("Component type management commands")
 
 _CT_COLUMNS = (
     ColumnDef("ID", "id"),

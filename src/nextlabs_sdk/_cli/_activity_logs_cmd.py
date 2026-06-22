@@ -12,9 +12,10 @@ from nextlabs_sdk._cli._activity_log_query_builder import build_activity_log_que
 from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, render
 
-activity_logs_app = typer.Typer(help="Report activity log commands.")
+activity_logs_app = make_group("Report activity log commands.")
 
 _ENFORCEMENT_COLUMNS = (
     ColumnDef("Row ID", "row_id"),

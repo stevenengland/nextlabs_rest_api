@@ -10,11 +10,12 @@ from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, render
 from nextlabs_sdk._cli._time_parser import now_epoch_ms, parse_time
 from nextlabs_sdk._cloudaz._dashboard_models import PolicyActivity
 
-dashboard_app = typer.Typer(help="Reporter dashboard commands")
+dashboard_app = make_group("Reporter dashboard commands")
 
 _DATE_HELP = (
     "Accepts epoch milliseconds (e.g. 1737014400000), ISO 8601 datetime "

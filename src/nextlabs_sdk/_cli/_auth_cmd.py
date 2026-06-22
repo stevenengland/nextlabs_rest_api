@@ -30,10 +30,11 @@ from nextlabs_sdk._cli._account_status_label import account_status_and_refreshab
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._expiry_format import format_expiry
+from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
 
-auth_app = typer.Typer(help="Authentication commands")
+auth_app = make_group("Authentication commands")
 
 _NO_ACCOUNTS_MESSAGE = "No cached accounts. Run `nextlabs auth login` to create one."
 _NO_ACTIVE_MESSAGE = (
