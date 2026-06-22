@@ -140,6 +140,48 @@ def test_diff_default_renders_semantic_report(stub: tuple[Any, Any]) -> None:
     assert "write" in output
 
 
+def test_diff_format_semantic_renders_semantic_report(stub: tuple[Any, Any]) -> None:
+    """Given two deployed revisions differing in description, when running diff
+    with --format semantic, then it renders the semantic report showing the
+    changed scalar."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "semantic"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Policy diff" in output
+    assert "write" in output
+
+
+def test_diff_format_unified_renders_git_style_diff(stub: tuple[Any, Any]) -> None:
+    """Given two deployed revisions differing in description, when running diff
+    with --format unified, then it renders a git-style unified diff with a hunk
+    header and the changed value on an added line."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "@@" in output
+    assert any(line.startswith("+") and "write" in line for line in output.splitlines())
+
+
 def test_diff_show_all_reveals_noise(stub: tuple[Any, Any]) -> None:
     """Given two deployed revisions differing only in a deployment-noise field,
     when running diff with --show-all, then the otherwise-hidden noise field is
