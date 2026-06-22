@@ -237,6 +237,22 @@ def test_diff_too_few_revisions_exits_nonzero_without_traceback(
     assert "fewer than two" in output.lower()
 
 
+def test_diff_unknown_override_revision_exits_nonzero_without_traceback(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given an overridden revision absent from history, when running diff, then
+    it exits non-zero with a clear message and no traceback."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--from", "2", "--to", "9"]
+    )
+    assert result.exit_code != 0
+    output = strip_ansi(result.output)
+    assert "Traceback" not in output
+    assert "9" in output
+
+
 def _obligation(name: str, params: dict[str, str]) -> dict[str, Any]:
     return {"id": None, "policyModelId": 0, "name": name, "params": params}
 
