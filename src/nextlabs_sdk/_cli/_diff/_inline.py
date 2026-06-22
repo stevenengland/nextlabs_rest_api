@@ -22,19 +22,7 @@ def highlight_inline(old: str, new: str) -> str:
     Returns:
         The new string with changed words wrapped in ``[bold yellow]...[/bold yellow]``.
     """
-    old_words = old.split()
-    new_words = new.split()
-    matcher = difflib.SequenceMatcher(None, old_words, new_words, autojunk=False)
-    parts: list[str] = []
-    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
-        segment = new_words[j1:j2]
-        if tag == "equal":
-            parts.extend(segment)
-        else:
-            parts.extend(
-                f"{_BOLD_YELLOW_OPEN}{word}{_BOLD_YELLOW_CLOSE}" for word in segment
-            )
-    return " ".join(parts)
+    return highlight_pair(old, new)[1]
 
 
 def highlight_pair(old: str, new: str) -> tuple[str, str]:

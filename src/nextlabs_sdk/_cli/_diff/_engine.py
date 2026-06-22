@@ -302,16 +302,13 @@ def _tag_summary(tag: Mapping[str, object] | None) -> TagSummary:
 def _tag_display(tag: Mapping[str, object] | None) -> str:
     if tag is None:
         return _UNKNOWN_LABEL
-    key = tag.get("key")
-    label = tag.get("label")
-    key_str = key if isinstance(key, str) else None
-    label_str = label if isinstance(label, str) else None
-    if key_str is not None and label_str is not None:
-        return f"{key_str} ({label_str.upper()})"
-    if key_str is not None:
-        return key_str
-    if label_str is not None:
-        return label_str
+    summary = _tag_summary(tag)
+    if summary.key is not None and summary.label is not None:
+        return f"{summary.key} ({summary.label.upper()})"
+    if summary.key is not None:
+        return summary.key
+    if summary.label is not None:
+        return summary.label
     return _UNKNOWN_LABEL
 
 
