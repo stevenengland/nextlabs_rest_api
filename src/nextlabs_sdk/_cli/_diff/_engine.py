@@ -278,7 +278,7 @@ def _diff_lists(
             changes.append(FieldChange(path=path, kind=_KIND_CHANGE, old=old, new=new))
         return
 
-    old_set = {_canonical(elem) for elem in old}
-    new_set = {_canonical(elem) for elem in new}
-    if old_set != new_set:
+    old_canonical = sorted(_canonical(elem) for elem in old)
+    new_canonical = sorted(_canonical(elem) for elem in new)
+    if old_canonical != new_canonical:
         changes.append(FieldChange(path=path, kind=_KIND_CHANGE, old=old, new=new))

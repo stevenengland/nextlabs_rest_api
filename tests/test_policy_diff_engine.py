@@ -17,6 +17,21 @@ def test_reordered_idless_array_yields_no_change():
     assert result.changes == ()
 
 
+def test_dropped_duplicate_idless_element_is_reported():
+    """Given two payloads where a duplicated id-less array element is removed.
+
+    When diffing without show_all, so the semantic path normalises the array.
+    Then the change is reported, because list multiplicity is significant and
+    matches the canonicalised array the unified renderer would emit.
+    """
+    old = {"name": "P", "tags": [{"key": "a"}, {"key": "a"}]}
+    new = {"name": "P", "tags": [{"key": "a"}]}
+
+    result = diff_payloads(old, new)
+
+    assert result.changes != ()
+
+
 def test_deployment_noise_excluded_by_default():
     """Given payloads differing only in deployment-noise leaf fields.
 
