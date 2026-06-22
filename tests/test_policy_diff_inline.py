@@ -101,3 +101,58 @@ def test_render_semantic_shows_inplace_scalar_change():
     assert "write" in output
     assert "access" in output
     assert "2 noise-only" in output
+
+
+def test_render_semantic_scalar_change_shows_old_and_new_lines():
+    """Test that a scalar change renders both the old and new value.
+
+    Given a delta with a single scalar effectType change allow -> deny,
+    when rendering to a captured console,
+    then both the old value on a '-' line and the new value on a '+' line appear.
+    """
+    # given
+    result = DiffResult(
+        changes=(
+            FieldChange(path=("effectType",), kind="change", old="ALLOW", new="DENY"),
+        ),
+        hidden_noise_count=0,
+    )
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
+    # when
+    with console.capture() as capture:
+        render_semantic(result, console=console)
+    output = capture.get()
+    # then
+    assert "- ALLOW" in output
+    assert "+ DENY" in output
+
+
+def test_render_semantic_empty_and_none_use_placeholders():
+    """Test that cleared values render as (empty) / (none) placeholders.
+
+    Given a delta clearing description to '' and obligationName to None,
+    when rendering to a captured console,
+    then the new '+' lines show '(empty)' and '(none)' while old values remain visible.
+    """
+    # given
+    result = DiffResult(
+        changes=(
+            FieldChange(path=("description",), kind="change", old="text", new=""),
+            FieldChange(path=("obligationName",), kind="change", old="OBL", new=None),
+        ),
+        hidden_noise_count=0,
+    )
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
+    # when
+    with console.capture() as capture:
+        render_semantic(result, console=console)
+    output = capture.get()
+    # then
+    assert "(empty)" in output
+    assert "(none)" in output
+    assert "text" in output
+    assert "OBL" in output

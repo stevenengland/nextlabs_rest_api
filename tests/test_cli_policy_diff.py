@@ -44,7 +44,10 @@ def _entry(revision: int, action_type: str = "DE") -> PolicyHistoryEntry:
 
 
 def _revision(
-    revision: int, description: str = "d", deployment_time: int = 0
+    revision: int,
+    description: str = "d",
+    deployment_time: int = 0,
+    effect_type: str = "ALLOW",
 ) -> PolicyRevision:
     return PolicyRevision(
         id=10,
@@ -54,7 +57,7 @@ def _revision(
             id=82,
             name="P",
             status="DRAFT",
-            effect_type="ALLOW",
+            effect_type=effect_type,
             description=description,
             deployment_time=deployment_time,
         ),
@@ -472,3 +475,25 @@ def test_without_exit_code_flag_exits_zero_despite_differences(
     )
     result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
     assert result.exit_code == 0
+
+
+def test_scalar_effect_type_change_renders_old_and_new_lines(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions where effect_type changes from ALLOW to DENY, when
+    running diff, then the output contains the old value on a '-' line and the
+    new value on a '+' line."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, effect_type="ALLOW")
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(_revision(3, effect_type="DENY"))
+    # when
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "- ALLOW" in output
+    assert "+ DENY" in output

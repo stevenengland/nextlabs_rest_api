@@ -5,7 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 
 from nextlabs_sdk._cli._diff._identity import ComponentSummary, ObligationSummary
-from nextlabs_sdk._cli._diff._inline import highlight_inline
+from nextlabs_sdk._cli._diff._inline import highlight_pair
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
 _GLYPH_ADD = "[green]+[/green]"
@@ -48,17 +48,37 @@ def _render_component_change(con: Console, field: str, change: FieldChange) -> N
         con.print(f"  {_GLYPH_CHANGE} {field}: {_format_component(summary)} {bump}")
 
 
+def _scalar_display(raw: object) -> str:
+    """Return the display string for a scalar value, with placeholders for empty/None."""
+    if raw is None:
+        return "[dim](none)[/dim]"
+    if raw == "":
+        return "[dim](empty)[/dim]"
+    return str(raw)
+
+
+def _render_scalar_change_lines(con: Console, field: str, change: FieldChange) -> None:
+    """Print the two-line header + old/new body for an in-place scalar change."""
+    con.print(f"  {_GLYPH_CHANGE} {field}:")
+    if isinstance(change.old, str) and isinstance(change.new, str):
+        old_markup, new_markup = highlight_pair(change.old, change.new)
+        old_display = "[dim](empty)[/dim]" if change.old == "" else old_markup
+        new_display = "[dim](empty)[/dim]" if change.new == "" else new_markup
+    else:
+        old_display = _scalar_display(change.old)
+        new_display = _scalar_display(change.new)
+    con.print(f"    {_GLYPH_REMOVE} {old_display}")
+    con.print(f"    {_GLYPH_ADD} {new_display}")
+
+
 def _render_scalar_change(con: Console, field: str, change: FieldChange) -> None:
     """Print a non-component FieldChange row to *con*."""
     if change.kind == "add":
         con.print(f"  {_GLYPH_ADD} {field}: {change.new}")
     elif change.kind == "remove":
         con.print(f"  {_GLYPH_REMOVE} {field}: {change.old}")
-    elif isinstance(change.old, str) and isinstance(change.new, str):
-        highlighted = highlight_inline(change.old, change.new)
-        con.print(f"  {_GLYPH_CHANGE} {field}: {highlighted}")
     else:
-        con.print(f"  {_GLYPH_CHANGE} {field}: {change.old!r} \u2192 {change.new!r}")
+        _render_scalar_change_lines(con, field, change)
 
 
 def _render_obligation_change(con: Console, field: str, change: FieldChange) -> None:
