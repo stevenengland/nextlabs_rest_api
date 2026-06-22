@@ -22,3 +22,23 @@ class DiffResult:
 
     changes: tuple[FieldChange, ...]
     hidden_noise_count: int
+
+
+def diff_result_to_dict(delta: DiffResult) -> dict[str, object]:
+    """Render a :class:`DiffResult` as a JSON-serialisable mapping.
+
+    Each change enumerates its ``path`` (as a list of segments), ``kind``,
+    ``old`` value and ``new`` value.
+    """
+    return {
+        "changes": [
+            {
+                "path": list(change.path),
+                "kind": change.kind,
+                "old": change.old,
+                "new": change.new,
+            }
+            for change in delta.changes
+        ],
+        "hidden_noise_count": delta.hidden_noise_count,
+    }

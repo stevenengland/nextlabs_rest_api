@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -282,3 +283,120 @@ def test_both_shared_name_obligations_report_changed_params(
     output = strip_ansi(result.output)
     assert "ssn_hash" in output
     assert "dob_hash" in output
+
+
+def test_output_json_emits_structured_delta_overriding_format(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions differing in description, when running diff with the
+    global --output json together with --format unified, then it emits the
+    structured JSON delta and not the unified text render (json overrides
+    format)."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "--output",
+            "json",
+            "policies",
+            "diff",
+            "10",
+            "--format",
+            "unified",
+        ],
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "@@" not in output
+    payload = json.loads(output)
+    assert "changes" in payload
+
+
+def test_output_json_delta_enumerates_path_kind_old_new(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose description changes, when running diff with the
+    global --output json, then each change entry carries its path, kind, old
+    value and new value."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "diff", "10"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(strip_ansi(result.output))
+    changes = payload["changes"]
+    assert changes
+    described = next(c for c in changes if c["path"] == ["description"])
+    assert described["kind"] == "change"
+    assert described["old"] == "allow read access"
+    assert described["new"] == "allow write access"
+
+
+def test_exit_code_flag_exits_nonzero_when_differences_exist(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions that differ after noise filtering, when running diff
+    with --exit-code, then the command exits non-zero."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--exit-code"]
+    )
+    assert result.exit_code != 0
+
+
+def test_exit_code_flag_exits_zero_when_revisions_equivalent(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions that are equivalent after noise filtering, when
+    running diff with --exit-code, then the command exits zero."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="same text", deployment_time=200)
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="same text", deployment_time=100)
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--exit-code"]
+    )
+    assert result.exit_code == 0
+
+
+def test_without_exit_code_flag_exits_zero_despite_differences(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions that differ after noise filtering, when running diff
+    without --exit-code, then the command still exits zero."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
