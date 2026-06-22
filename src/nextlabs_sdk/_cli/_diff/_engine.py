@@ -9,16 +9,19 @@ from typing import Literal
 from nextlabs_sdk._cli._diff._identity import (
     COMPONENT_SLOT_FIELDS,
     OBLIGATION_FIELDS,
+    TAG_FIELDS,
     ComponentSummary,
     ObligationSummary,
     flatten_slot,
     pair_obligations,
 )
+from nextlabs_sdk._cli._diff._identity import TagSummary, pair_tags
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 
 _KIND_ADD: Literal["add"] = "add"
 _KIND_REMOVE: Literal["remove"] = "remove"
 _KIND_CHANGE: Literal["change"] = "change"
+_UNKNOWN_LABEL: str = "?"
 
 _NOISE_FIELDS: frozenset[str] = frozenset(
     (
@@ -165,6 +168,9 @@ def _diff_special_field(
     if key in OBLIGATION_FIELDS:
         _diff_obligation_field(old_value, new_value, path=path, changes=changes)
         return True
+    if key in TAG_FIELDS:
+        _diff_tag_field(old_value, new_value, path=path, changes=changes)
+        return True
     return False
 
 
@@ -240,9 +246,73 @@ def _diff_obligation_field(
 
 def _obligation_label(obligation: Mapping[str, object] | None) -> str:
     if obligation is None:
-        return "?"
+        return _UNKNOWN_LABEL
     name = obligation.get("name")
-    return name if isinstance(name, str) else "?"
+    return name if isinstance(name, str) else _UNKNOWN_LABEL
+
+
+def _diff_tag_field(
+    old_value: object,
+    new_value: object,
+    *,
+    path: tuple[str, ...],
+    changes: list[FieldChange],
+) -> None:
+    for old_tag, new_tag in pair_tags(old_value, new_value):
+        display = _tag_display(new_tag if old_tag is None else old_tag)
+        if old_tag is not None and new_tag is not None:
+            _diff_dicts(
+                old_tag,
+                new_tag,
+                path=path + (display,),
+                show_all=False,
+                changes=changes,
+            )
+        elif new_tag is None:
+            changes.append(
+                FieldChange(
+                    path=path,
+                    kind=_KIND_REMOVE,
+                    old=_tag_summary(old_tag),
+                    new=None,
+                )
+            )
+        else:
+            changes.append(
+                FieldChange(
+                    path=path,
+                    kind=_KIND_ADD,
+                    old=None,
+                    new=_tag_summary(new_tag),
+                )
+            )
+
+
+def _tag_summary(tag: Mapping[str, object] | None) -> TagSummary:
+    if tag is None:
+        return TagSummary(key=None, label=None)
+    key = tag.get("key")
+    label = tag.get("label")
+    return TagSummary(
+        key=key if isinstance(key, str) else None,
+        label=label if isinstance(label, str) else None,
+    )
+
+
+def _tag_display(tag: Mapping[str, object] | None) -> str:
+    if tag is None:
+        return _UNKNOWN_LABEL
+    key = tag.get("key")
+    label = tag.get("label")
+    key_str = key if isinstance(key, str) else None
+    label_str = label if isinstance(label, str) else None
+    if key_str is not None and label_str is not None:
+        return f"{key_str} ({label_str.upper()})"
+    if key_str is not None:
+        return key_str
+    if label_str is not None:
+        return label_str
+    return _UNKNOWN_LABEL
 
 
 def _diff_values(

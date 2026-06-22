@@ -8,11 +8,14 @@ from nextlabs_sdk._cli._diff._engine import diff_payloads
 from nextlabs_sdk._cli._diff._identity import (
     COMPONENT_SLOT_FIELDS,
     OBLIGATION_FIELDS,
+    TAG_FIELDS,
     ComponentSummary,
     ObligationSummary,
+    TagSummary,
     flatten_slot,
     identity_key,
     pair_obligations,
+    pair_tags,
 )
 
 
@@ -317,3 +320,58 @@ def test_extra_obligation_in_colliding_group_is_reported_as_added():
 
     assert [change.kind for change in changes] == ["add"]
     assert changes[0].new == ObligationSummary(name="data_masking")
+
+
+def test_tag_identity_key_prefers_key_then_label():
+    """Given tags with key, with only label, and with neither.
+
+    When resolving each tag's identity key for schema type 'Tag'.
+    Then key wins, label is the fallback, and neither yields None.
+    """
+    # given / when / then
+    assert identity_key("Tag", {"key": "adr6", "label": "ADR6"}) == ("key", "adr6")
+    assert identity_key("Tag", {"label": "ADR6"}) == ("label", "ADR6")
+    assert identity_key("Tag", {}) is None
+
+
+def test_tag_fields_contains_tags_alias():
+    """Given the tag field registry.
+
+    When inspecting it.
+    Then it contains exactly the tags field alias.
+    """
+    assert TAG_FIELDS == frozenset(("tags",))
+
+
+def test_tag_summary_holds_key_and_label():
+    """Given a tag identity summary.
+
+    When constructing a TagSummary.
+    Then key and label are stored as-is.
+    """
+    # given / when
+    summary = TagSummary(key="adr6", label="ADR6")
+
+    # then
+    assert summary.key == "adr6"
+    assert summary.label == "ADR6"
+
+
+def test_pair_tags_matches_by_key_falling_back_to_label():
+    """Given two tag lists matched by key and by label.
+
+    When pairing them.
+    Then key-identity and label-identity tags are each paired exactly once.
+    """
+    # given
+    old = [{"key": "adr6", "label": "ADR6"}, {"label": "STATUS"}]
+    new = [{"key": "adr6", "label": "ADR6"}, {"label": "STATUS", "status": "ON"}]
+
+    # when
+    pairs = pair_tags(old, new)
+
+    # then
+    assert len(pairs) == 2
+    for old_tag, new_tag in pairs:
+        assert old_tag is not None
+        assert new_tag is not None

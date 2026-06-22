@@ -20,6 +20,7 @@ _ObligationPair: TypeAlias = "tuple[_Element | None, _Element | None]"
 _ObligationGroups: TypeAlias = "dict[Hashable, list[_Element]]"
 
 _NAME_FIELD = "name"
+_TAG_SCHEMA_TYPE = "Tag"
 
 COMPONENT_SLOT_FIELDS: frozenset[str] = frozenset(
     (
@@ -32,6 +33,8 @@ COMPONENT_SLOT_FIELDS: frozenset[str] = frozenset(
 )
 
 OBLIGATION_FIELDS: frozenset[str] = frozenset(("allowObligations", "denyObligations"))
+
+TAG_FIELDS: frozenset[str] = frozenset(("tags",))
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,14 @@ class ComponentSummary:
     version: int | None
 
 
+@dataclass(frozen=True)
+class TagSummary:
+    """A tag reduced to its identity fields for display."""
+
+    key: str | None
+    label: str | None
+
+
 def _component_dto_key(element: Mapping[str, object]) -> Hashable | None:
     component_id = element.get("id")
     if component_id is not None:
@@ -60,9 +71,20 @@ def _component_dto_key(element: Mapping[str, object]) -> Hashable | None:
     return None
 
 
+def _tag_key(element: Mapping[str, object]) -> Hashable | None:
+    key = element.get("key")
+    if key is not None:
+        return ("key", key)
+    label = element.get("label")
+    if label is not None:
+        return ("label", label)
+    return None
+
+
 _KEY_RESOLVERS = MappingProxyType(
     {
         "ComponentDTORes": _component_dto_key,
+        _TAG_SCHEMA_TYPE: _tag_key,
     }
 )
 
@@ -152,6 +174,36 @@ def pair_obligations(old_value: object, new_value: object) -> list[_ObligationPa
     return pairs
 
 
+def pair_tags(old_value: object, new_value: object) -> list[_ObligationPair]:
+    """Pair old and new tags for comparison by identity key.
+
+    Tags are matched by ``key``, falling back to ``label``. Elements with no
+    resolvable identity key are silently skipped.
+
+    Args:
+        old_value: The alias-keyed baseline tag list.
+        new_value: The alias-keyed revised tag list.
+
+    Returns:
+        A list of ``(old, new)`` pairs; either side is ``None`` when there is
+        no counterpart in that version.
+    """
+    old_idx = {
+        identity_key(_TAG_SCHEMA_TYPE, el): el
+        for el in _as_mappings(old_value)
+        if identity_key(_TAG_SCHEMA_TYPE, el) is not None
+    }
+    new_idx = {
+        identity_key(_TAG_SCHEMA_TYPE, el): el
+        for el in _as_mappings(new_value)
+        if identity_key(_TAG_SCHEMA_TYPE, el) is not None
+    }
+    pairs: list[_ObligationPair] = []
+    for tag_key in _ordered_keys(old_idx, new_idx):
+        pairs.append((old_idx.get(tag_key), new_idx.get(tag_key)))
+    return pairs
+
+
 def _group_obligations(value: object) -> _ObligationGroups:  # noqa: WPS110
     grouped: _ObligationGroups = {}
     for element in _as_mappings(value):
@@ -160,7 +212,7 @@ def _group_obligations(value: object) -> _ObligationGroups:  # noqa: WPS110
 
 
 def _ordered_keys(
-    old_groups: _ObligationGroups, new_groups: _ObligationGroups
+    old_groups: Mapping[Hashable, object], new_groups: Mapping[Hashable, object]
 ) -> list[Hashable]:
     ordered = list(old_groups)
     for key in new_groups:
