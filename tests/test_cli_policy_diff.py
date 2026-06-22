@@ -16,6 +16,7 @@ from nextlabs_sdk.cloudaz import (
     PolicyHistoryEntry,
     PolicyRevision,
     PolicyService,
+    Tag,
 )
 
 runner = CliRunner()
@@ -497,3 +498,45 @@ def test_scalar_effect_type_change_renders_old_and_new_lines(
     assert result.exit_code == 0
     assert "- ALLOW" in output
     assert "+ DENY" in output
+
+
+def _revision_with_tags(revision: int, tags: list[Tag]) -> PolicyRevision:
+    return PolicyRevision(
+        id=10,
+        revision=revision,
+        action_type="DE",
+        policy_detail=Policy(
+            id=82,
+            name="P",
+            status="DRAFT",
+            effect_type="ALLOW",
+            tags=tags,
+        ),
+    )
+
+
+def test_tag_add_and_remove_render_as_glyph_lines(stub: tuple[Any, Any]) -> None:
+    """Given two revisions where one tag is added and another is removed, when
+    running diff, then a '+' line shows the added tag and a '-' line shows the
+    removed tag, both in 'key (LABEL)' format.
+
+    Given two revisions differing in tags,
+    when running the diff command,
+    then the output contains a '+' line for the added tag and a '-' line for the removed tag.
+    """
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_tags(2, [Tag(id=1, key="old1", label="OLD1")])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_tags(3, [Tag(id=2, key="adr6", label="ADR6")])
+    )
+    # when
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "+ adr6 (ADR6)" in output
+    assert "- old1 (OLD1)" in output

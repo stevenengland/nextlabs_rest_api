@@ -6,6 +6,7 @@ from io import StringIO
 
 from rich.console import Console
 
+from nextlabs_sdk._cli._diff._identity import TagSummary
 from nextlabs_sdk._cli._diff._inline import highlight_inline, highlight_pair
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
 from nextlabs_sdk._cli._diff._render_semantic import render_semantic
@@ -156,3 +157,71 @@ def test_render_semantic_empty_and_none_use_placeholders():
     assert "(none)" in output
     assert "text" in output
     assert "OBL" in output
+
+
+def test_render_semantic_shows_tag_glyph_lines():
+    """Test that added and removed tags render as 'key (LABEL)' glyph lines.
+
+    Given a delta adding one tag and removing another,
+    when rendering to a captured console,
+    then a '+' line shows the added tag and a '-' line the removed tag, both as 'key (LABEL)'.
+    """
+    # given
+    result = DiffResult(
+        changes=(
+            FieldChange(
+                path=("tags",),
+                kind="add",
+                old=None,
+                new=TagSummary(key="adr6", label="ADR6"),
+            ),
+            FieldChange(
+                path=("tags",),
+                kind="remove",
+                old=TagSummary(key="old1", label="OLD1"),
+                new=None,
+            ),
+        ),
+        hidden_noise_count=0,
+    )
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
+    # when
+    with console.capture() as capture:
+        render_semantic(result, console=console)
+    output = capture.get()
+    # then
+    assert "+ adr6 (ADR6)" in output
+    assert "- old1 (OLD1)" in output
+
+
+def test_render_semantic_nests_inplace_tag_field_change():
+    """Test that an in-place tag field change nests a two-line scalar diff.
+
+    Given a delta with a scalar change under a tag's path,
+    when rendering,
+    then both the old and new field values appear on '-'/'+' lines.
+    """
+    # given
+    result = DiffResult(
+        changes=(
+            FieldChange(
+                path=("tags", "adr6 (ADR6)", "status"),
+                kind="change",
+                old="ON",
+                new="OFF",
+            ),
+        ),
+        hidden_noise_count=0,
+    )
+    console = Console(
+        file=StringIO(), force_terminal=False, width=120, color_system=None
+    )
+    # when
+    with console.capture() as capture:
+        render_semantic(result, console=console)
+    output = capture.get()
+    # then
+    assert "- ON" in output
+    assert "+ OFF" in output
