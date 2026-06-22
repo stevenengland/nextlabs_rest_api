@@ -540,3 +540,52 @@ def test_tag_add_and_remove_render_as_glyph_lines(stub: tuple[Any, Any]) -> None
     assert result.exit_code == 0
     assert "+ adr6 (ADR6)" in output
     assert "- old1 (OLD1)" in output
+
+
+def test_diff_json_emits_per_element_tag_changes(stub: tuple[Any, Any]) -> None:
+    """Given two revisions whose tags differ by one added tag, when running diff
+    with --output json, then the changes array contains a per-element tag entry
+    with path[0] == 'tags' and new carrying key and label."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(82).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        PolicyRevision(
+            id=10,
+            revision=2,
+            action_type="DE",
+            policy_detail=Policy(
+                id=82,
+                name="P",
+                status="DRAFT",
+                effect_type="ALLOW",
+                tags=[],
+            ),
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        PolicyRevision(
+            id=10,
+            revision=3,
+            action_type="DE",
+            policy_detail=Policy(
+                id=82,
+                name="P",
+                status="DRAFT",
+                effect_type="ALLOW",
+                tags=[Tag(key="adr6", label="ADR6")],
+            ),
+        )
+    )
+    # when
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "diff", "82"]
+    )
+    # then
+    assert result.exit_code == 0
+    payload = json.loads(strip_ansi(result.output))
+    tag_entries = [
+        c for c in payload["changes"] if c["path"] and c["path"][0] == "tags"
+    ]
+    assert tag_entries
+    assert tag_entries[0]["new"] == {"key": "adr6", "label": "ADR6"}
