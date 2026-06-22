@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -15,6 +16,7 @@ from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
 from nextlabs_sdk._cli._diff import (
     _engine,
     _format,
+    _models,
     _render_semantic,
     _render_unified,
 )
@@ -24,6 +26,7 @@ from nextlabs_sdk._cli._diff._revision_select import (
 )
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
+from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._payload_loader import (
     load_payload,
     reject_data_flag,
@@ -622,6 +625,13 @@ def diff(  # noqa: WPS211
         _format.DiffFormat,
         typer.Option("--format", help="Human renderer: semantic (default) or unified"),
     ] = _format.DiffFormat.SEMANTIC,
+    exit_code: Annotated[
+        bool,
+        typer.Option(
+            "--exit-code",
+            help="Exit non-zero when post-filter differences exist (default 0)",
+        ),
+    ] = False,
 ) -> None:
     """Show a diff between two revisions of a policy."""
     cli_ctx: CliContext = ctx.obj
@@ -635,13 +645,17 @@ def diff(  # noqa: WPS211
         raise typer.Exit(code=1) from exc
     old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)
     new_payload = new.policy_detail.model_dump(mode="json", by_alias=True)
-    if diff_format is _format.DiffFormat.UNIFIED:
+    diff_result = _engine.diff_payloads(old_payload, new_payload, show_all=show_all)
+    if cli_ctx.output_format is OutputFormat.JSON:
+        print(json.dumps(_models.diff_result_to_dict(diff_result), indent=2))
+    elif diff_format is _format.DiffFormat.UNIFIED:
         _render_unified.render_unified(
             old_payload,
             new_payload,
             labels=(f"revision {old.revision}", f"revision {new.revision}"),
             show_all=show_all,
         )
-        return
-    diff_result = _engine.diff_payloads(old_payload, new_payload, show_all=show_all)
-    _render_semantic.render_semantic(diff_result)
+    else:
+        _render_semantic.render_semantic(diff_result)
+    if exit_code and diff_result.changes:
+        raise typer.Exit(code=1)
