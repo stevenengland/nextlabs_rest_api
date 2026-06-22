@@ -22,6 +22,7 @@ from nextlabs_sdk._cli._diff import (
 )
 from nextlabs_sdk._cli._diff._revision_select import (
     InsufficientRevisionsError,
+    UnknownRevisionError,
     select_revisions,
 )
 from nextlabs_sdk._cli._error_handler import cli_error_handler
@@ -641,7 +642,7 @@ def diff(  # noqa: WPS211
         old, new = select_revisions(
             client.policies, policy_id, from_rev=from_rev, to_rev=to_rev
         )
-    except InsufficientRevisionsError as exc:
+    except (InsufficientRevisionsError, UnknownRevisionError) as exc:
         print_error(str(exc))
         raise typer.Exit(code=1) from exc
     old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)

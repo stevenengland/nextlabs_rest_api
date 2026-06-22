@@ -204,10 +204,16 @@ def test_diff_from_to_override_fetches_those_revisions(stub: tuple[Any, Any]) ->
     """Given explicit from/to revisions, when overriding both sides, then it
     succeeds using the overridden revisions."""
     _, mock_policies = stub
-    when(mock_policies).get_revision(10, 1).thenReturn(
+    when(mock_policies).list_history(10).thenReturn(
+        [
+            PolicyHistoryEntry(id=21, revision=1, action_type="DR"),
+            PolicyHistoryEntry(id=24, revision=4, action_type="DR"),
+        ]
+    )
+    when(mock_policies).get_revision(21, 1).thenReturn(
         _revision(1, description="allow read access")
     )
-    when(mock_policies).get_revision(10, 4).thenReturn(
+    when(mock_policies).get_revision(24, 4).thenReturn(
         _revision(4, description="allow write access")
     )
     result = runner.invoke(
@@ -229,6 +235,22 @@ def test_diff_too_few_revisions_exits_nonzero_without_traceback(
     output = strip_ansi(result.output)
     assert "Traceback" not in output
     assert "fewer than two" in output.lower()
+
+
+def test_diff_unknown_override_revision_exits_nonzero_without_traceback(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given an overridden revision absent from history, when running diff, then
+    it exits non-zero with a clear message and no traceback."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--from", "2", "--to", "9"]
+    )
+    assert result.exit_code != 0
+    output = strip_ansi(result.output)
+    assert "Traceback" not in output
+    assert "9" in output
 
 
 def _obligation(name: str, params: dict[str, str]) -> dict[str, Any]:
