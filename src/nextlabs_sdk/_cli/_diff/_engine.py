@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Literal
 
 from nextlabs_sdk._cli._diff._identity import (
     COMPONENT_SLOT_FIELDS,
     OBLIGATION_FIELDS,
     TAG_FIELDS,
-    ComponentSummary,
     ObligationSummary,
-    flatten_slot,
     pair_obligations,
 )
 from nextlabs_sdk._cli._diff._identity import TagSummary, pair_tags
 from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
+from nextlabs_sdk._cli._diff._slot import compare_slot
 
 _KIND_ADD: Literal["add"] = "add"
 _KIND_REMOVE: Literal["remove"] = "remove"
@@ -181,30 +181,8 @@ def _diff_component_slot(
     path: tuple[str, ...],
     changes: list[FieldChange],
 ) -> None:
-    old_components = flatten_slot(old_value)
-    new_components = flatten_slot(new_value)
-    for key in old_components.keys() | new_components.keys():
-        change = _classify_component(
-            path, old_components.get(key), new_components.get(key)
-        )
-        if change is not None:
-            changes.append(change)
-
-
-def _classify_component(
-    path: tuple[str, ...],
-    old_summary: ComponentSummary | None,
-    new_summary: ComponentSummary | None,
-) -> FieldChange | None:
-    if old_summary is not None and new_summary is not None:
-        if old_summary == new_summary:
-            return None
-        return FieldChange(
-            path=path, kind=_KIND_CHANGE, old=old_summary, new=new_summary
-        )
-    if new_summary is not None:
-        return FieldChange(path=path, kind=_KIND_ADD, old=None, new=new_summary)
-    return FieldChange(path=path, kind=_KIND_REMOVE, old=old_summary, new=None)
+    for change in compare_slot(old_value, new_value):
+        changes.append(replace(change, path=path + change.path))
 
 
 def _diff_obligation_field(

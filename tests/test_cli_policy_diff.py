@@ -86,6 +86,23 @@ def _revision_with_subjects(
     )
 
 
+def _revision_with_subject_groups(
+    revision: int, groups: list[dict[str, Any]]
+) -> PolicyRevision:
+    policy = Policy.model_validate(
+        {
+            "id": 82,
+            "name": "P",
+            "status": "DRAFT",
+            "effectType": "ALLOW",
+            "subjectComponents": groups,
+        }
+    )
+    return PolicyRevision(
+        id=10, revision=revision, action_type="DE", policy_detail=policy
+    )
+
+
 def test_edited_component_renders_single_modified_entry(stub: tuple[Any, Any]) -> None:
     """Given two revisions where a subject component's version is bumped, when
     running diff, then it shows a single modified entry by name and id, not a
@@ -684,3 +701,72 @@ def test_diff_unified_format_unaffected_by_tag_changes(stub: tuple[Any, Any]) ->
     assert result.exit_code == 0
     assert "@@" in output
     assert any(line.startswith("+") and "write" in line for line in output.splitlines())
+
+
+def _grouped(operator: str, *components: dict[str, Any]) -> dict[str, Any]:
+    return {"operator": operator, "components": list(components)}
+
+
+def test_diff_reports_grouping_change_when_operator_flips(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose subject group operator flips with identical
+    members, when running diff, then a grouping change block is shown rather
+    than a membership change."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subject_groups(
+            2, [_grouped("OR", _component(5, "Engineers"), _component(6, "Ops"))]
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subject_groups(
+            3, [_grouped("AND", _component(5, "Engineers"), _component(6, "Ops"))]
+        )
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "grouping:" in output
+    assert "was:  [OR : Engineers, Ops]" in output
+    assert "now:  [AND: Engineers, Ops]" in output
+
+
+def test_diff_grouping_change_flips_exit_code(stub: tuple[Any, Any]) -> None:
+    """Given a subject group operator flip, when running diff with
+    --exit-code, then the command exits non-zero."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subject_groups(2, [_grouped("OR", _component(5, "Engineers"))])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subject_groups(3, [_grouped("AND", _component(5, "Engineers"))])
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--exit-code"]
+    )
+    assert result.exit_code == 1
+
+
+def test_diff_grouping_change_appears_in_unified_format(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given a subject group operator flip, when running diff with --format
+    unified, then the operator drift surfaces in the unified output."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subject_groups(2, [_grouped("OR", _component(5, "Engineers"))])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subject_groups(3, [_grouped("AND", _component(5, "Engineers"))])
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert any(line.startswith("-") and "OR" in line for line in output.splitlines())
+    assert any(line.startswith("+") and "AND" in line for line in output.splitlines())
