@@ -19,6 +19,8 @@ _KIND_ADD = "add"
 _UNKNOWN = "?"
 _POLICY_LABEL = "Policy:"
 _ARROW = "\u2192"
+_GROUPING_SEGMENT = "grouping"
+_CONTINUATION_PREFIX = "AND "
 
 
 def _format_component(summary: ComponentSummary | None) -> str:
@@ -115,6 +117,25 @@ def _render_tag_change(con: Console, change: FieldChange) -> None:
         con.print(f"  {_GLYPH_REMOVE} {display}")
 
 
+def _render_grouping_change(con: Console, change: FieldChange) -> None:
+    """Print a slot grouping change as aligned ``was``/``now`` structure blocks.
+
+    The first group of each revision prints inline after its label; each
+    continuation group (already carrying the implicit ``AND`` prefix) prints on
+    its own line, indented so every group's opening bracket aligns.
+    """
+    con.print(f"  {_GLYPH_CHANGE} {_GROUPING_SEGMENT}:")
+    _render_structure_block(con, "was", change.old)
+    _render_structure_block(con, "now", change.new)
+
+
+def _render_structure_block(con: Console, label: str, structure: object) -> None:
+    lines = str(structure).split("\n")
+    con.print(f"      {label}:  {lines[0]}")
+    for line in lines[1:]:
+        con.print(f"        {line}")
+
+
 def _render_change(con: Console, field: str, change: FieldChange) -> None:
     """Print a single FieldChange row to *con*.
 
@@ -123,6 +144,13 @@ def _render_change(con: Console, field: str, change: FieldChange) -> None:
         field: Dot-joined path string for display.
         change: The field change to render.
     """
+    if change.path and change.path[-1] == _GROUPING_SEGMENT:
+        _render_grouping_change(con, change)
+    else:
+        _render_typed_change(con, field, change)
+
+
+def _render_typed_change(con: Console, field: str, change: FieldChange) -> None:
     if isinstance(change.old, ObligationSummary) or isinstance(
         change.new, ObligationSummary
     ):
