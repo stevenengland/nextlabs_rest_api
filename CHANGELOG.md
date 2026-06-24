@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.1 - 2026-06-23
+
+### nextlabs-sdk 0.12.1
+
+#### Bug Fixes
+
+- fix: remove typer._click private-internal coupling from _error_handler @stevenengland ([#218](https://github.com/stevenengland/nextlabs_rest_api/pull/218))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.12.0...0.12.1
+
 ## 0.12.0 - 2026-06-22
 
 ### nextlabs-sdk 0.12.0
