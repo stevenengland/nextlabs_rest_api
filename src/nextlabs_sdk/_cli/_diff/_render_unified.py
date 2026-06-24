@@ -4,24 +4,44 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from difflib import unified_diff
 
 from rich.console import Console
 from rich.markup import escape
 
-from nextlabs_sdk._cli._diff._engine import canonicalise, diff_payloads
+from nextlabs_sdk._cli._diff._engine import canonicalise
 from nextlabs_sdk._cli._diff._identity import COMPONENT_SLOT_FIELDS
-from nextlabs_sdk._cli._diff._models import DiffHeader, FieldChange
+from nextlabs_sdk._cli._diff._models import DiffHeader, DiffResult, FieldChange
 
 _REVISION_LABEL = "revision"
 _OPERATOR_FIELD = "operator"
 _GROUPING_SEGMENT = "grouping"
 
 
+@dataclass(frozen=True)
+class UnifiedDiffInput:
+    """Inputs for a unified render of one policy revision pair.
+
+    Bundles the raw payloads (rendered as the JSON body), the identity header
+    (labels), and the engine-computed delta (the source of grouping drift), so
+    the renderer never recomputes the comparison it is handed.
+
+    Attributes:
+        old: The baseline alias-keyed policy payload.
+        new: The revised alias-keyed policy payload.
+        header: The policy identity and the compared revision numbers.
+        diff_result: The structured delta already computed for this pair.
+    """
+
+    old: Mapping[str, object]
+    new: Mapping[str, object]
+    header: DiffHeader
+    diff_result: DiffResult
+
+
 def render_unified(
-    old: Mapping[str, object],
-    new: Mapping[str, object],
-    header: DiffHeader,
+    diff: UnifiedDiffInput,
     *,
     show_all: bool = False,
     console: Console | None = None,
@@ -37,20 +57,19 @@ def render_unified(
     parity with the semantic format and ``--exit-code``.
 
     Args:
-        old: The baseline alias-keyed policy payload.
-        new: The revised alias-keyed policy payload.
-        header: The policy identity and compared revisions; the policy row is
-            printed first and the ``--- / +++`` labels derive from its revision
-            numbers.
+        diff: The revision payloads, identity header, and engine-computed delta
+            to render; grouping drift is read from ``diff.diff_result`` rather
+            than recomputed, so the renderer shares one comparison source.
         show_all: When True, reveal ordering and noise differences and keep raw
             group operators in the body.
         console: Rich Console to print to; defaults to a new Console().
     """
     con = Console() if console is None else console
+    header = diff.header
     con.print(f"Policy: {header.policy_name} (id={header.policy_id})")
     con.print()
-    old_lines = _canonical_lines(old, show_all=show_all)
-    new_lines = _canonical_lines(new, show_all=show_all)
+    old_lines = _canonical_lines(diff.old, show_all=show_all)
+    new_lines = _canonical_lines(diff.new, show_all=show_all)
     from_label = f"{_REVISION_LABEL} {header.from_rev}"
     to_label = f"{_REVISION_LABEL} {header.to_rev}"
     for line in unified_diff(
@@ -62,16 +81,14 @@ def render_unified(
     ):
         con.print(_colourise(line), highlight=False)
     if not show_all:
-        for change in _grouping_changes(old, new):
+        for change in _grouping_changes(diff.diff_result):
             _render_grouping_change(con, change)
 
 
-def _grouping_changes(
-    old: Mapping[str, object], new: Mapping[str, object]
-) -> list[FieldChange]:
+def _grouping_changes(diff_result: DiffResult) -> list[FieldChange]:
     return [
         change
-        for change in diff_payloads(old, new).changes
+        for change in diff_result.changes
         if change.path and change.path[-1] == _GROUPING_SEGMENT
     ]
 

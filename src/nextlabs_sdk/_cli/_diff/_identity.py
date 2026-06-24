@@ -10,7 +10,7 @@ matched identically.
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable, Iterator, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TypeAlias
@@ -106,19 +106,32 @@ def identity_key(schema_type: str, element: Mapping[str, object]) -> Hashable | 
     return resolver(element)
 
 
-def _collect_component(
+def walk_group_components(
+    group: Mapping[str, object],
+) -> Iterator[Mapping[str, object]]:
+    """Yield every component in a group, descending into nested subComponents.
+
+    This is the single traversal of the component-group shape (``components``
+    holding ``ComponentDTORes`` elements, each reachable sub-tree under
+    ``subComponents``). Callers that key components by identity or summarise
+    them share this walk so schema-shape changes touch one place.
+
+    Args:
+        group: An alias-keyed component group (a mapping with ``components``).
+
+    Yields:
+        Each component mapping in the group, including nested subcomponents.
+    """
+    for component in _as_mappings(group.get("components")):
+        yield from _walk_component(component)
+
+
+def _walk_component(
     component: Mapping[str, object],
-    collected: dict[Hashable, ComponentSummary],
-) -> None:
-    key = identity_key("ComponentDTORes", component)
-    if key is not None and key not in collected:
-        collected[key] = ComponentSummary(
-            component_id=_as_int(component.get("id")),
-            name=_as_str(component.get("name")),
-            version=_as_int(component.get("version")),
-        )
+) -> Iterator[Mapping[str, object]]:
+    yield component
     for sub in _as_mappings(component.get("subComponents")):
-        _collect_component(sub, collected)
+        yield from _walk_component(sub)
 
 
 def flatten_slot(slot_value: object) -> dict[Hashable, ComponentSummary]:
@@ -136,8 +149,14 @@ def flatten_slot(slot_value: object) -> dict[Hashable, ComponentSummary]:
     """
     collected: dict[Hashable, ComponentSummary] = {}
     for group in _as_mappings(slot_value):
-        for component in _as_mappings(group.get("components")):
-            _collect_component(component, collected)
+        for component in walk_group_components(group):
+            key = identity_key("ComponentDTORes", component)
+            if key is not None and key not in collected:
+                collected[key] = ComponentSummary(
+                    component_id=_as_int(component.get("id")),
+                    name=_as_str(component.get("name")),
+                    version=_as_int(component.get("version")),
+                )
     return collected
 
 
