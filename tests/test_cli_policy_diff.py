@@ -770,3 +770,53 @@ def test_diff_grouping_change_appears_in_unified_format(
     output = strip_ansi(result.output)
     assert any(line.startswith("-") and "OR" in line for line in output.splitlines())
     assert any(line.startswith("+") and "AND" in line for line in output.splitlines())
+
+
+def test_diff_unified_renders_structured_grouping_block(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given a subject group operator flip, when running diff with --format
+    unified, then the grouping change renders as a structured block keyed by
+    the slot's grouping path rather than as a raw operator JSON line."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subject_groups(2, [_grouped("OR", _component(5, "Engineers"))])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subject_groups(3, [_grouped("AND", _component(5, "Engineers"))])
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "subjectComponents.grouping" in output
+    assert any(line.startswith("-") and "[OR" in line for line in output.splitlines())
+    assert any(line.startswith("+") and "[AND" in line for line in output.splitlines())
+    assert '"operator"' not in output
+
+
+def test_diff_unified_ignores_cosmetic_operator_change_matching_semantic(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose group operator differs only in case and
+    trailing whitespace (semantically identical), when running diff with
+    --format unified, then no operator change surfaces, matching the semantic
+    format which reports no change and a zero exit code."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_subject_groups(2, [_grouped("OR", _component(5, "Engineers"))])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_subject_groups(3, [_grouped("or ", _component(5, "Engineers"))])
+    )
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified", "--exit-code"],
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "operator" not in output
+    assert "grouping" not in output
