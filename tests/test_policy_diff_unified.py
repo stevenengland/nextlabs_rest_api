@@ -6,7 +6,10 @@ from typing import Any
 from rich.console import Console
 from strip_ansi import strip_ansi
 
+from nextlabs_sdk._cli._diff._models import DiffHeader
 from nextlabs_sdk._cli._diff._render_unified import render_unified
+
+_HEADER = DiffHeader(policy_name="P", policy_id=82, from_rev=2, to_rev=3)
 
 
 def _render(old: dict[str, Any], new: dict[str, Any], **kwargs: Any) -> str:
@@ -15,7 +18,7 @@ def _render(old: dict[str, Any], new: dict[str, Any], **kwargs: Any) -> str:
     render_unified(
         old,
         new,
-        labels=("revision 2", "revision 3"),
+        _HEADER,
         console=console,
         **kwargs,
     )
@@ -74,3 +77,27 @@ def test_show_all_reveals_noise_field_in_unified_diff() -> None:
     output = _render(old, new, show_all=True)
     assert "deploymentTime" in output
     assert _body_change_lines(output) != []
+
+
+def test_header_renders_policy_row_and_derives_revision_labels() -> None:
+    """Given a DiffHeader and two differing payloads, when rendering the unified
+    diff, then a single 'Policy: <name> (id=<id>)' row precedes the diff and the
+    git --- / +++ labels are derived from the header's revision numbers."""
+    old = {"name": "P", "description": "allow read access"}
+    new = {"name": "P", "description": "allow write access"}
+    output = _render(old, new)
+    lines = output.splitlines()
+    assert lines[0] == "Policy: P (id=82)"
+    assert lines[1] == ""
+    assert "--- revision 2" in output
+    assert "+++ revision 3" in output
+
+
+def test_header_renders_when_revisions_are_identical() -> None:
+    """Given two identical payloads, when rendering the unified diff, then the
+    'Policy:' row is still emitted where the renderer previously printed
+    nothing."""
+    payload = {"name": "P", "description": "allow read access"}
+    output = _render(dict(payload), dict(payload))
+    assert output.splitlines()[0] == "Policy: P (id=82)"
+    assert _body_change_lines(output) == []

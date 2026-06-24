@@ -648,16 +648,22 @@ def diff(  # noqa: WPS211
     old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)
     new_payload = new.policy_detail.model_dump(mode="json", by_alias=True)
     diff_result = _engine.diff_payloads(old_payload, new_payload, show_all=show_all)
+    header = _models.DiffHeader(
+        policy_name=new.policy_detail.name,
+        policy_id=new.policy_detail.id,
+        from_rev=old.revision,
+        to_rev=new.revision,
+    )
     if cli_ctx.output_format is OutputFormat.JSON:
         print(json.dumps(_models.diff_result_to_dict(diff_result), indent=2))
     elif diff_format is _format.DiffFormat.UNIFIED:
         _render_unified.render_unified(
             old_payload,
             new_payload,
-            labels=(f"revision {old.revision}", f"revision {new.revision}"),
+            header,
             show_all=show_all,
         )
     else:
-        _render_semantic.render_semantic(diff_result)
+        _render_semantic.render_semantic(diff_result, header)
     if exit_code and diff_result.changes:
         raise typer.Exit(code=1)
