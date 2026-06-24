@@ -24,6 +24,16 @@ class DiffResult:
     hidden_noise_count: int
 
 
+@dataclass(frozen=True)
+class DiffHeader:
+    """Identity of a policy diff: the policy and the two compared revisions."""
+
+    policy_name: str
+    policy_id: int
+    from_rev: int
+    to_rev: int
+
+
 def _to_jsonable(value: object) -> object:  # noqa: WPS110
     """Convert a change value into a JSON-serialisable structure.
 

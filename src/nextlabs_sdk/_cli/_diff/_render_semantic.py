@@ -10,13 +10,15 @@ from nextlabs_sdk._cli._diff._identity import (
     TagSummary,
 )
 from nextlabs_sdk._cli._diff._inline import highlight_pair
-from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
+from nextlabs_sdk._cli._diff._models import DiffHeader, DiffResult, FieldChange
 
 _GLYPH_ADD = "[green]+[/green]"
 _GLYPH_REMOVE = "[red]-[/red]"
 _GLYPH_CHANGE = "[yellow]~[/yellow]"
 _KIND_ADD = "add"
 _UNKNOWN = "?"
+_POLICY_LABEL = "Policy:"
+_ARROW = "\u2192"
 
 
 def _format_component(summary: ComponentSummary | None) -> str:
@@ -135,7 +137,9 @@ def _render_change(con: Console, field: str, change: FieldChange) -> None:
         _render_scalar_change(con, field, change)
 
 
-def render_semantic(diff: DiffResult, *, console: Console | None = None) -> None:
+def render_semantic(
+    diff: DiffResult, header: DiffHeader, *, console: Console | None = None
+) -> None:
     """Render a DiffResult as a Rich semantic report.
 
     In-place scalar edits show only the changed words highlighted.
@@ -143,10 +147,16 @@ def render_semantic(diff: DiffResult, *, console: Console | None = None) -> None
 
     Args:
         diff: The structured diff result to render.
+        header: The policy identity and compared revisions, printed as two
+            lines above the change sections.
         console: Rich Console to print to; defaults to a new Console().
     """
     con = Console() if console is None else console
-    con.print("[bold]Policy diff[/bold]")
+    con.print(
+        f"[bold]{_POLICY_LABEL}[/bold] {header.policy_name} (id={header.policy_id})"
+    )
+    con.print(f"Comparing revisions {header.from_rev} {_ARROW} {header.to_rev}")
+    con.print()
 
     sections: dict[str, list[FieldChange]] = {}
     for change in diff.changes:

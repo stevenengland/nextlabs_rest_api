@@ -10,13 +10,16 @@ from rich.console import Console
 from rich.markup import escape
 
 from nextlabs_sdk._cli._diff._engine import canonicalise
+from nextlabs_sdk._cli._diff._models import DiffHeader
+
+_REVISION_LABEL = "revision"
 
 
 def render_unified(
     old: Mapping[str, object],
     new: Mapping[str, object],
+    header: DiffHeader,
     *,
-    labels: tuple[str, str],
     show_all: bool = False,
     console: Console | None = None,
 ) -> None:
@@ -29,14 +32,19 @@ def render_unified(
     Args:
         old: The baseline alias-keyed policy payload.
         new: The revised alias-keyed policy payload.
-        labels: The ``(from, to)`` labels for the diff header.
+        header: The policy identity and compared revisions; the policy row is
+            printed first and the ``--- / +++`` labels derive from its revision
+            numbers.
         show_all: When True, reveal ordering and noise differences.
         console: Rich Console to print to; defaults to a new Console().
     """
     con = Console() if console is None else console
+    con.print(f"Policy: {header.policy_name} (id={header.policy_id})")
+    con.print()
     old_lines = _canonical_lines(old, show_all=show_all)
     new_lines = _canonical_lines(new, show_all=show_all)
-    from_label, to_label = labels
+    from_label = f"{_REVISION_LABEL} {header.from_rev}"
+    to_label = f"{_REVISION_LABEL} {header.to_rev}"
     for line in unified_diff(
         old_lines,
         new_lines,

@@ -162,8 +162,52 @@ def test_diff_format_semantic_renders_semantic_report(stub: tuple[Any, Any]) -> 
     )
     assert result.exit_code == 0
     output = strip_ansi(result.output)
-    assert "Policy diff" in output
+    assert "Policy diff" not in output
     assert "write" in output
+
+
+def test_diff_semantic_shows_identity_header(stub: tuple[Any, Any]) -> None:
+    """Given two deployed revisions, when running diff in the default semantic
+    format, then the output names the policy and the two compared revisions
+    above the change sections."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Policy: P (id=82)" in output
+    assert "Comparing revisions 2 \u2192 3" in output
+    assert output.index("Policy: P (id=82)") < output.index("description")
+
+
+def test_diff_unified_shows_policy_row_and_git_revision_labels(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two deployed revisions, when running diff with --format unified,
+    then the output carries the policy identity row and the git revision labels
+    derived from the compared revision numbers."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Policy: P (id=82)" in output
+    assert "--- revision 2" in output
+    assert "+++ revision 3" in output
 
 
 def test_diff_format_unified_renders_git_style_diff(stub: tuple[Any, Any]) -> None:
@@ -371,6 +415,27 @@ def test_output_json_delta_enumerates_path_kind_old_new(
     assert described["kind"] == "change"
     assert described["old"] == "allow read access"
     assert described["new"] == "allow write access"
+
+
+def test_output_json_has_no_text_header(stub: tuple[Any, Any]) -> None:
+    """Given two revisions, when running diff with --output json, then the
+    structured delta is emitted with no human identity header text."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2), _entry(3)])
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision(3, description="allow write access")
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision(2, description="allow read access")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "policies", "diff", "10"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "Policy:" not in output
+    assert "Comparing revisions" not in output
+    assert json.loads(output)["changes"]
 
 
 def test_output_json_serializes_component_version_bump(
