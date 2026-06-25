@@ -1108,3 +1108,83 @@ def test_diff_cross_policy_show_all_unified_reveals_identity_fields(
     output = strip_ansi(result.output)
     diff_lines = [line for line in output.splitlines() if line.startswith(("+", "-"))]
     assert any('"name"' in line for line in diff_lines)
+
+
+def test_diff_cross_policy_semantic_header_notes_identity_ignored(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two distinct policies, when running cross-policy diff without
+    --show-all in semantic format, then the header notes that identity fields
+    are ignored."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2)])
+    when(mock_policies).list_history(20).thenReturn(
+        [PolicyHistoryEntry(id=200, revision=2, action_type="DE")]
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _cross_revision(10, "Alpha", 2, description="read")
+    )
+    when(mock_policies).get_revision(200, 2).thenReturn(
+        _cross_revision(20, "Beta", 2, description="write")
+    )
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "policies", "diff", "10", "20"])
+    assert result.exit_code == 0
+    assert "identity fields ignored" in strip_ansi(result.output)
+
+
+def test_diff_cross_policy_semantic_show_all_omits_identity_note(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two distinct policies, when running cross-policy diff with
+    --show-all in semantic format, then the header does not claim identity
+    fields are ignored, because --show-all reveals them."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2)])
+    when(mock_policies).list_history(20).thenReturn(
+        [PolicyHistoryEntry(id=200, revision=2, action_type="DE")]
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _cross_revision(10, "Alpha", 2, description="read")
+    )
+    when(mock_policies).get_revision(200, 2).thenReturn(
+        _cross_revision(20, "Beta", 2, description="write")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "20", "--show-all"]
+    )
+    assert result.exit_code == 0
+    assert "identity fields ignored" not in strip_ansi(result.output)
+
+
+def test_diff_cross_policy_unified_show_all_omits_identity_note(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two distinct policies, when running cross-policy diff with
+    --show-all --format unified, then the header does not claim identity fields
+    are ignored, because --show-all reveals them in the body."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2)])
+    when(mock_policies).list_history(20).thenReturn(
+        [PolicyHistoryEntry(id=200, revision=2, action_type="DE")]
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _cross_revision(10, "Alpha", 2, description="read")
+    )
+    when(mock_policies).get_revision(200, 2).thenReturn(
+        _cross_revision(20, "Beta", 2, description="write")
+    )
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "diff",
+            "10",
+            "20",
+            "--show-all",
+            "--format",
+            "unified",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "identity fields ignored" not in strip_ansi(result.output)

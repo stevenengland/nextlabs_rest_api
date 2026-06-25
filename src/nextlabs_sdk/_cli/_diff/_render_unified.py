@@ -67,7 +67,7 @@ def render_unified(
     """
     con = Console() if console is None else console
     header = diff.header
-    _render_unified_header(con, header)
+    _render_unified_header(con, header, show_all=show_all)
     con.print()
     cross_policy = header.is_cross_policy
     old_lines = _canonical_lines(diff.old, show_all=show_all, cross_policy=cross_policy)
@@ -87,11 +87,12 @@ def render_unified(
             _render_grouping_change(con, change)
 
 
-def _render_unified_header(con: Console, header: DiffHeader) -> None:
+def _render_unified_header(con: Console, header: DiffHeader, *, show_all: bool) -> None:
     if header.is_cross_policy:
         con.print(f"A: {header.policy_name} (id={header.policy_id})")
         con.print(f"B: {header.to_policy_name} (id={header.to_policy_id})")
-        con.print(f"({_IDENTITY_NOTE})")
+        if not show_all:
+            con.print(f"({_IDENTITY_NOTE})")
     else:
         con.print(f"Policy: {header.policy_name} (id={header.policy_id})")
 
