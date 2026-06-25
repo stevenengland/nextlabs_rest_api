@@ -51,12 +51,25 @@ def _range_payload(token: str) -> dict[str, Any]:
     from_part, _, to_part = token.partition(_RANGE_SEP)
     return {
         "type": _DATE_LABEL,
-        "fromDate": _to_epoch_ms(from_part),
-        "toDate": _to_epoch_ms(to_part),
+        "fromDate": epoch_millis(from_part),
+        "toDate": epoch_millis(to_part),
     }
 
 
-def _to_epoch_ms(bound: str) -> int:
+def epoch_millis(bound: str) -> int:
+    """Parse an ISO date bound into UTC epoch-milliseconds.
+
+    A naive date is interpreted as UTC; an explicit offset is honoured.
+
+    Args:
+        bound: The raw ISO date bound.
+
+    Returns:
+        The bound as integer milliseconds since the Unix epoch.
+
+    Raises:
+        SearchExpressionError: If the bound is empty or not a valid ISO date.
+    """
     text = bound.strip()
     if not text:
         raise SearchExpressionError("date range bound is missing")
