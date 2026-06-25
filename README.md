@@ -255,6 +255,111 @@ nextlabs -o detail policies get 17
 nextlabs --output json components search    # machine-readable
 ```
 
+### Searching policies
+
+`nextlabs policies search` accepts three composable front-ends, all of
+which compile to the same backend `SearchCriteria` (an array of
+`SearchField` entries the server combines with **AND**). Pick the register
+that fits the job:
+
+| Flag | Register | Shape |
+| --- | --- | --- |
+| `--where '<SCIM filter>'` | Human | An RFC 7644 (SCIM) filter string. |
+| `--field 'NAME[:TYPE]=VALUE'` (repeatable) | Scriptable | One explicit field per flag. |
+| `--criteria-file <path>` | Raw escape | A JSON `SearchCriteria` posted verbatim. |
+
+The six original shorthand flags (`--status`, `--effect`, `--text`,
+`--tag`, plus `--sort` and the paging flags) still work and **desugar** to
+the equivalent `SearchField`(s); their behavior is unchanged.
+
+#### `--where` — SCIM filter (human register)
+
+```bash
+# Prefix match on name, exact match on status (AND-combined):
+nextlabs policies search --where 'name sw "billing" and status eq "APPROVED"'
+
+# Same-field OR collapses into one MULTI list:
+nextlabs policies search --where 'status eq "DRAFT" or status eq "APPROVED"'
+
+# Nested attribute group (tags.team):
+nextlabs policies search --where 'tags[team eq "finance"]'
+
+# Date window on an updated-at field:
+nextlabs policies search --where 'updatedAt ge "2024-01-01" and updatedAt le "2024-03-31"'
+
+# Reserved 'text' attribute → bundled TEXT search over name + description:
+nextlabs policies search --where 'text co "invoice"'
+```
+
+The `--where` parser maps SCIM operators to backend **match types** as
+follows:
+
+| SCIM input | Match type |
+| --- | --- |
+| `field sw "v"` (prefix) | `SINGLE` |
+| `field eq "v"` / `field co "v"` (scalar) | `SINGLE_EXACT_MATCH` |
+| `field co "a" or field co "b"` (same field) | `MULTI` |
+| `field eq "a" or field eq "b"` (same field) | `MULTI_EXACT_MATCH` |
+| `field ge/gt/le/lt "<iso-date>"` | `DATE` (`fromDate`/`toDate`) |
+| `attr[sub op "v"]` (nested) | `NESTED` |
+| `attr[sub op "a" or sub op "b"]` (same sub) | `NESTED_MULTI` |
+| `text co "v"` (reserved attribute) | `TEXT` (subfields `name`, `description`) |
+
+Because the backend ANDs fields and has no cross-field `OR`/negation,
+**cross-field `OR` and any `NOT` are rejected** with a
+`SearchExpressionError` that points you at running separate searches.
+There is no `in` operator — express lists as a same-field paren-OR group
+(`status eq "a" or status eq "b"`), or use the terser `--field f=a,b`.
+
+#### `--field` — explicit field (scriptable register)
+
+`--field` is repeatable and takes `NAME[:TYPE]=VALUE`. `TYPE` is a
+`SearchFieldType` token (case-insensitive); when omitted it is inferred:
+
+| Expression | Inferred match type |
+| --- | --- |
+| `--field 'status=APPROVED'` | `SINGLE_EXACT_MATCH` |
+| `--field 'status=DRAFT,APPROVED'` (comma → list) | `MULTI` |
+| `--field 'tags.team=finance'` (dotted → nested) | `NESTED` |
+| `--field 'tags.team=finance,legal'` (dotted + comma) | `NESTED_MULTI` |
+| `--field 'name:SINGLE=billing'` (explicit `:TYPE`) | `SINGLE` |
+| `--field 'updatedAt:DATE=2024-01-01..2024-03-31'` | `DATE` |
+| `--field 'text:TEXT=invoice'` | `TEXT` |
+
+A comma in `VALUE` always splits it into a list. A dotted `NAME` sets the
+backend `field` to the segment before the last dot and `nestedField` to
+the full dotted path. `DATE` values are either a keyword (`PAST_7_DAYS`,
+`PAST_30_DAYS`, `PAST_3_MONTHS`, `PAST_1_YEAR`) or a `from..to` range of
+ISO dates parsed to epoch-milliseconds.
+
+```bash
+nextlabs policies search \
+  --field 'status=APPROVED' \
+  --field 'tags.team=finance' \
+  --sort updatedAt:desc --page-size 50
+```
+
+#### `--criteria-file` — raw JSON escape
+
+```bash
+nextlabs policies search --criteria-file ./criteria.json
+```
+
+`--criteria-file` is **mutually exclusive** with `--status`, `--effect`,
+`--text`, `--tag`, `--field`, and `--where`; combining them raises a
+`SearchExpressionError`.
+
+#### Sorting and paging
+
+`--sort` is repeatable, takes `field[:asc|desc]` (default `desc`), and
+preserves order. Paging is `--page-no` (default `0`) and `--page-size`
+(default `20`).
+
+> **Field names are server-defined.** The CLI does not validate them
+> client-side — a misspelled field name passes through to the backend,
+> which typically returns an empty result set rather than an error. See
+> [`docs/troubleshooting.md`](docs/troubleshooting.md).
+
 ### Recipes
 
 Real workflows assembled from the commands shipped today.

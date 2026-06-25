@@ -125,3 +125,54 @@ This writes the latest spec to
 `tests/_openapi/fixtures/nextlabs-openapi.json`. Review the diff, run the test
 suite (including `--e2e`), fix any new round-trip or model-registry failures,
 then commit. The helper refuses to run in CI.
+
+## Policy search expressions
+
+The `nextlabs policies search` front-ends (`--where`, `--field`,
+`--criteria-file`) are thin CLI wrappers over pure, side-effect-free
+transforms in `_cloudaz/_search/`. All three compile to one
+`SearchField` list that the backend combines with **AND**. The CLI-facing
+walkthrough lives in the [README](../README.md#searching-policies); the
+design rationale is [ADR 0004](adr/0004-policy-search-expression-grammar.md).
+
+The two parser entry points are reusable by programmatic SDK callers:
+
+| Entry point | Module | Input → output |
+| --- | --- | --- |
+| `transpile_where` | `_cloudaz/_search/where.py` | A SCIM `--where` string → `list[SearchField]`. |
+| `parse_field_expr` | `_cloudaz/_search/field_expr.py` | One `NAME[:TYPE]=VALUE` `--field` token → `SearchField`. |
+| `date_value` / `epoch_millis` | `_cloudaz/_search/dates.py` | A DATE keyword or `from..to` ISO range → date payload. |
+
+```python
+from nextlabs_sdk._cloudaz._search.where import transpile_where
+from nextlabs_sdk._cloudaz._search.field_expr import parse_field_expr
+
+fields = transpile_where('name sw "billing" and status eq "APPROVED"')
+fields.append(parse_field_expr("tags.team=finance"))
+```
+
+### SCIM operator → match-type mapping
+
+`--where` maps SCIM operators onto the eight backend `SearchFieldType`
+values:
+
+| SCIM input | Match type |
+| --- | --- |
+| `field sw "v"` (prefix) | `SINGLE` |
+| `field eq "v"` / `field co "v"` (scalar) | `SINGLE_EXACT_MATCH` |
+| `field co "a" or field co "b"` (same field) | `MULTI` |
+| `field eq "a" or field eq "b"` (same field) | `MULTI_EXACT_MATCH` |
+| `field ge/gt/le/lt "<iso-date>"` | `DATE` (`fromDate`/`toDate`) |
+| `attr[sub op "v"]` (nested) | `NESTED` |
+| `attr[sub op "a" or sub op "b"]` (same sub) | `NESTED_MULTI` |
+| `text co "v"` (reserved attribute) | `TEXT` (subfields `name`, `description`) |
+
+`--field` uses the same `SearchFieldType` tokens explicitly
+(case-insensitive after `:`) and otherwise infers: a dotted `NAME` →
+`NESTED`/`NESTED_MULTI`, a comma in `VALUE` → `MULTI`, else
+`SINGLE_EXACT_MATCH`.
+
+All parsers raise `SearchExpressionError` (a `NextLabsError` subclass) on
+malformed input, an unsupported operator, a cross-field `OR`/`NOT`, or a
+`--criteria-file` combined with an expression flag — never a raw parser,
+`ValueError`, or `httpx` exception.

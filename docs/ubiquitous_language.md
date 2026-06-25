@@ -54,6 +54,12 @@
 | **Folder** | The hierarchical container in which **Policies** and **Components** live. | directory |
 | **Deployment** | The act and state of pushing a **Policy** or **Component** revision out to enforcement points. | publish, push |
 | **DPS** | A Deployment Push Service target referenced by `dps_url` in **PushResults**. | endpoint URL |
+| **SearchCriteria** | The policy-search request: an array of **SearchField** entries (server-combined with **AND**), plus sort and paging. Built from `--where`, `--field`, the shorthand flags, or `--criteria-file`. | query, filter |
+| **SearchField** | One criterion in a **SearchCriteria**: a `field`, a **SearchFieldType**, a value payload, and an optional `nestedField`. | criterion, filter entry |
+| **SearchFieldType** | The backend **match type** of a **SearchField**: `SINGLE`, `SINGLE_EXACT_MATCH`, `TEXT`, `DATE`, `MULTI`, `MULTI_EXACT_MATCH`, `NESTED`, or `NESTED_MULTI`. | operator, mode |
+| **`--where` filter** | A SCIM (RFC 7644) filter string the CLI transpiles into **SearchField**s (the human search register). | query string |
+| **`--field` expression** | A `NAME[:TYPE]=VALUE` token parsed into a single **SearchField** (the scriptable search register). | field flag |
+| **Reserved `text` attribute** | The special `--where`/`--field` name that emits one `TEXT` **SearchField** over the bundled subfields `name` and `description`. | full-text |
 
 ## Authorization runtime (PDP domain)
 
@@ -88,6 +94,7 @@ escape public APIs, see [`architecture.md`](./architecture.md).
 | **AuthorizationError** | HTTP 403. | forbidden |
 | **PdpStatusError** | HTTP 200 with a non-ok XACML **Status** from the **PDP**. Subclass of **ApiError**. | xacml error |
 | **PdpPayloadError** | Local failure to read or parse a PDP request payload file. | payload error |
+| **SearchExpressionError** | Client-side failure to parse or transpile a `--where`/`--field` expression, or an illegal flag combination (e.g. `--criteria-file` with an expression flag). Subclass of **NextLabsError**. | parse error, filter error |
 
 ## Relationships
 
