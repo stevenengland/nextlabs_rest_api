@@ -39,6 +39,7 @@ from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_models import Policy, PolicyRevision
 from nextlabs_sdk._cloudaz._search import SearchCriteria
 from nextlabs_sdk._cloudaz._search.field_expr import parse_field_expr
+from nextlabs_sdk._cloudaz._search.where import transpile_where
 
 policies_app = make_group("Policy management commands")
 
@@ -434,22 +435,23 @@ def search(  # noqa: WPS211
             help="Repeatable NAME[:TYPE]=VALUE field expression",
         ),
     ] = None,
+    where: Annotated[
+        str | None,
+        typer.Option(
+            "--where",
+            help="SCIM filter, e.g. 'status eq \"DRAFT\"'",
+        ),
+    ] = None,
     sort: Annotated[str | None, typer.Option(help="Sort field (e.g. name)")] = None,
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
     """Search policies."""
     cli_ctx: CliContext = ctx.obj
     criteria = SearchCriteria()
-    if status:
-        criteria.filter_status(status)
-    if effect:
-        criteria.filter_effect_type(effect)
-    if text:
-        criteria.filter_text(text)
-    if tag:
-        criteria.filter_tags(tag)
+    _apply_shorthands(criteria, status=status, effect=effect, text=text, tag=tag)
     for field_expr in field or []:
         criteria.filter_field(parse_field_expr(field_expr))
+    _apply_where(criteria, where)
     if sort:
         criteria.sort_by(sort)
     criteria.page(page_no=1, page_size=page_size)
@@ -462,6 +464,31 @@ def search(  # noqa: WPS211
         title="Policies",
         wide_columns=_POLICY_WIDE_COLUMNS,
     )
+
+
+def _apply_shorthands(
+    criteria: SearchCriteria,
+    *,
+    status: str | None,
+    effect: str | None,
+    text: str | None,
+    tag: str | None,
+) -> None:
+    if status:
+        criteria.filter_status(status)
+    if effect:
+        criteria.filter_effect_type(effect)
+    if text:
+        criteria.filter_text(text)
+    if tag:
+        criteria.filter_tags(tag)
+
+
+def _apply_where(criteria: SearchCriteria, where: str | None) -> None:
+    if not where:
+        return
+    for where_field in transpile_where(where):
+        criteria.filter_field(where_field)
 
 
 @policies_app.command()

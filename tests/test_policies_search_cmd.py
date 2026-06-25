@@ -182,3 +182,75 @@ def test_shorthand_status_flag_keeps_original_criteria(
             "value": {"type": "String", "value": ["DRAFT"]},
         },
     ]
+
+
+def test_where_option_issues_search_and_renders_rows(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub capturing the built criteria
+    _, captured = search_stub
+
+    # when searching with a scalar --where SCIM filter
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "search", "--where", 'status eq "DRAFT"'],
+    )
+
+    # then the rows render and the criteria carry the transpiled field
+    assert result.exit_code == 0
+    assert "Allow IT Access" in result.output
+    assert _fields(captured[0]) == [
+        {
+            "field": "status",
+            "type": "SINGLE_EXACT_MATCH",
+            "value": {"type": "String", "value": "DRAFT"},
+        },
+    ]
+
+
+def test_where_and_chain_ands_into_one_payload(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub capturing the built criteria
+    _, captured = search_stub
+
+    # when searching with an and-chained --where filter
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--where",
+            'status eq "DRAFT" and effectType eq "ALLOW"',
+        ],
+    )
+
+    # then both terms AND together in one criteria payload
+    assert result.exit_code == 0
+    fields = _fields(captured[0])
+    assert {entry["field"] for entry in fields} == {"status", "effectType"}
+    assert len(fields) == 2
+
+
+def test_where_cross_field_or_exits_with_error(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub
+    _, captured = search_stub
+
+    # when passing a cross-field OR --where filter
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--where",
+            'status eq "DRAFT" or name co "Allow"',
+        ],
+    )
+
+    # then the command exits non-zero and no search is issued
+    assert result.exit_code != 0
+    assert captured == []
