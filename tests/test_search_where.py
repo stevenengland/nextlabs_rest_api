@@ -93,3 +93,74 @@ def test_malformed_filter_raises_search_expression_error():
     # then the parser failure surfaces as a SearchExpressionError
     with pytest.raises(SearchExpressionError):
         transpile_where(where)
+
+
+def test_same_field_eq_or_group_maps_to_multi_exact_match():
+    # given a same-field paren-OR group of eq terms
+    where = '(status eq "DRAFT" or status eq "APPROVED")'
+
+    # when the filter is transpiled
+    fields = transpile_where(where)
+
+    # then it becomes one MULTI_EXACT_MATCH list field
+    assert len(fields) == 1
+    assert fields[0].field == "status"
+    assert fields[0].type == SearchFieldType.MULTI_EXACT_MATCH
+    assert fields[0].value == {
+        "type": "String",
+        "value": ["DRAFT", "APPROVED"],
+    }
+
+
+def test_same_field_co_or_group_maps_to_multi():
+    # given a same-field paren-OR group of co terms
+    where = '(name co "Allow" or name co "Deny")'
+
+    # when the filter is transpiled
+    fields = transpile_where(where)
+
+    # then it becomes one MULTI list field
+    assert len(fields) == 1
+    assert fields[0].field == "name"
+    assert fields[0].type == SearchFieldType.MULTI
+    assert fields[0].value == {"type": "String", "value": ["Allow", "Deny"]}
+
+
+def test_three_term_same_field_or_group_collects_all_values():
+    # given a three-term same-field eq OR group
+    where = '(status eq "DRAFT" or status eq "APPROVED" or status eq "RETIRED")'
+
+    # when the filter is transpiled
+    fields = transpile_where(where)
+
+    # then all three values collect into one list field
+    assert len(fields) == 1
+    assert fields[0].type == SearchFieldType.MULTI_EXACT_MATCH
+    assert fields[0].value == {
+        "type": "String",
+        "value": ["DRAFT", "APPROVED", "RETIRED"],
+    }
+
+
+def test_or_group_anded_with_scalar_term():
+    # given a same-field OR group AND-chained with a scalar term
+    where = '(status eq "DRAFT" or status eq "APPROVED") and name co "Allow"'
+
+    # when the filter is transpiled
+    fields = transpile_where(where)
+
+    # then the group yields a list field and the scalar yields its own field
+    assert len(fields) == 2
+    by_field = {entry.field: entry for entry in fields}
+    assert by_field["status"].type == SearchFieldType.MULTI_EXACT_MATCH
+    assert by_field["name"].type == SearchFieldType.SINGLE_EXACT_MATCH
+
+
+def test_or_group_mixing_operators_raises():
+    # given a same-field OR group mixing eq and co operators
+    where = '(status eq "DRAFT" or status co "APP")'
+
+    # when the filter is transpiled
+    # then a SearchExpressionError is raised
+    with pytest.raises(SearchExpressionError):
+        transpile_where(where)
