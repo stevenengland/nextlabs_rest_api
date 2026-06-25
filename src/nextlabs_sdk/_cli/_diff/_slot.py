@@ -16,8 +16,10 @@ from typing import Literal, TypeAlias
 
 from nextlabs_sdk._cli._diff._identity import (
     ComponentSummary,
+    _as_mappings,
     flatten_slot,
     identity_key,
+    walk_group_components,
 )
 from nextlabs_sdk._cli._diff._models import FieldChange
 
@@ -28,8 +30,6 @@ _KIND_CHANGE: Literal["change"] = "change"
 _GROUPING_SEGMENT = "grouping"
 _SCHEMA_TYPE = "ComponentDTORes"
 _OPERATOR_FIELD = "operator"
-_COMPONENTS_FIELD = "components"
-_SUBCOMPONENTS_FIELD = "subComponents"
 _OPERATOR_WIDTH = 3
 _UNKNOWN_MEMBER = "?"
 
@@ -110,7 +110,7 @@ def _grouping_change(
 
 def _partition(slot_value: object, shared: frozenset[Hashable]) -> list[_Group]:
     groups: list[_Group] = []
-    for group in _mappings(slot_value):
+    for group in _as_mappings(slot_value):
         operator = group.get(_OPERATOR_FIELD)
         operator_str = operator if isinstance(operator, str) else ""
         members = frozenset(key for key in _group_identities(group) if key in shared)
@@ -127,17 +127,11 @@ def _normalised(groups: list[_Group]) -> frozenset[_Group]:
 
 def _group_identities(group: Mapping[str, object]) -> set[Hashable]:
     keys: set[Hashable] = set()
-    for component in _mappings(group.get(_COMPONENTS_FIELD)):
-        _collect_identities(component, keys)
+    for component in walk_group_components(group):
+        key = identity_key(_SCHEMA_TYPE, component)
+        if key is not None:
+            keys.add(key)
     return keys
-
-
-def _collect_identities(component: Mapping[str, object], keys: set[Hashable]) -> None:
-    key = identity_key(_SCHEMA_TYPE, component)
-    if key is not None:
-        keys.add(key)
-    for sub in _mappings(component.get(_SUBCOMPONENTS_FIELD)):
-        _collect_identities(sub, keys)
 
 
 def _render_structure(groups: list[_Group], summaries: _Summaries) -> str:
@@ -175,9 +169,3 @@ def _group_sort_key(group: _Group) -> tuple[list[str], str]:
 
 def _identity_sort_key(key: Hashable) -> str:
     return str(key)
-
-
-def _mappings(value: object) -> list[Mapping[str, object]]:  # noqa: WPS110
-    if not isinstance(value, list):
-        return []
-    return [element for element in value if isinstance(element, Mapping)]

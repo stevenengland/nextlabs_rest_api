@@ -6,8 +6,9 @@ from typing import Any
 from rich.console import Console
 from strip_ansi import strip_ansi
 
+from nextlabs_sdk._cli._diff._engine import diff_payloads
 from nextlabs_sdk._cli._diff._models import DiffHeader
-from nextlabs_sdk._cli._diff._render_unified import render_unified
+from nextlabs_sdk._cli._diff._render_unified import UnifiedDiffInput, render_unified
 
 _HEADER = DiffHeader(policy_name="P", policy_id=82, from_rev=2, to_rev=3)
 
@@ -15,10 +16,9 @@ _HEADER = DiffHeader(policy_name="P", policy_id=82, from_rev=2, to_rev=3)
 def _render(old: dict[str, Any], new: dict[str, Any], **kwargs: Any) -> str:
     buffer = io.StringIO()
     console = Console(file=buffer, force_terminal=False, width=200)
+    diff_result = diff_payloads(old, new, show_all=kwargs.get("show_all", False))
     render_unified(
-        old,
-        new,
-        _HEADER,
+        UnifiedDiffInput(old=old, new=new, header=_HEADER, diff_result=diff_result),
         console=console,
         **kwargs,
     )

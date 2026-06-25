@@ -658,9 +658,12 @@ def diff(  # noqa: WPS211
         print(json.dumps(_models.diff_result_to_dict(diff_result), indent=2))
     elif diff_format is _format.DiffFormat.UNIFIED:
         _render_unified.render_unified(
-            old_payload,
-            new_payload,
-            header,
+            _render_unified.UnifiedDiffInput(
+                old=old_payload,
+                new=new_payload,
+                header=header,
+                diff_result=diff_result,
+            ),
             show_all=show_all,
         )
     else:
