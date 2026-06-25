@@ -26,12 +26,25 @@ class DiffResult:
 
 @dataclass(frozen=True)
 class DiffHeader:
-    """Identity of a policy diff: the policy and the two compared revisions."""
+    """Identity of a policy diff: the policy and the two compared revisions.
+
+    In cross-policy mode the two sides are different policies. ``policy_name``
+    and ``policy_id`` then describe side A (the ``from`` policy) and
+    ``to_policy_name``/``to_policy_id`` describe side B (the ``to`` policy); both
+    are ``None`` for a single-policy revision diff.
+    """
 
     policy_name: str
     policy_id: int
     from_rev: int
     to_rev: int
+    to_policy_name: str | None = None
+    to_policy_id: int | None = None
+
+    @property
+    def is_cross_policy(self) -> bool:
+        """Whether this header compares two distinct policies."""
+        return self.to_policy_id is not None
 
 
 def _to_jsonable(value: object) -> object:  # noqa: WPS110

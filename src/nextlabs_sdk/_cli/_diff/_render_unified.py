@@ -10,13 +10,14 @@ from difflib import unified_diff
 from rich.console import Console
 from rich.markup import escape
 
-from nextlabs_sdk._cli._diff._engine import canonicalise
+from nextlabs_sdk._cli._diff._engine import _CROSS_POLICY_IDENTITY_FIELDS, canonicalise
 from nextlabs_sdk._cli._diff._identity import COMPONENT_SLOT_FIELDS
 from nextlabs_sdk._cli._diff._models import DiffHeader, DiffResult, FieldChange
 
 _REVISION_LABEL = "revision"
 _OPERATOR_FIELD = "operator"
 _GROUPING_SEGMENT = "grouping"
+_IDENTITY_NOTE = "identity fields ignored"
 
 
 @dataclass(frozen=True)
@@ -66,10 +67,11 @@ def render_unified(
     """
     con = Console() if console is None else console
     header = diff.header
-    con.print(f"Policy: {header.policy_name} (id={header.policy_id})")
+    _render_unified_header(con, header)
     con.print()
-    old_lines = _canonical_lines(diff.old, show_all=show_all)
-    new_lines = _canonical_lines(diff.new, show_all=show_all)
+    cross_policy = header.is_cross_policy
+    old_lines = _canonical_lines(diff.old, show_all=show_all, cross_policy=cross_policy)
+    new_lines = _canonical_lines(diff.new, show_all=show_all, cross_policy=cross_policy)
     from_label = f"{_REVISION_LABEL} {header.from_rev}"
     to_label = f"{_REVISION_LABEL} {header.to_rev}"
     for line in unified_diff(
@@ -85,6 +87,15 @@ def render_unified(
             _render_grouping_change(con, change)
 
 
+def _render_unified_header(con: Console, header: DiffHeader) -> None:
+    if header.is_cross_policy:
+        con.print(f"A: {header.policy_name} (id={header.policy_id})")
+        con.print(f"B: {header.to_policy_name} (id={header.to_policy_id})")
+        con.print(f"({_IDENTITY_NOTE})")
+    else:
+        con.print(f"Policy: {header.policy_name} (id={header.policy_id})")
+
+
 def _grouping_changes(diff_result: DiffResult) -> list[FieldChange]:
     return [
         change
@@ -93,11 +104,30 @@ def _grouping_changes(diff_result: DiffResult) -> list[FieldChange]:
     ]
 
 
-def _canonical_lines(payload: Mapping[str, object], *, show_all: bool) -> list[str]:
+def _canonical_lines(
+    payload: Mapping[str, object], *, show_all: bool, cross_policy: bool = False
+) -> list[str]:
     canonical = canonicalise(payload, show_all=show_all)
     if not show_all:
         canonical = _strip_slot_operators(canonical)
+        if cross_policy:
+            canonical = _strip_identity_fields(canonical)
     return json.dumps(canonical, indent=2, sort_keys=True).splitlines()
+
+
+def _strip_identity_fields(canonical: object) -> object:
+    """Drop top-level cross-policy identity keys from a canonical payload.
+
+    Mirrors the engine strip so the unified JSON body never renders identity
+    fields that the structured diff already suppresses in cross-policy mode.
+    """
+    if not isinstance(canonical, Mapping):
+        return canonical
+    return {
+        key: child
+        for key, child in canonical.items()
+        if key not in _CROSS_POLICY_IDENTITY_FIELDS
+    }
 
 
 def _strip_slot_operators(canonical: object) -> object:

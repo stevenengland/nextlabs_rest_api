@@ -115,3 +115,65 @@ def test_fewer_than_two_comparable_raises():
     # when / then
     with pytest.raises(InsufficientRevisionsError):
         select_revisions(policies, POLICY_ID)
+
+
+from nextlabs_sdk._cli._diff._revision_select import select_policy_revision
+
+
+def test_select_policy_revision_defaults_to_latest_deployed():
+    """Given a policy whose history has several deployed revisions.
+
+    When resolving a single side with no explicit revision.
+    Then the newest deployed revision is fetched via its own entry id.
+    """
+    # given
+    policies = mock(PolicyService)
+    when(policies).list_history(POLICY_ID).thenReturn(
+        [
+            _entry(1, entry_id=101),
+            _entry(3, entry_id=103),
+            _entry(2, entry_id=102),
+            _entry(4, entry_id=104, action_type="DR"),
+        ]
+    )
+    when(policies).get_revision(103, 3).thenReturn(_revision(3, entry_id=103))
+    # when
+    revision = select_policy_revision(policies, POLICY_ID)
+    # then
+    assert revision.revision == 3
+    verify(policies).get_revision(103, 3)
+
+
+def test_select_policy_revision_uses_explicit_override():
+    """Given a policy whose requested revision is not deployed.
+
+    When resolving a single side with an explicit revision number.
+    Then that revision is fetched, bypassing the deployed-only filter.
+    """
+    # given
+    policies = mock(PolicyService)
+    when(policies).list_history(POLICY_ID).thenReturn(
+        [_entry(7, entry_id=207, action_type="DR")]
+    )
+    when(policies).get_revision(207, 7).thenReturn(_revision(7, entry_id=207))
+    # when
+    revision = select_policy_revision(policies, POLICY_ID, revision=7)
+    # then
+    assert revision.revision == 7
+    verify(policies).get_revision(207, 7)
+
+
+def test_select_policy_revision_no_deployed_raises():
+    """Given a policy with no deployed revision and no override.
+
+    When resolving a single side.
+    Then a clear domain error is raised.
+    """
+    # given
+    policies = mock(PolicyService)
+    when(policies).list_history(POLICY_ID).thenReturn(
+        [_entry(1, entry_id=101, action_type="DR")]
+    )
+    # when / then
+    with pytest.raises(InsufficientRevisionsError):
+        select_policy_revision(policies, POLICY_ID)

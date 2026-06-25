@@ -21,6 +21,27 @@ _POLICY_LABEL = "Policy:"
 _ARROW = "\u2192"
 _GROUPING_SEGMENT = "grouping"
 _CONTINUATION_PREFIX = "AND "
+_IDENTITY_NOTE = "identity fields ignored"
+
+
+def _render_header(con: Console, header: DiffHeader) -> None:
+    """Print the identity header for a single- or cross-policy diff."""
+    if header.is_cross_policy:
+        con.print(
+            f"[bold]A:[/bold] {header.policy_name} (id={header.policy_id}) "
+            f"revision {header.from_rev}"
+        )
+        con.print(
+            f"[bold]B:[/bold] {header.to_policy_name} (id={header.to_policy_id}) "
+            f"revision {header.to_rev}"
+        )
+        con.print(f"[dim]{_IDENTITY_NOTE}[/dim]")
+    else:
+        con.print(
+            f"[bold]{_POLICY_LABEL}[/bold] {header.policy_name} "
+            f"(id={header.policy_id})"
+        )
+        con.print(f"Comparing revisions {header.from_rev} {_ARROW} {header.to_rev}")
 
 
 def _format_component(summary: ComponentSummary | None) -> str:
@@ -180,10 +201,7 @@ def render_semantic(
         console: Rich Console to print to; defaults to a new Console().
     """
     con = Console() if console is None else console
-    con.print(
-        f"[bold]{_POLICY_LABEL}[/bold] {header.policy_name} (id={header.policy_id})"
-    )
-    con.print(f"Comparing revisions {header.from_rev} {_ARROW} {header.to_rev}")
+    _render_header(con, header)
     con.print()
 
     sections: dict[str, list[FieldChange]] = {}

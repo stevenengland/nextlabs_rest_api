@@ -35,6 +35,21 @@ _NOISE_FIELDS: frozenset[str] = frozenset(
     )
 )
 
+_CROSS_POLICY_IDENTITY_FIELDS: frozenset[str] = frozenset(
+    (
+        "id",
+        "name",
+        "fullName",
+        "folderId",
+        "parentId",
+        "parentName",
+        "version",
+        "revisionCount",
+        "ownerId",
+        "ownerDisplayName",
+    )
+)
+
 
 def canonicalise(payload: Mapping[str, object], *, show_all: bool = False) -> object:
     """Reduce a policy payload to a stable, comparison-ready form.
@@ -86,6 +101,7 @@ def diff_payloads(
     new: Mapping[str, object],
     *,
     show_all: bool = False,
+    cross_policy: bool = False,
 ) -> DiffResult:
     """Compare two alias-keyed policy payload dicts and return a structured delta.
 
@@ -94,11 +110,18 @@ def diff_payloads(
         new: The revised policy payload (alias-keyed JSON dict).
         show_all: When True, disables noise filtering and array-order
             normalisation so every raw difference is reported.
+        cross_policy: When True, drop the top-level policy identity fields from
+            each side before diffing so they never surface as changes. Nested
+            structures are untouched. Ignored when ``show_all`` is set.
 
     Returns:
         A DiffResult with all detected changes and a count of suppressed
         noise-field differences.
     """
+    if cross_policy and not show_all:
+        old = _strip_identity_fields(old)
+        new = _strip_identity_fields(new)
+
     changes: list[FieldChange] = []
 
     _diff_dicts(old, new, path=(), show_all=show_all, changes=changes)
@@ -116,6 +139,20 @@ def diff_payloads(
         changes=tuple(visible_changes),
         hidden_noise_count=hidden_noise_count,
     )
+
+
+def _strip_identity_fields(payload: Mapping[str, object]) -> dict[str, object]:
+    """Drop top-level cross-policy identity fields from a payload.
+
+    The strip is shallow on purpose: only the policy's own identity attributes
+    are removed, so nested components, obligations and tags keep their own
+    identity fields and still diff normally.
+    """
+    return {
+        key: child
+        for key, child in payload.items()
+        if key not in _CROSS_POLICY_IDENTITY_FIELDS
+    }
 
 
 def _diff_dicts(
