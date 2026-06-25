@@ -462,8 +462,12 @@ def search(  # noqa: WPS211
             help="Repeatable sort field[:asc|desc] (default desc)",
         ),
     ] = None,
-    page_no: Annotated[int, typer.Option("--page-no", help="Page number")] = 0,
-    page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
+    page_no: Annotated[
+        int | None, typer.Option("--page-no", help="Page number (default 0)")
+    ] = None,
+    page_size: Annotated[
+        int | None, typer.Option(help="Results per page (default 20)")
+    ] = None,
 ) -> None:
     """Search policies."""
     cli_ctx: CliContext = ctx.obj
@@ -491,6 +495,8 @@ def search(  # noqa: WPS211
 
 
 _EXPRESSION_FLAGS = ("--status", "--effect", "--text", "--tag", "--field", "--where")
+_DEFAULT_PAGE_NO = 0
+_DEFAULT_PAGE_SIZE = 20
 
 
 def _build_search_criteria(  # noqa: WPS211
@@ -503,11 +509,12 @@ def _build_search_criteria(  # noqa: WPS211
     where: str | None,
     criteria_file: Path | None,
     sort: list[str] | None,
-    page_no: int,
-    page_size: int,
+    page_no: int | None,
+    page_size: int | None,
 ) -> SearchCriteria:
     if criteria_file is not None:
         _reject_expression_flags([status, effect, text, tag, field, where])
+        _reject_sort_and_paging(sort=sort, page_no=page_no, page_size=page_size)
         return SearchCriteria.from_payload(_load_criteria_file(criteria_file))
     criteria = SearchCriteria()
     _apply_shorthands(criteria, status=status, effect=effect, text=text, tag=tag)
@@ -517,12 +524,35 @@ def _build_search_criteria(  # noqa: WPS211
     for sort_spec in sort or []:
         sort_field, sort_order = _parse_sort(sort_spec)
         criteria.sort_by(sort_field, sort_order)
-    criteria.page(page_no=page_no, page_size=page_size)
+    criteria.page(
+        page_no=_DEFAULT_PAGE_NO if page_no is None else page_no,
+        page_size=_DEFAULT_PAGE_SIZE if page_size is None else page_size,
+    )
     return criteria
 
 
 def _reject_expression_flags(flag_values: list[object]) -> None:
     provided = [flag for flag, is_set in zip(_EXPRESSION_FLAGS, flag_values) if is_set]
+    if provided:
+        joined = ", ".join(provided)
+        raise SearchExpressionError(
+            f"--criteria-file cannot be combined with {joined}",
+        )
+
+
+def _reject_sort_and_paging(
+    *,
+    sort: list[str] | None,
+    page_no: int | None,
+    page_size: int | None,
+) -> None:
+    provided = []
+    if sort:
+        provided.append("--sort")
+    if page_no is not None:
+        provided.append("--page-no")
+    if page_size is not None:
+        provided.append("--page-size")
     if provided:
         joined = ", ".join(provided)
         raise SearchExpressionError(
