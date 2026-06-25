@@ -72,6 +72,55 @@ def _deployed_newest_first(
     )
 
 
+def select_policy_revision(
+    policies: PolicyService,
+    policy_id: int,
+    *,
+    revision: int | None = None,
+) -> PolicyRevision:
+    """Resolve a single policy revision for one side of a cross-policy diff.
+
+    Each side of a cross-policy comparison resolves independently: the latest
+    deployed revision by default, or an explicit revision number when given.
+
+    Args:
+        policies: The policy service used to query history and fetch revisions.
+        policy_id: The policy whose revision is being resolved.
+        revision: Explicit revision number. When given, bypasses the
+            deployed-only filter; otherwise the newest deployed revision wins.
+
+    Returns:
+        The resolved :class:`PolicyRevision`, fetched via the history entry's
+        own ``id``.
+
+    Raises:
+        InsufficientRevisionsError: When no revision can be auto-selected
+            because the policy has no deployed revision and none was supplied.
+        UnknownRevisionError: When an explicit revision number is absent from
+            the policy's history.
+    """
+    entries = policies.list_history(policy_id)
+    by_revision = {entry.revision: entry for entry in entries}
+    resolved = _resolve_latest(entries, policy_id, revision)
+    entry = _require_entry(by_revision, policy_id, resolved)
+    return policies.get_revision(entry.id, entry.revision)
+
+
+def _resolve_latest(
+    entries: list[PolicyHistoryEntry],
+    policy_id: int,
+    revision: int | None,
+) -> int:
+    if revision is not None:
+        return revision
+    deployed = _deployed_newest_first(entries)
+    if not deployed:
+        raise InsufficientRevisionsError(
+            f"Policy {policy_id} has no deployed revision to compare."
+        )
+    return deployed[0].revision
+
+
 def _resolve_to(
     entries: list[PolicyHistoryEntry],
     policy_id: int,

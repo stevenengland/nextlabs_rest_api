@@ -154,3 +154,91 @@ def test_tag_changes_serialise_per_element():
     # then
     assert tag_entries
     assert tag_entries[0]["new"] == {"key": "fresh", "label": "FRESH"}
+
+
+from nextlabs_sdk._cli._diff._engine import _CROSS_POLICY_IDENTITY_FIELDS
+
+
+def test_cross_policy_strips_top_level_identity_fields():
+    """Given two policies differing in top-level identity fields and one body field.
+
+    When diffing in cross-policy mode without show_all.
+    Then identity fields never surface and are not counted as noise; only the
+        genuine body difference is reported.
+    """
+    # given
+    old = {
+        "id": 1,
+        "name": "Alpha",
+        "fullName": "/Alpha",
+        "folderId": 7,
+        "parentId": 3,
+        "parentName": "root",
+        "version": 2,
+        "revisionCount": 5,
+        "ownerId": 11,
+        "ownerDisplayName": "Ann",
+        "description": "read",
+    }
+    new = {
+        "id": 2,
+        "name": "Beta",
+        "fullName": "/Beta",
+        "folderId": 9,
+        "parentId": 4,
+        "parentName": "other",
+        "version": 8,
+        "revisionCount": 1,
+        "ownerId": 22,
+        "ownerDisplayName": "Bob",
+        "description": "write",
+    }
+
+    result = diff_payloads(old, new, cross_policy=True)
+
+    paths = {change.path[0] for change in result.changes}
+    assert paths == {"description"}
+    assert _CROSS_POLICY_IDENTITY_FIELDS & paths == set()
+    assert result.hidden_noise_count == 0
+
+
+def test_cross_policy_keeps_nested_identity_like_fields():
+    """Given two policies whose only difference is a nested component name.
+
+    When diffing in cross-policy mode.
+    Then the nested name change still surfaces, proving the strip is top-level only.
+    """
+    # given
+    old = {
+        "id": 1,
+        "name": "Alpha",
+        "subjectComponents": [
+            {"operator": "AND", "components": [{"id": 5, "name": "Old", "version": 1}]}
+        ],
+    }
+    new = {
+        "id": 2,
+        "name": "Beta",
+        "subjectComponents": [
+            {"operator": "AND", "components": [{"id": 5, "name": "New", "version": 1}]}
+        ],
+    }
+
+    result = diff_payloads(old, new, cross_policy=True)
+
+    assert any(c.path and c.path[0] == "subjectComponents" for c in result.changes)
+
+
+def test_cross_policy_show_all_reveals_identity_fields():
+    """Given two policies differing in a top-level identity field.
+
+    When diffing in cross-policy mode with show_all.
+    Then the identity field difference is revealed.
+    """
+    # given
+    old = {"id": 1, "name": "Alpha", "description": "x"}
+    new = {"id": 2, "name": "Beta", "description": "x"}
+
+    result = diff_payloads(old, new, cross_policy=True, show_all=True)
+
+    assert any(c.path == ("name",) for c in result.changes)
