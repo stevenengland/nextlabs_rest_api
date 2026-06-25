@@ -49,6 +49,8 @@ __all__: list[str] = [
     "SavedReportCriteria",
     "SavedSearch",
     "SearchCriteria",
+    "SearchField",
+    "SearchFieldType",
     "SystemConfig",
     "UserGroup",
     "WidgetData",
@@ -67,6 +69,11 @@ __all__: list[str] = [
     "Operator",
     "Tag",
     "TagType",
+    # Search helpers
+    "date_value",
+    "epoch_millis",
+    "parse_field_expr",
+    "transpile_where",
 ]
 
 from nextlabs_sdk._cloudaz._async_client import (
@@ -204,6 +211,24 @@ from nextlabs_sdk._cloudaz._search import (
 )
 from nextlabs_sdk._cloudaz._search import (
     SearchCriteria as SearchCriteria,
+)
+from nextlabs_sdk._cloudaz._search import (
+    SearchField as SearchField,
+)
+from nextlabs_sdk._cloudaz._search import (
+    SearchFieldType as SearchFieldType,
+)
+from nextlabs_sdk._cloudaz._search import (
+    date_value as date_value,
+)
+from nextlabs_sdk._cloudaz._search import (
+    epoch_millis as epoch_millis,
+)
+from nextlabs_sdk._cloudaz._search import (
+    parse_field_expr as parse_field_expr,
+)
+from nextlabs_sdk._cloudaz._search import (
+    transpile_where as transpile_where,
 )
 from nextlabs_sdk._cloudaz._system_config_models import (
     SystemConfig as SystemConfig,

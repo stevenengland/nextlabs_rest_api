@@ -135,17 +135,18 @@ transforms in `_cloudaz/_search/`. All three compile to one
 walkthrough lives in the [README](../README.md#searching-policies); the
 design rationale is [ADR 0004](adr/0004-policy-search-expression-grammar.md).
 
-The two parser entry points are reusable by programmatic SDK callers:
+The parser entry points are part of the supported public surface and are
+reusable by programmatic SDK callers — import them from
+`nextlabs_sdk.cloudaz`, never from the internal `_cloudaz` modules:
 
-| Entry point | Module | Input → output |
-| --- | --- | --- |
-| `transpile_where` | `_cloudaz/_search/where.py` | A SCIM `--where` string → `list[SearchField]`. |
-| `parse_field_expr` | `_cloudaz/_search/field_expr.py` | One `NAME[:TYPE]=VALUE` `--field` token → `SearchField`. |
-| `date_value` / `epoch_millis` | `_cloudaz/_search/dates.py` | A DATE keyword or `from..to` ISO range → date payload. |
+| Entry point | Input → output |
+| --- | --- |
+| `transpile_where` | A SCIM `--where` string → `list[SearchField]`. |
+| `parse_field_expr` | One `NAME[:TYPE]=VALUE` `--field` token → `SearchField`. |
+| `date_value` / `epoch_millis` | A DATE keyword or `from..to` ISO range → date payload. |
 
 ```python
-from nextlabs_sdk._cloudaz._search.where import transpile_where
-from nextlabs_sdk._cloudaz._search.field_expr import parse_field_expr
+from nextlabs_sdk.cloudaz import parse_field_expr, transpile_where
 
 fields = transpile_where('name sw "billing" and status eq "APPROVED"')
 fields.append(parse_field_expr("tags.team=finance"))

@@ -52,6 +52,8 @@ __all__: list[str] = [
     "SavedReportCriteria",
     "SavedSearch",
     "SearchCriteria",
+    "SearchField",
+    "SearchFieldType",
     "SystemConfig",
     "UserGroup",
     "WidgetData",
@@ -70,6 +72,11 @@ __all__: list[str] = [
     "Operator",
     "Tag",
     "TagType",
+    # Search helpers
+    "date_value",
+    "epoch_millis",
+    "parse_field_expr",
+    "transpile_where",
 ]
 
 from nextlabs_sdk._cloudaz import ActivityByEntity as ActivityByEntity
@@ -136,9 +143,15 @@ from nextlabs_sdk._cloudaz import SaveInfo as SaveInfo
 from nextlabs_sdk._cloudaz import SavedReportCriteria as SavedReportCriteria
 from nextlabs_sdk._cloudaz import SavedSearch as SavedSearch
 from nextlabs_sdk._cloudaz import SearchCriteria as SearchCriteria
+from nextlabs_sdk._cloudaz import SearchField as SearchField
+from nextlabs_sdk._cloudaz import SearchFieldType as SearchFieldType
 from nextlabs_sdk._cloudaz import SystemConfig as SystemConfig
 from nextlabs_sdk._cloudaz import Tag as Tag
 from nextlabs_sdk._cloudaz import TagService as TagService
 from nextlabs_sdk._cloudaz import TagType as TagType
 from nextlabs_sdk._cloudaz import UserGroup as UserGroup
 from nextlabs_sdk._cloudaz import WidgetData as WidgetData
+from nextlabs_sdk._cloudaz import date_value as date_value
+from nextlabs_sdk._cloudaz import epoch_millis as epoch_millis
+from nextlabs_sdk._cloudaz import parse_field_expr as parse_field_expr
+from nextlabs_sdk._cloudaz import transpile_where as transpile_where
