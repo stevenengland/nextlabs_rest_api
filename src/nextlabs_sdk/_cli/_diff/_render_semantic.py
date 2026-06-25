@@ -24,7 +24,7 @@ _CONTINUATION_PREFIX = "AND "
 _IDENTITY_NOTE = "identity fields ignored"
 
 
-def _render_header(con: Console, header: DiffHeader) -> None:
+def _render_header(con: Console, header: DiffHeader, *, show_all: bool) -> None:
     """Print the identity header for a single- or cross-policy diff."""
     if header.is_cross_policy:
         con.print(
@@ -35,7 +35,8 @@ def _render_header(con: Console, header: DiffHeader) -> None:
             f"[bold]B:[/bold] {header.to_policy_name} (id={header.to_policy_id}) "
             f"revision {header.to_rev}"
         )
-        con.print(f"[dim]{_IDENTITY_NOTE}[/dim]")
+        if not show_all:
+            con.print(f"[dim]{_IDENTITY_NOTE}[/dim]")
     else:
         con.print(
             f"[bold]{_POLICY_LABEL}[/bold] {header.policy_name} "
@@ -187,7 +188,11 @@ def _render_typed_change(con: Console, field: str, change: FieldChange) -> None:
 
 
 def render_semantic(
-    diff: DiffResult, header: DiffHeader, *, console: Console | None = None
+    diff: DiffResult,
+    header: DiffHeader,
+    *,
+    show_all: bool = False,
+    console: Console | None = None,
 ) -> None:
     """Render a DiffResult as a Rich semantic report.
 
@@ -198,10 +203,12 @@ def render_semantic(
         diff: The structured diff result to render.
         header: The policy identity and compared revisions, printed as two
             lines above the change sections.
+        show_all: When True, identity fields are revealed in cross-policy mode,
+            so the "identity fields ignored" header note is suppressed.
         console: Rich Console to print to; defaults to a new Console().
     """
     con = Console() if console is None else console
-    _render_header(con, header)
+    _render_header(con, header, show_all=show_all)
     con.print()
 
     sections: dict[str, list[FieldChange]] = {}

@@ -681,7 +681,7 @@ def diff(  # noqa: WPS211
             show_all=show_all,
         )
     else:
-        _render_semantic.render_semantic(diff_result, header)
+        _render_semantic.render_semantic(diff_result, header, show_all=show_all)
     if exit_code and diff_result.changes:
         raise typer.Exit(code=1)
 
