@@ -77,6 +77,10 @@ class TransportError(NextLabsError):
     """Transport-level failure after retries exhausted."""
 
 
+class SearchExpressionError(NextLabsError):
+    """Client-side search expression parse or transpile failure."""
+
+
 class ApiError(NextLabsError):
     """Catch-all for unmapped HTTP errors."""
 
