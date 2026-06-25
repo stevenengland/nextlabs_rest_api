@@ -24,6 +24,7 @@ notice — do not import from tests outside their own module, examples, or docs.
 | `_auth/_active_account/` | Active-account selection and persistence. |
 | `_auth/_token_cache/` | File-backed token store (`CachedToken`, `FileTokenCache`). |
 | `_cloudaz/` | CloudAz client internals: request builders, pagination, response helpers. |
+| `_cloudaz/_search/` | Policy-search core: `SearchCriteria`/`SearchField`/`SearchFieldType` models (`criteria.py`), the SCIM `--where` transpiler (`where.py`, `transpile_where`), the `--field` parser (`field_expr.py`, `parse_field_expr`), and DATE parsing (`dates.py`). Pure transforms; see [ADR 0004](adr/0004-policy-search-expression-grammar.md). |
 | `_pdp/` | PDP client internals: token-url resolution, evaluation request/response models. |
 | `_pdp/_payload/` | PDP evaluation payload Pydantic models. |
 | `_cli/` | Typer + Rich CLI: entrypoints, context resolvers, error handler, subcommands. |

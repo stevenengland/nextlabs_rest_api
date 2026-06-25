@@ -179,3 +179,55 @@ nextlabs -vv pdp eval \
 Use `-v` (single) to add only request context to errors; `-vv` (double)
 prints every HTTP request and response body. Add the missing attribute
 with `--subject-attr key=value`, `--resource-attr key=value`, etc.
+
+## `SearchExpressionError: cross-field 'or'/'not' is unsupported in --where`
+
+**Symptom:** `nextlabs policies search --where '...'` fails with
+`cross-field 'or'/'not' is unsupported in --where; run separate searches
+instead`.
+
+**Cause:** the backend combines search fields with **AND** only — it has
+no server-side `OR`, negation, or grouping *across different fields*. The
+`--where` transpiler therefore rejects an `or` that spans two field names
+(e.g. `status eq "DRAFT" or effect eq "DENY"`) and any `not`.
+
+**Fix:** a same-field `or` *is* supported and collapses into one `MULTI`
+list — keep the field name identical on both sides:
+
+```bash
+# OK — same field, becomes one MULTI_EXACT_MATCH list:
+nextlabs policies search --where 'status eq "DRAFT" or status eq "APPROVED"'
+```
+
+For a true cross-field `OR`, run one search per branch and union the
+results client-side:
+
+```bash
+nextlabs -o json policies search --where 'status eq "DRAFT"'  > a.json
+nextlabs -o json policies search --where 'effect eq "DENY"'   > b.json
+jq -s 'add | unique_by(.id)' a.json b.json
+```
+
+## `policies search` returns nothing for a field you know has data
+
+**Symptom:** a `--where` or `--field` query with a perfectly valid syntax
+returns an empty table, even though matching policies clearly exist.
+
+**Cause:** **field names are server-defined and are passed through
+verbatim** — the CLI does not (and cannot) validate them client-side,
+because there is no field-discovery API. A misspelled or wrong-case field
+name (`updateAt` instead of `updatedAt`, `Status` instead of `status`)
+reaches the backend unchanged, matches nothing, and yields an empty
+result set rather than a `SearchExpressionError`.
+
+**Fix:** confirm the exact field name the backend expects (check an
+existing policy's JSON with `nextlabs -o json policies get <id>`), then
+re-run. To see the request the CLI actually sent, add `-vv`:
+
+```bash
+nextlabs -vv policies search --where 'status eq "APPROVED"'
+```
+
+A `SearchExpressionError` means the *expression* was malformed (bad
+operator, unbalanced quotes, cross-field `or`); an empty result with no
+error usually means a valid expression over a non-existent field.
