@@ -71,6 +71,11 @@ def test_base_exception_carries_envelope_fields():
         ),
         pytest.param(exceptions.ApiError, exceptions.NextLabsError, id="api"),
         pytest.param(
+            exceptions.SearchExpressionError,
+            exceptions.NextLabsError,
+            id="search-expression",
+        ),
+        pytest.param(
             exceptions.RateLimitError, exceptions.ApiError, id="rate-limit-is-api"
         ),
         pytest.param(
