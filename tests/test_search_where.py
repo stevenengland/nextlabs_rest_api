@@ -164,3 +164,35 @@ def test_or_group_mixing_operators_raises():
     # then a SearchExpressionError is raised
     with pytest.raises(SearchExpressionError):
         transpile_where(where)
+
+
+def test_cross_field_or_raises_pointing_at_separate_searches():
+    # given an OR across two different fields
+    where = 'status eq "DRAFT" or name co "Allow"'
+
+    # when the filter is transpiled
+    # then it is rejected with guidance to run separate searches
+    with pytest.raises(SearchExpressionError) as exc_info:
+        transpile_where(where)
+    assert "separate searches" in str(exc_info.value)
+
+
+def test_top_level_not_raises_pointing_at_separate_searches():
+    # given a negated filter
+    where = 'not (status eq "DRAFT")'
+
+    # when the filter is transpiled
+    # then it is rejected with guidance to run separate searches
+    with pytest.raises(SearchExpressionError) as exc_info:
+        transpile_where(where)
+    assert "separate searches" in str(exc_info.value)
+
+
+def test_negated_term_inside_and_chain_raises():
+    # given an and-chain containing a negated term
+    where = 'status eq "DRAFT" and not (name co "Allow")'
+
+    # when the filter is transpiled
+    # then the negation is rejected
+    with pytest.raises(SearchExpressionError):
+        transpile_where(where)
