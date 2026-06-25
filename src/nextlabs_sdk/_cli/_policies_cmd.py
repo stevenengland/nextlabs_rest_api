@@ -38,6 +38,7 @@ from nextlabs_sdk._cli._payload_loader import (
 from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_models import Policy, PolicyRevision
 from nextlabs_sdk._cloudaz._search import SearchCriteria
+from nextlabs_sdk._cloudaz._search.field_expr import parse_field_expr
 
 policies_app = make_group("Policy management commands")
 
@@ -426,6 +427,13 @@ def search(  # noqa: WPS211
     ] = None,
     text: Annotated[str | None, typer.Option(help="Text search")] = None,
     tag: Annotated[str | None, typer.Option(help="Filter by tag key")] = None,
+    field: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--field",
+            help="Repeatable NAME[:TYPE]=VALUE field expression",
+        ),
+    ] = None,
     sort: Annotated[str | None, typer.Option(help="Sort field (e.g. name)")] = None,
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
@@ -440,6 +448,8 @@ def search(  # noqa: WPS211
         criteria.filter_text(text)
     if tag:
         criteria.filter_tags(tag)
+    for field_expr in field or []:
+        criteria.filter_field(parse_field_expr(field_expr))
     if sort:
         criteria.sort_by(sort)
     criteria.page(page_no=1, page_size=page_size)
