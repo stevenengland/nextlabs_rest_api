@@ -338,6 +338,45 @@ def test_criteria_file_with_expression_flag_exits_with_error(
     assert captured == []
 
 
+@pytest.mark.parametrize(
+    "extra_flags",
+    [
+        ["--sort", "name:asc"],
+        ["--page-no", "2"],
+        ["--page-size", "50"],
+    ],
+)
+def test_criteria_file_with_sort_or_paging_flag_exits_with_error(
+    search_stub: tuple[Any, list[SearchCriteria]],
+    tmp_path: Path,
+    extra_flags: list[str],
+) -> None:
+    # given a valid criteria file
+    _, captured = search_stub
+    criteria_file = tmp_path / "criteria.json"
+    criteria_file.write_text(
+        json.dumps({"criteria": {"fields": []}}),
+        encoding="utf-8",
+    )
+
+    # when combining --criteria-file with a sort or paging flag
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--criteria-file",
+            str(criteria_file),
+            *extra_flags,
+        ],
+    )
+
+    # then the command exits non-zero and no search is issued
+    assert result.exit_code != 0
+    assert captured == []
+
+
 def test_repeated_sort_options_preserve_order_and_explicit_direction(
     search_stub: tuple[Any, list[SearchCriteria]],
 ) -> None:

@@ -21,3 +21,15 @@ from nextlabs_sdk._cloudaz._search.criteria import (
 from nextlabs_sdk._cloudaz._search.criteria import (
     SortOrder as SortOrder,
 )
+from nextlabs_sdk._cloudaz._search.dates import (
+    date_value as date_value,
+)
+from nextlabs_sdk._cloudaz._search.dates import (
+    epoch_millis as epoch_millis,
+)
+from nextlabs_sdk._cloudaz._search.field_expr import (
+    parse_field_expr as parse_field_expr,
+)
+from nextlabs_sdk._cloudaz._search.where import (
+    transpile_where as transpile_where,
+)

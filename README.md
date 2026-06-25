@@ -346,8 +346,9 @@ nextlabs policies search --criteria-file ./criteria.json
 ```
 
 `--criteria-file` is **mutually exclusive** with `--status`, `--effect`,
-`--text`, `--tag`, `--field`, and `--where`; combining them raises a
-`SearchExpressionError`.
+`--text`, `--tag`, `--field`, `--where`, `--sort`, `--page-no`, and
+`--page-size`; combining them raises a `SearchExpressionError`. Encode any
+sorting and paging inside the JSON payload itself.
 
 #### Sorting and paging
 
