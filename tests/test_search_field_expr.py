@@ -85,3 +85,87 @@ def test_missing_assignment_raises_search_expression_error():
     # then a SearchExpressionError is raised
     with pytest.raises(SearchExpressionError):
         parse_field_expr(expr)
+
+
+def test_dotted_name_infers_nested_field():
+    # given a dotted NAME with a scalar value
+    expr = "tags.key=helpdesk"
+
+    # when the expression is parsed
+    parsed = parse_field_expr(expr)
+
+    # then it is a NESTED field whose nestedField is the full dotted path
+    assert parsed.type == SearchFieldType.NESTED
+    assert parsed.field == "tags"
+    assert parsed.nested_field == "tags.key"
+    assert parsed.value == {"type": "String", "value": "helpdesk"}
+
+
+def test_dotted_name_with_comma_infers_nested_multi():
+    # given a dotted NAME with a comma-separated value
+    expr = "tags.key=helpdesk,billing"
+
+    # when the expression is parsed
+    parsed = parse_field_expr(expr)
+
+    # then the type is NESTED_MULTI and the value is a list
+    assert parsed.type == SearchFieldType.NESTED_MULTI
+    assert parsed.field == "tags"
+    assert parsed.nested_field == "tags.key"
+    assert parsed.value == {"type": "String", "value": ["helpdesk", "billing"]}
+
+
+def test_date_keyword_builds_date_option():
+    # given an explicit DATE type with a keyword value
+    expr = "lastUpdatedDate:DATE=PAST_7_DAYS"
+
+    # when the expression is parsed
+    parsed = parse_field_expr(expr)
+
+    # then it carries a DATE field with the keyword as dateOption
+    assert parsed.field == "lastUpdatedDate"
+    assert parsed.type == SearchFieldType.DATE
+    assert parsed.value == {"type": "Date", "dateOption": "PAST_7_DAYS"}
+
+
+def test_date_range_builds_epoch_millisecond_bounds():
+    # given an explicit DATE type with a from..to ISO range
+    expr = "lastUpdatedDate:DATE=2024-01-01..2024-02-01"
+
+    # when the expression is parsed
+    parsed = parse_field_expr(expr)
+
+    # then the bounds become epoch-millisecond fromDate/toDate
+    assert parsed.type == SearchFieldType.DATE
+    assert parsed.value == {
+        "type": "Date",
+        "fromDate": 1704067200000,
+        "toDate": 1706745600000,
+    }
+
+
+def test_malformed_date_value_raises_search_expression_error():
+    # given an explicit DATE type with an unparseable value
+    expr = "lastUpdatedDate:DATE=BOGUS"
+
+    # when the expression is parsed
+    # then a SearchExpressionError is raised
+    with pytest.raises(SearchExpressionError):
+        parse_field_expr(expr)
+
+
+def test_text_type_builds_default_subfields():
+    # given the reserved text attribute with an explicit TEXT type
+    expr = "text:TEXT=ticket"
+
+    # when the expression is parsed
+    parsed = parse_field_expr(expr)
+
+    # then it is a TEXT entry carrying the default name/description subfields
+    assert parsed.field == "text"
+    assert parsed.type == SearchFieldType.TEXT
+    assert parsed.value == {
+        "type": "Text",
+        "fields": ["name", "description"],
+        "value": "ticket",
+    }
