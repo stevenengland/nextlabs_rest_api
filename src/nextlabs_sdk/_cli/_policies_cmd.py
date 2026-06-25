@@ -37,11 +37,14 @@ from nextlabs_sdk._cli._payload_loader import (
 )
 from nextlabs_sdk._cloudaz._policies import PolicyService
 from nextlabs_sdk._cloudaz._policy_models import Policy, PolicyRevision
-from nextlabs_sdk._cloudaz._search import SearchCriteria
+from nextlabs_sdk._cloudaz._search import SearchCriteria, SortOrder
 from nextlabs_sdk._cloudaz._search.field_expr import parse_field_expr
 from nextlabs_sdk._cloudaz._search.where import transpile_where
+from nextlabs_sdk.exceptions import SearchExpressionError
 
 policies_app = make_group("Policy management commands")
+
+_UTF8 = "utf-8"
 
 _ID_FIELD = "id"
 _ID_COLUMN = ColumnDef("ID", _ID_FIELD)
@@ -260,7 +263,7 @@ def export_all(
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     exported = client.policies.export_all(export_mode=export_mode)
-    write_bytes(output, exported.encode("utf-8"), overwrite=overwrite)
+    write_bytes(output, exported.encode(_UTF8), overwrite=overwrite)
 
 
 @policies_app.command(name="export-options")
@@ -291,7 +294,7 @@ def generate_xacml(
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     xacml = client.policies.generate_xacml([{_ID_FIELD: policy_id}])
-    write_bytes(output, xacml.encode("utf-8"), overwrite=overwrite)
+    write_bytes(output, xacml.encode(_UTF8), overwrite=overwrite)
 
 
 @policies_app.command(name="generate-pdf")
@@ -312,7 +315,7 @@ def generate_pdf(
     cli_ctx: CliContext = ctx.obj
     client = _client_factory.make_cloudaz_client(cli_ctx)
     pdf = client.policies.generate_pdf([{_ID_FIELD: policy_id}])
-    write_bytes(output, pdf.encode("utf-8"), overwrite=overwrite)
+    write_bytes(output, pdf.encode(_UTF8), overwrite=overwrite)
 
 
 @policies_app.command(name="import-xacml")
@@ -442,19 +445,40 @@ def search(  # noqa: WPS211
             help="SCIM filter, e.g. 'status eq \"DRAFT\"'",
         ),
     ] = None,
-    sort: Annotated[str | None, typer.Option(help="Sort field (e.g. name)")] = None,
+    criteria_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--criteria-file",
+            help=(
+                "Path to a JSON SearchCriteria posted verbatim; "
+                "mutually exclusive with the expression flags"
+            ),
+        ),
+    ] = None,
+    sort: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--sort",
+            help="Repeatable sort field[:asc|desc] (default desc)",
+        ),
+    ] = None,
+    page_no: Annotated[int, typer.Option("--page-no", help="Page number")] = 0,
     page_size: Annotated[int, typer.Option(help="Results per page")] = 20,
 ) -> None:
     """Search policies."""
     cli_ctx: CliContext = ctx.obj
-    criteria = SearchCriteria()
-    _apply_shorthands(criteria, status=status, effect=effect, text=text, tag=tag)
-    for field_expr in field or []:
-        criteria.filter_field(parse_field_expr(field_expr))
-    _apply_where(criteria, where)
-    if sort:
-        criteria.sort_by(sort)
-    criteria.page(page_no=1, page_size=page_size)
+    criteria = _build_search_criteria(
+        status=status,
+        effect=effect,
+        text=text,
+        tag=tag,
+        field=field,
+        where=where,
+        criteria_file=criteria_file,
+        sort=sort,
+        page_no=page_no,
+        page_size=page_size,
+    )
     client = _client_factory.make_cloudaz_client(cli_ctx)
     matches = list(client.policy_search.search(criteria))
     render(
@@ -464,6 +488,72 @@ def search(  # noqa: WPS211
         title="Policies",
         wide_columns=_POLICY_WIDE_COLUMNS,
     )
+
+
+_EXPRESSION_FLAGS = ("--status", "--effect", "--text", "--tag", "--field", "--where")
+
+
+def _build_search_criteria(  # noqa: WPS211
+    *,
+    status: str | None,
+    effect: str | None,
+    text: str | None,
+    tag: str | None,
+    field: list[str] | None,
+    where: str | None,
+    criteria_file: Path | None,
+    sort: list[str] | None,
+    page_no: int,
+    page_size: int,
+) -> SearchCriteria:
+    if criteria_file is not None:
+        _reject_expression_flags([status, effect, text, tag, field, where])
+        return SearchCriteria.from_payload(_load_criteria_file(criteria_file))
+    criteria = SearchCriteria()
+    _apply_shorthands(criteria, status=status, effect=effect, text=text, tag=tag)
+    for field_expr in field or []:
+        criteria.filter_field(parse_field_expr(field_expr))
+    _apply_where(criteria, where)
+    for sort_spec in sort or []:
+        sort_field, sort_order = _parse_sort(sort_spec)
+        criteria.sort_by(sort_field, sort_order)
+    criteria.page(page_no=page_no, page_size=page_size)
+    return criteria
+
+
+def _reject_expression_flags(flag_values: list[object]) -> None:
+    provided = [flag for flag, is_set in zip(_EXPRESSION_FLAGS, flag_values) if is_set]
+    if provided:
+        joined = ", ".join(provided)
+        raise SearchExpressionError(
+            f"--criteria-file cannot be combined with {joined}",
+        )
+
+
+def _load_criteria_file(criteria_file: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(criteria_file.read_text(encoding=_UTF8))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SearchExpressionError(
+            f"could not read criteria file {criteria_file}: {exc}",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise SearchExpressionError(
+            f"criteria file {criteria_file} must contain a JSON object",
+        )
+    return payload
+
+
+def _parse_sort(sort_spec: str) -> tuple[str, SortOrder]:
+    field_name, _, order_token = sort_spec.partition(":")
+    if not order_token:
+        return field_name, SortOrder.DESC
+    try:
+        return field_name, SortOrder[order_token.upper()]
+    except KeyError as exc:
+        raise SearchExpressionError(
+            f"invalid sort order {order_token!r}; use 'asc' or 'desc'",
+        ) from exc
 
 
 def _apply_shorthands(

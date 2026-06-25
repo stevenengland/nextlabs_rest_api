@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -254,3 +256,155 @@ def test_where_cross_field_or_exits_with_error(
     # then the command exits non-zero and no search is issued
     assert result.exit_code != 0
     assert captured == []
+
+
+def _sort_fields(criteria: SearchCriteria) -> list[dict[str, str]]:
+    return criteria.to_dict()["criteria"]["sortFields"]
+
+
+def _criteria_body(criteria: SearchCriteria) -> dict[str, Any]:
+    return criteria.to_dict()["criteria"]
+
+
+def test_criteria_file_posts_payload_verbatim_and_renders_rows(
+    search_stub: tuple[Any, list[SearchCriteria]],
+    tmp_path: Path,
+) -> None:
+    # given a criteria file holding a verbatim SearchCriteria payload
+    _, captured = search_stub
+    payload = {
+        "criteria": {
+            "fields": [
+                {
+                    "field": "status",
+                    "type": "MULTI",
+                    "value": {"type": "String", "value": ["DRAFT"]},
+                },
+            ],
+            "sortFields": [{"field": "name", "order": "ASC"}],
+            "pageNo": 3,
+            "pageSize": 50,
+        },
+    }
+    criteria_file = tmp_path / "criteria.json"
+    criteria_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    # when searching with --criteria-file
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--criteria-file",
+            str(criteria_file),
+        ],
+    )
+
+    # then the rows render and the file's criteria are posted verbatim
+    assert result.exit_code == 0
+    assert "Allow IT Access" in result.output
+    assert captured[0].to_dict() == payload
+
+
+def test_criteria_file_with_expression_flag_exits_with_error(
+    search_stub: tuple[Any, list[SearchCriteria]],
+    tmp_path: Path,
+) -> None:
+    # given a valid criteria file
+    _, captured = search_stub
+    criteria_file = tmp_path / "criteria.json"
+    criteria_file.write_text(
+        json.dumps({"criteria": {"fields": []}}),
+        encoding="utf-8",
+    )
+
+    # when combining --criteria-file with an expression flag
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--criteria-file",
+            str(criteria_file),
+            "--where",
+            'status eq "DRAFT"',
+        ],
+    )
+
+    # then the command exits non-zero and no search is issued
+    assert result.exit_code != 0
+    assert captured == []
+
+
+def test_repeated_sort_options_preserve_order_and_explicit_direction(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub capturing the built criteria
+    _, captured = search_stub
+
+    # when passing two --sort flags with explicit directions
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--sort",
+            "name:asc",
+            "--sort",
+            "lastUpdatedDate:desc",
+        ],
+    )
+
+    # then the sort fields keep their order and directions
+    assert result.exit_code == 0
+    assert _sort_fields(captured[0]) == [
+        {"field": "name", "order": "ASC"},
+        {"field": "lastUpdatedDate", "order": "DESC"},
+    ]
+
+
+def test_bare_sort_option_defaults_to_descending(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub capturing the built criteria
+    _, captured = search_stub
+
+    # when passing a bare --sort field with no direction
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "policies", "search", "--sort", "name"],
+    )
+
+    # then the field sorts descending by default
+    assert result.exit_code == 0
+    assert _sort_fields(captured[0]) == [{"field": "name", "order": "DESC"}]
+
+
+def test_page_no_and_page_size_set_pagination_fields(
+    search_stub: tuple[Any, list[SearchCriteria]],
+) -> None:
+    # given a search stub capturing the built criteria
+    _, captured = search_stub
+
+    # when passing --page-no and --page-size
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "search",
+            "--page-no",
+            "2",
+            "--page-size",
+            "5",
+        ],
+    )
+
+    # then the criteria carry the requested pagination values
+    assert result.exit_code == 0
+    body = _criteria_body(captured[0])
+    assert body["pageNo"] == 2
+    assert body["pageSize"] == 5

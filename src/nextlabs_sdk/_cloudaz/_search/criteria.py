@@ -58,6 +58,7 @@ class SavedSearch(BaseModel):
 
 
 _STRING_LABEL = "String"
+_DEFAULT_PAGE_SIZE = 20
 
 
 def _typed_payload(label: str, **entries: Any) -> dict[str, Any]:
@@ -74,6 +75,21 @@ class SearchCriteria:  # noqa: WPS214
         self._sort_fields: list[dict[str, str]] = []
         self._page_no: int = 0
         self._page_size: int = 20
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> SearchCriteria:
+        """Build a criteria from a serialised payload, preserving it verbatim.
+
+        Accepts either the full ``{"criteria": {...}}`` envelope produced by
+        :meth:`to_dict` or a bare criteria body.
+        """
+        body = payload.get("criteria", payload)
+        criteria = cls()
+        criteria._fields = list(body.get("fields", []))
+        criteria._sort_fields = list(body.get("sortFields", []))
+        criteria._page_no = body.get("pageNo", 0)
+        criteria._page_size = body.get("pageSize", _DEFAULT_PAGE_SIZE)
+        return criteria
 
     def filter_type(self, *types: str) -> SearchCriteria:
         self._append_entry(
