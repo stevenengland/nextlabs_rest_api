@@ -1042,3 +1042,69 @@ def test_diff_cross_policy_unified_header_and_strips_identity(
     diff_lines = [line for line in output.splitlines() if line.startswith(("+", "-"))]
     assert not any('"name"' in line or '"id"' in line for line in diff_lines)
     assert any("write" in line and line.startswith("+") for line in diff_lines)
+
+
+def test_diff_cross_policy_show_all_reveals_identity_fields(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two policies differing only in top-level identity fields, when
+    running cross-policy diff with --show-all, then the otherwise-stripped
+    identity fields surface as ordinary changes."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2)])
+    when(mock_policies).list_history(20).thenReturn(
+        [PolicyHistoryEntry(id=200, revision=2, action_type="DE")]
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _cross_revision(10, "Alpha", 2, description="same")
+    )
+    when(mock_policies).get_revision(200, 2).thenReturn(
+        _cross_revision(20, "Beta", 2, description="same")
+    )
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "policies", "diff", "10", "20", "--show-all"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    change_lines = [
+        line
+        for line in output.splitlines()
+        if line.lstrip().startswith(("~", "+", "-"))
+    ]
+    assert any("name" in line for line in change_lines)
+
+
+def test_diff_cross_policy_show_all_unified_reveals_identity_fields(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two policies differing only in top-level identity fields, when
+    running cross-policy diff with --show-all --format unified, then the
+    identity fields appear in the unified diff body."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([_entry(2)])
+    when(mock_policies).list_history(20).thenReturn(
+        [PolicyHistoryEntry(id=200, revision=2, action_type="DE")]
+    )
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _cross_revision(10, "Alpha", 2, description="same")
+    )
+    when(mock_policies).get_revision(200, 2).thenReturn(
+        _cross_revision(20, "Beta", 2, description="same")
+    )
+    result = runner.invoke(
+        app,
+        [
+            *_GLOBAL_OPTS,
+            "policies",
+            "diff",
+            "10",
+            "20",
+            "--show-all",
+            "--format",
+            "unified",
+        ],
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    diff_lines = [line for line in output.splitlines() if line.startswith(("+", "-"))]
+    assert any('"name"' in line for line in diff_lines)
