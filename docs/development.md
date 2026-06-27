@@ -83,6 +83,13 @@ pre-commit install
 
 Docker is still required to run the E2E suite (`tests.py --e2e`).
 
+## Dependencies
+
+Token-cache encryption at rest is part of the core library, so `cryptography`
+and `argon2-cffi` are now core runtime dependencies (declared under
+`[project.dependencies]` in `pyproject.toml`). `keyring` stays in the optional
+`[cli]` extra — it is only used by the CLI.
+
 ## E2E Tests
 
 ```bash

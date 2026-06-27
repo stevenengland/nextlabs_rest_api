@@ -29,7 +29,13 @@
 | **ID token** | The OIDC `id_token` used as the Authorization bearer; falls back to access token with a warning. | JWT, bearer |
 | **Refresh token** | The OIDC refresh token used to renew an expired **ID token** without re-prompting. | renewal token |
 | **CachedToken** | The persisted token record (id_token, refresh_token, expirations) stored by a **TokenCache**. | token blob |
-| **TokenCache** | The pluggable token-store interface (`FileTokenCache`, `NullTokenCache`). | token storage |
+| **TokenCache** | The pluggable token-store interface (`FileTokenCache`, `EncryptedFileTokenCache`, `NullTokenCache`). | token storage |
+| **NLBX envelope** | The fixed-layout, single-slot container `EncryptedFileTokenCache` writes: `magic·version·wrap-type·suite-id·salt·wrapped-DEK` header (bound as AAD) followed by the AES-256-GCM ciphertext. | header, blob |
+| **DEK** | Data Encryption Key — a random 256-bit key that encrypts the cache payload under AES-256-GCM; itself wrapped by the **KEK**. | data key |
+| **KEK** | Key Encryption Key — the key derived from the master passphrase (Argon2id) that wraps the **DEK**. | wrap key, master key |
+| **suite-id** | The byte in the **NLBX** header identifying the crypto suite (KDF + cipher) so the format can evolve without ambiguity. | algorithm id, cipher id |
+| **encrypt-when-possible** | The safe-by-default policy: encrypt the cache when a passphrase source resolves, otherwise keep a plaintext cache with a one-time warning — never abort. | best-effort encryption |
+| **Organic migration** | A legacy plaintext cache is read once as-is and rewritten as an **NLBX** envelope on the next write; a read never mutates the file. | lazy migration |
 | **PDP auth source** | The choice of which token endpoint to use for **PDP** login: `cloudaz` (`/cas/token` on the auth base URL) or `pdp` (`/dpc/oauth` on the PDP URL). | auth flavor |
 | **Active account** | The currently selected user/tenant identity used by the CLI to scope token cache lookups. | current user, profile |
 | **PDP client ID** | The OAuth client identifier used specifically when authenticating to the **PDP**, separate from the **CloudAz** client ID. | DPC client id |

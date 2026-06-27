@@ -8,11 +8,11 @@ import typer
 
 from nextlabs_sdk._auth._refresh_token_policy import RefreshDecision, decide
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
-    build_file_cache,
     build_prefs_store,
+    build_token_cache,
     effective_verify_ssl,
     load_account_prefs,
     resolve_account,
@@ -64,7 +64,7 @@ def _pdp_url_required(flavor: PdpAuthSource) -> str:
 
 
 def _cached_credentials_usable(
-    cache: FileTokenCache,
+    cache: TokenCache,
     account: ResolvedAccount,
     *,
     now: float | None = None,
@@ -141,7 +141,7 @@ def make_cloudaz_client(ctx: CliContext) -> CloudAzClient:
         return _build_static_token_client(ctx)
 
     account = _resolve_or_raise(ctx)
-    cache = build_file_cache(ctx)
+    cache = build_token_cache(ctx)
 
     password = ctx.password or None
     if password is None and not _cached_credentials_usable(cache, account):
@@ -207,7 +207,7 @@ def _load_pdp_overrides(
     if account is None or account.kind != "pdp":
         return _PdpOverrides()
     prefs = load_account_prefs(build_prefs_store(ctx), account)
-    entry = build_file_cache(ctx).load(cache_key_for(account))
+    entry = build_token_cache(ctx).load(cache_key_for(account))
     flavor = _coerce_flavor(prefs.pdp_auth_source if prefs else None)
     return _PdpOverrides(
         client_secret=entry.client_secret if entry else None,

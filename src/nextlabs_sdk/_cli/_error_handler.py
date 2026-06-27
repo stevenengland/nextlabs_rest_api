@@ -19,6 +19,7 @@ from nextlabs_sdk.exceptions import (
     PdpStatusError,
     RefreshTokenExpiredError,
     RequestTimeoutError,
+    TokenCacheError,
     TransportError,
 )
 
@@ -30,6 +31,7 @@ _BODY_PREVIEW_LIMIT = 2000
 
 _ErrorPrefixPair = tuple[type[NextLabsError], str]
 _ERROR_PREFIXES: tuple[_ErrorPrefixPair, ...] = (
+    (TokenCacheError, "Token cache error"),
     (RefreshTokenExpiredError, "Re-login required"),
     (AuthenticationError, "Authentication failed"),
     (NotFoundError, "Not found"),

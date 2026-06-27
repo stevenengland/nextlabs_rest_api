@@ -37,6 +37,24 @@ class AuthenticationError(NextLabsError):
     """HTTP 401 or token acquisition failure."""
 
 
+class TokenCacheError(NextLabsError):
+    """Token cache file could not be read, decrypted, or verified.
+
+    Raised generically for every cache failure mode (wrong passphrase,
+    tampered ciphertext, tampered or unrecognised header) so that no
+    information distinguishes the cause. Recover by deleting the cache
+    file and logging in again.
+    """
+
+    def __init__(
+        self,
+        message: str = (
+            "Token cache is unreadable; delete the cache file and log in again."
+        ),
+    ) -> None:
+        super().__init__(message)
+
+
 class RefreshTokenExpiredError(AuthenticationError):
     """Refresh token is no longer usable.
 

@@ -5,9 +5,10 @@ from pathlib import Path
 import pytest
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli._account_resolver import (
     build_active_store,
-    build_file_cache,
+    build_token_cache,
     resolve_account,
 )
 from nextlabs_sdk._cli._context import CliContext
@@ -132,8 +133,9 @@ def test_cache_dir_from_ctx_is_honoured(tmp_path: Path) -> None:
     assert resolved.username == "pointer-user"
 
 
-def test_build_file_cache_respects_cache_dir(tmp_path: Path) -> None:
-    cache = build_file_cache(_ctx(cache_dir=str(tmp_path)))
+def test_build_token_cache_respects_cache_dir(tmp_path: Path) -> None:
+    cache = build_token_cache(_ctx(cache_dir=str(tmp_path)))
+    assert isinstance(cache, FileTokenCache)
     assert cache.path == tmp_path / "tokens.json"
 
 

@@ -16,7 +16,7 @@ from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
     build_active_store,
-    build_file_cache,
+    build_token_cache,
     build_prefs_store,
     effective_verify_ssl,
 )
@@ -351,7 +351,7 @@ class _PersistedLogin:
 
 
 def _persist_login(cli_ctx: CliContext, record: _PersistedLogin) -> None:
-    cache = build_file_cache(cli_ctx)
+    cache = build_token_cache(cli_ctx)
     prefs = build_prefs_store(cli_ctx)
     active = build_active_store(cli_ctx)
     account = record.account

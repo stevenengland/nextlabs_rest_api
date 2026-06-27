@@ -155,6 +155,32 @@ nextlabs auth logout              # preferred
 rm "$(echo "${NEXTLABS_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}")/nextlabs-sdk/tokens.json"
 ```
 
+## `Token cache error` after changing `NEXTLABS_MASTER_PASSWORD`
+
+**Symptom:** commands fail with `Token cache error` (a `TokenCacheError`)
+once the token cache is encrypted — typically after the passphrase in
+`NEXTLABS_MASTER_PASSWORD` changed, was lost, or the cache file was
+copied from another machine.
+
+**Cause:** the encrypted `NLBX` cache can only be decrypted with the same
+passphrase that wrote it. A wrong, missing, or rotated passphrase — or a
+truncated/tampered file — fails authentication, and every such failure is
+normalized to one generic `TokenCacheError` (it never reveals which check
+failed). The cache is encrypt-only on write, so an old plaintext file is
+migrated organically the first time the CLI writes it.
+
+**Fix:** delete the cache and log in again with the passphrase you intend
+to keep:
+
+```bash
+rm "$(echo "${NEXTLABS_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}")/nextlabs-sdk/tokens.json"
+NEXTLABS_MASTER_PASSWORD="<your-passphrase>" nextlabs auth login
+```
+
+To go back to a plaintext cache, unset `NEXTLABS_MASTER_PASSWORD` (the
+CLI prints a one-time stderr warning; set `NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1`
+to silence it).
+
 ## PDP returns no `Permit`/`Deny` decision (status code is non-OK)
 
 **Symptom:** `nextlabs pdp eval ...` returns a result whose

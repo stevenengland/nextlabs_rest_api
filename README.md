@@ -184,8 +184,8 @@ All imports come from four public entry points:
   `RetryConfig`, `create_http_client`, `create_async_http_client`),
   pagination (`SyncPaginator`, `AsyncPaginator`, `PageResult`), auth
   (`CloudAzAuth`, `PdpAuth`, `StaticTokenAuth`), token cache
-  (`TokenCache`, `CachedToken`, `FileTokenCache`, `NullTokenCache`),
-  and `__version__`.
+  (`TokenCache`, `CachedToken`, `FileTokenCache`,
+  `EncryptedFileTokenCache`, `NullTokenCache`), and `__version__`.
 - `nextlabs_sdk.cloudaz` — CloudAz domain models and enums (`Tag`,
   `TagType`, `Operator`, audit-log / report / dashboard /
   system-config / activity-log models).
@@ -479,6 +479,15 @@ The file is written `0600` inside a `0700` directory; writes are atomic
 (temp file + `os.replace`). The cache key is
 `"{token_url}|{username}|{client_id}"` so multiple profiles coexist.
 
+**Encryption at rest.** When `NEXTLABS_MASTER_PASSWORD` is set, the CLI
+stores the cache as an `EncryptedFileTokenCache` — an `NLBX` envelope
+where a random data key (DEK) encrypts the payload under AES-256-GCM and
+is itself wrapped by a key derived from the passphrase (Argon2id). The
+cache migrates organically: a legacy plaintext `tokens.json` is read
+once and rewritten encrypted on the next write. Without a passphrase the
+CLI keeps a plaintext cache and prints a one-time stderr warning; set
+`NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1` to silence it.
+
 Refresh tokens are used transparently when available; on refresh failure
 the CLI falls back to the password grant (if `--password` /
 `NEXTLABS_PASSWORD` is set) and otherwise raises `AuthenticationError`
@@ -630,6 +639,8 @@ Notes:
 | `NEXTLABS_PDP_CLIENT_ID`   | PDP-specific client ID (required when `--pdp-auth=pdp`)       |
 | `NEXTLABS_TOKEN`           | Pre-issued bearer token; bypasses the login flow and cache    |
 | `NEXTLABS_CACHE_DIR`       | Directory holding `tokens.json` (overrides XDG default)       |
+| `NEXTLABS_MASTER_PASSWORD` | Passphrase that encrypts the token cache at rest (see below)  |
+| `NEXTLABS_DISABLE_TOKEN_ENCRYPTION` | Set to `1` to silence the unencrypted-cache warning |
 
 Top-level CLI flags worth knowing: `--no-verify` (skip TLS verification —
 dev only), `-v` / `-vv` (verbose; `-vv` logs every HTTP request and
