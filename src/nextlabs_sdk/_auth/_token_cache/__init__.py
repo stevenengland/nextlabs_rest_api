@@ -1,4 +1,7 @@
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken as CachedToken
+from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
+    EncryptedFileTokenCache as EncryptedFileTokenCache,
+)
 from nextlabs_sdk._auth._token_cache._file_token_cache import (
     FileTokenCache as FileTokenCache,
 )

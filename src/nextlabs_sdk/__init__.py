@@ -12,6 +12,7 @@ __all__: list[str] = [
     # Auth
     "CachedToken",
     "CloudAzAuth",
+    "EncryptedFileTokenCache",
     "FileTokenCache",
     "NullTokenCache",
     "PdpAuth",
@@ -32,6 +33,9 @@ from nextlabs_sdk._auth._pdp_auth import PdpAuth as PdpAuth
 from nextlabs_sdk._auth._static_token_auth import StaticTokenAuth as StaticTokenAuth
 from nextlabs_sdk._auth._token_cache import (
     CachedToken as CachedToken,
+)
+from nextlabs_sdk._auth._token_cache import (
+    EncryptedFileTokenCache as EncryptedFileTokenCache,
 )
 from nextlabs_sdk._auth._token_cache import (
     FileTokenCache as FileTokenCache,
