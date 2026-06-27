@@ -22,7 +22,7 @@ notice — do not import from tests outside their own module, examples, or docs.
 |---|---|
 | `_auth/` | OIDC auth: token acquisition, refresh, bearer injection (`CloudAzAuth`). |
 | `_auth/_active_account/` | Active-account selection and persistence. |
-| `_auth/_token_cache/` | File-backed token store (`CachedToken`, `FileTokenCache`). |
+| `_auth/_token_cache/` | File-backed token store (`CachedToken`, `FileTokenCache`) plus encryption at rest: the IO-free `NLBX` envelope crypto (`_secret_box.py`), the encrypting cache with organic plaintext migration (`_encrypted_file_token_cache.py`), passphrase resolution and the env source (`_passphrase_resolver.py`, `_env_passphrase_source.py`), the `build_token_cache`/`inspect_token_cache` factory (`_cache_factory.py`), and stderr warning IO (`_console_io.py`). |
 | `_cloudaz/` | CloudAz client internals: request builders, pagination, response helpers. |
 | `_cloudaz/_search/` | Policy-search core: `SearchCriteria`/`SearchField`/`SearchFieldType` models (`criteria.py`), the SCIM `--where` transpiler (`where.py`, `transpile_where`), the `--field` parser (`field_expr.py`, `parse_field_expr`), and DATE parsing (`dates.py`). Pure transforms; see [ADR 0004](adr/0004-policy-search-expression-grammar.md). |
 | `_pdp/` | PDP client internals: token-url resolution, evaluation request/response models. |
