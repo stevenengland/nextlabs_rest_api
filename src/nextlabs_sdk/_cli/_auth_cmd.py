@@ -22,7 +22,7 @@ from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
     build_active_store,
-    build_file_cache,
+    build_token_cache,
     build_prefs_store,
     effective_verify_ssl,
 )
@@ -91,7 +91,7 @@ def _apply_menu_defaults(
 ) -> tuple[str | None, str | None]:
     if base_url and username:
         return base_url, username
-    accounts = known_accounts(build_file_cache(cli_ctx))
+    accounts = known_accounts(build_token_cache(cli_ctx))
     if not accounts:
         return base_url, username
     selection = select_account(accounts)
@@ -165,7 +165,7 @@ def _account_status_and_refreshable(
     cli_ctx: CliContext,
     account: AccountIdentifier,
 ) -> tuple[str, str]:
-    entry = build_file_cache(cli_ctx).load(cache_key_for(account))
+    entry = build_token_cache(cli_ctx).load(cache_key_for(account))
     return account_status_and_refreshable(entry)
 
 
@@ -331,7 +331,7 @@ def logout(ctx: typer.Context) -> None:
     """Remove the cached token; defaults to the active account."""
     cli_ctx: CliContext = ctx.obj
     target = _resolve_active_target(cli_ctx)
-    cache = build_file_cache(cli_ctx)
+    cache = build_token_cache(cli_ctx)
     cache.delete(cache_key_for(target))
     build_prefs_store(cli_ctx).delete(_prefs_key(target))
     if _is_active(cli_ctx, target):
@@ -389,7 +389,7 @@ def status(
         _status_all(cli_ctx)
         return
     target = _resolve_active_target(cli_ctx)
-    cache = build_file_cache(cli_ctx)
+    cache = build_token_cache(cli_ctx)
     entry = cache.load(cache_key_for(target))
     if entry is None:
         typer.echo("No cached token.")
@@ -400,7 +400,7 @@ def status(
 
 
 def _status_all(cli_ctx: CliContext) -> None:
-    accounts = known_accounts(build_file_cache(cli_ctx))
+    accounts = known_accounts(build_token_cache(cli_ctx))
     if not accounts:
         typer.echo(_NO_ACCOUNTS_MESSAGE)
         raise _EXIT_FAILURE
@@ -412,7 +412,7 @@ def _status_all(cli_ctx: CliContext) -> None:
 def accounts(ctx: typer.Context) -> None:
     """List every cached account, marking the active one."""
     cli_ctx: CliContext = ctx.obj
-    entries = known_accounts(build_file_cache(cli_ctx))
+    entries = known_accounts(build_token_cache(cli_ctx))
     if not entries:
         typer.echo(_NO_ACCOUNTS_MESSAGE)
         raise _EXIT_FAILURE
@@ -427,7 +427,7 @@ def use(
 ) -> None:
     """Switch the active cached account."""
     cli_ctx: CliContext = ctx.obj
-    entries = known_accounts(build_file_cache(cli_ctx))
+    entries = known_accounts(build_token_cache(cli_ctx))
     if not entries:
         typer.echo(_NO_ACCOUNTS_MESSAGE)
         raise _EXIT_FAILURE

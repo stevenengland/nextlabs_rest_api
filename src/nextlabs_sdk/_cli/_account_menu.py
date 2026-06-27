@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import click
 import typer
 
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk._cli._cache_key import cache_key_for as cache_key_for
 from nextlabs_sdk._cli._cache_key import parse_cache_key as _parse_cache_key
 
@@ -34,7 +34,7 @@ def parse_cache_key(key: str) -> AccountIdentifier | None:
     )
 
 
-def known_accounts(cache: FileTokenCache) -> list[AccountIdentifier]:
+def known_accounts(cache: TokenCache) -> list[AccountIdentifier]:
     """Return all parseable accounts from the token cache, in insertion order."""
     parsed: list[AccountIdentifier] = []
     for key in cache.keys():
