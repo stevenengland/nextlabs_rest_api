@@ -1,37 +1,34 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-
 
 from nextlabs_sdk._auth._token_cache._atomic_write import atomic_write_bytes
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk._auth._token_cache._secret_box import (
+    PassphraseKek,
+    RawKek,
+    SecretBox,
+)
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 
 _FILE_MODE = 0o600
 _DIR_MODE = 0o700
-_CACHE_FILENAME = "tokens.json"
-_PACKAGE_DIR = "nextlabs-sdk"
 
 
-def _default_path() -> Path:
-    override = os.environ.get("NEXTLABS_CACHE_DIR")
-    if override:
-        return Path(override) / _CACHE_FILENAME
+class EncryptedFileTokenCache(TokenCache):
+    """Token cache that reads plaintext or ``NLBX`` and always writes encrypted.
 
-    xdg = os.environ.get("XDG_CACHE_HOME")
-    if xdg:
-        return Path(xdg) / _PACKAGE_DIR / _CACHE_FILENAME
+    Reading a legacy plaintext file leaves it untouched; the next ``save``
+    rewrites it as an ``NLBX`` envelope. The unwrapped data-encryption key is
+    cached in-process so the Argon2 key derivation runs at most once per
+    process across all loads and saves.
+    """
 
-    return Path.home() / ".cache" / _PACKAGE_DIR / _CACHE_FILENAME
-
-
-class FileTokenCache(TokenCache):
-    """JSON-backed token cache with atomic writes and ``0600`` permissions."""
-
-    def __init__(self, *, path: Path | str | None = None) -> None:
-        self._path = _default_path() if path is None else Path(path)
+    def __init__(self, *, path: Path | str, kek_source: PassphraseKek | RawKek) -> None:
+        self._path = Path(path)
+        self._kek_source = kek_source
+        self._box: SecretBox | None = None
 
     @property
     def path(self) -> Path:
@@ -63,19 +60,27 @@ class FileTokenCache(TokenCache):
     def _read_all(self) -> dict[str, object]:
         if not self._path.exists():
             return {}
+        blob = self._path.read_bytes()
+        if not blob:
+            return {}
+        if SecretBox.is_encrypted(blob):
+            if self._box is None:
+                self._box = SecretBox.unlock(blob, self._kek_source)
+            loaded = json.loads(self._box.decrypt(blob))
+            return loaded if isinstance(loaded, dict) else {}
         try:
-            with self._path.open("r", encoding="utf-8") as fh:
-                loaded = json.load(fh)
-        except (OSError, json.JSONDecodeError):
+            loaded = json.loads(blob.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
             return {}
-        if not isinstance(loaded, dict):
-            return {}
-        return loaded
+        return loaded if isinstance(loaded, dict) else {}
 
     def _write_all(self, entries: dict[str, object]) -> None:
+        if self._box is None:
+            self._box = SecretBox.seal_new(self._kek_source)
+        blob = self._box.encrypt(json.dumps(entries).encode("utf-8"))
         atomic_write_bytes(
             self._path,
-            json.dumps(entries).encode("utf-8"),
+            blob,
             dir_mode=_DIR_MODE,
             file_mode=_FILE_MODE,
         )
