@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 from pathlib import Path
 
@@ -37,7 +38,9 @@ def test_encrypted_round_trip_and_magic(tmp_path: Path):
     assert path.read_bytes().startswith(b"NLBX")
     fresh = EncryptedFileTokenCache(path=path, kek_source=_kek())
     assert fresh.load("acct") == tok
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    # POSIX-mode bits are not enforceable on Windows; chmod is a no-op there.
+    if os.name == "posix":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_legacy_plaintext_loads_then_save_encrypts(tmp_path: Path):
