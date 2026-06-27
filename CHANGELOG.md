@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.13.0 - 2026-06-26
+
+### nextlabs-sdk 0.13.0
+
+#### Features
+
+- feat(cli): add --criteria-file, multi --sort and --page-no to policies search @stevenengland ([#253](https://github.com/stevenengland/nextlabs_rest_api/pull/253))
+- feat(search): complete --where with nested, date and text match types (#<!---->231) @stevenengland ([#252](https://github.com/stevenengland/nextlabs_rest_api/pull/252))
+- feat(search): add --where SCIM filter to policies search (#<!---->230) @stevenengland ([#251](https://github.com/stevenengland/nextlabs_rest_api/pull/251))
+- feat(search): add nested, date and text field value shapes (#<!---->229) @stevenengland ([#250](https://github.com/stevenengland/nextlabs_rest_api/pull/250))
+- feat(cli): add --field expression option to policies search (#<!---->228) @stevenengland ([#249](https://github.com/stevenengland/nextlabs_rest_api/pull/249))
+- feat(search): scaffold _search package and add SearchExpressionError (#<!---->227) @stevenengland ([#248](https://github.com/stevenengland/nextlabs_rest_api/pull/248))
+- feat(diff): cross-policy diff core (diff A B) @stevenengland ([#244](https://github.com/stevenengland/nextlabs_rest_api/pull/244))
+- feat(diff): render grouping drift in unified format with semantic parity (#<!---->237) @stevenengland ([#239](https://github.com/stevenengland/nextlabs_rest_api/pull/239))
+- feat(diff): operator/grouping-aware compare_slot for policies diff @stevenengland ([#238](https://github.com/stevenengland/nextlabs_rest_api/pull/238))
+- feat(cli): add identity header to policies diff output (#<!---->225) @stevenengland ([#234](https://github.com/stevenengland/nextlabs_rest_api/pull/234))
+
+#### Bug Fixes
+
+- fix(PRD): #<!---->226 cleanup — capstone findings @stevenengland ([#255](https://github.com/stevenengland/nextlabs_rest_api/pull/255))
+- fix(PRD): #<!---->241 cleanup — capstone findings @stevenengland ([#246](https://github.com/stevenengland/nextlabs_rest_api/pull/246))
+- fix(PRD): #<!---->235 cleanup — capstone findings @stevenengland ([#240](https://github.com/stevenengland/nextlabs_rest_api/pull/240))
+
+#### Documentation
+
+- docs(search): document policy-search expressions and mark ADR 0004 implemented @stevenengland ([#254](https://github.com/stevenengland/nextlabs_rest_api/pull/254))
+
+#### Maintenance
+
+- test(diff): cross-policy --show-all identity reveal (241/2) @stevenengland ([#245](https://github.com/stevenengland/nextlabs_rest_api/pull/245))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.12.1...0.13.0
+
 ## 0.12.1 - 2026-06-23
 
 ### nextlabs-sdk 0.12.1
