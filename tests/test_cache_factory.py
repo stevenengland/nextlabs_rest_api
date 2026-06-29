@@ -1,8 +1,9 @@
 import base64
 
 import keyring
-
-from mockito import mock, spy2, verify, when
+import pytest
+from keyring.errors import NoKeyringError
+from mockito import ANY, mock, spy2, verify, when
 
 from nextlabs_sdk._auth._token_cache import _cache_factory as cache_factory
 from nextlabs_sdk._auth._token_cache import _keyring_passphrase_source as kps
@@ -12,6 +13,13 @@ from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
     EncryptedFileTokenCache,
 )
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk.exceptions import TokenCacheError
+
+
+def _keyring_unavailable() -> None:
+    when(keyring).set_password(
+        kps._SERVICE, kps._PROBE_ACCOUNT, kps._PROBE_VALUE
+    ).thenRaise(NoKeyringError())
 
 
 def _tok(access_token: str = "id", expires_at: float = 1000.0) -> CachedToken:
@@ -130,3 +138,72 @@ class TestInspectTokenCache:
         assert status.state == "absent"
         assert status.source == "keyring"
         verify(keyring, times=0).set_password(kps._SERVICE, kps._KEK_ACCOUNT, ...)
+
+
+class TestInteractiveTokenCache:
+    def test_tty_passphrase_unlocks_and_roundtrips_with_tty_label(
+        self, tmp_path, monkeypatch
+    ):
+        # given no env secret, an unavailable keyring, and a TTY passphrase
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("hunter2")
+        path = tmp_path / "t.json"
+        # when a cache is built and a token round-trips
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        cache.save("a", _tok())
+        loaded = cache.load("a")
+        # then the entered passphrase encrypts and unlocks the cache
+        assert isinstance(cache, EncryptedFileTokenCache)
+        assert loaded == _tok()
+
+    def test_no_source_tty_confirm_yes_returns_plaintext_with_guidance(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given no source, a TTY, an empty passphrase, and a yes confirmation
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        when(console).confirm(ANY).thenReturn(True)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console
+        )
+        # then a plaintext cache is returned after warning how to encrypt later
+        assert isinstance(cache, FileTokenCache)
+        assert "NEXTLABS_MASTER_PASSWORD" in capsys.readouterr().err
+
+    def test_no_source_tty_confirm_no_aborts_without_writing(
+        self, tmp_path, monkeypatch
+    ):
+        # given no source, a TTY, an empty passphrase, and a declined confirmation
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        when(console).confirm(ANY).thenReturn(False)
+        path = tmp_path / "t.json"
+        # when the cache is built, then the gate aborts and writes nothing
+        with pytest.raises(TokenCacheError):
+            cache_factory.build_token_cache(path=path, env={}, console=console)
+        assert not path.exists()
+
+    def test_confirmation_is_read_via_console_confirm(self, tmp_path, monkeypatch):
+        # given a piped stdin must not bypass the gate
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        when(console).confirm(ANY).thenReturn(True)
+        # when the cache is built
+        cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console
+        )
+        # then the decision is read through the controlling terminal, not stdin
+        verify(console, times=1).confirm(ANY)

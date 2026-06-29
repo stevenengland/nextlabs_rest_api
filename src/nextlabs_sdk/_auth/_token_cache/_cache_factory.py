@@ -10,19 +10,37 @@ from nextlabs_sdk._auth._token_cache._console_io import ConsoleIO
 from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
     EncryptedFileTokenCache,
 )
+from nextlabs_sdk._auth._token_cache._env_passphrase_source import (
+    EnvVarPassphraseSource,
+)
 from nextlabs_sdk._auth._token_cache._file_token_cache import (
     FileTokenCache,
     _default_path,
 )
-from nextlabs_sdk._auth._token_cache._passphrase_resolver import PassphraseResolver
+from nextlabs_sdk._auth._token_cache._interactive_passphrase_source import (
+    InteractivePassphraseSource,
+)
+from nextlabs_sdk._auth._token_cache._keyring_passphrase_source import (
+    KeyringPassphraseSource,
+)
+from nextlabs_sdk._auth._token_cache._passphrase_resolver import (
+    PassphraseResolver,
+)
 from nextlabs_sdk._auth._token_cache._secret_box import SecretBox, read_header
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
+from nextlabs_sdk.exceptions import TokenCacheError
 
 _DISABLE_ENCRYPTION_ENV = "NEXTLABS_DISABLE_TOKEN_ENCRYPTION"
 _PLAINTEXT_WARNING = (
     "warning: token cache is stored UNENCRYPTED; set NEXTLABS_MASTER_PASSWORD "
     "to encrypt it, or NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1 to silence this warning"
 )
+_CONFIRM_WARNING = (
+    "warning: no passphrase source is available, so the token cache would be "
+    "stored UNENCRYPTED. Set NEXTLABS_MASTER_PASSWORD or configure an OS keyring "
+    "to encrypt it later."
+)
+_CONFIRM_PROMPT = "Store the token cache unencrypted anyway? [y/N]: "
 
 _WARNED = False
 
@@ -35,19 +53,40 @@ def build_token_cache(
 ) -> TokenCache:
     """Build a token cache, encrypting when a passphrase source is present.
 
-    With no source available the cache falls back to plaintext and emits a
-    single process-wide warning to stderr; it never aborts. Setting
-    ``NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1`` silences the warning.
+    Sources are consulted in order: ``NEXTLABS_MASTER_PASSWORD``, the OS
+    keyring, then an interactive TTY passphrase prompt. With no source and a
+    TTY present the caller is warned and asked to confirm plaintext storage;
+    declining raises :class:`TokenCacheError` without writing anything. With no
+    source and no TTY the cache falls back to plaintext and emits a single
+    process-wide warning to stderr; it never aborts. Setting
+    ``NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1`` silences the non-interactive warning.
     """
     console = console or ConsoleIO()
-    material, _label = PassphraseResolver().resolve(env)
+    resolver = PassphraseResolver(
+        sources=(
+            EnvVarPassphraseSource(),
+            KeyringPassphraseSource(),
+            InteractivePassphraseSource(console),
+        )
+    )
+    material, _label = resolver.resolve(env)
     cache_path = _default_path() if path is None else Path(path)
 
     if material is not None:
         return EncryptedFileTokenCache(path=cache_path, kek_source=material)
 
+    if console.isatty():
+        return _confirm_plaintext_or_abort(console, cache_path)
+
     _warn_plaintext_once(env)
     return FileTokenCache(path=cache_path)
+
+
+def _confirm_plaintext_or_abort(console: ConsoleIO, cache_path: Path) -> TokenCache:
+    print(_CONFIRM_WARNING, file=sys.stderr)
+    if console.confirm(_CONFIRM_PROMPT):
+        return FileTokenCache(path=cache_path)
+    raise TokenCacheError()
 
 
 @dataclass(frozen=True)
