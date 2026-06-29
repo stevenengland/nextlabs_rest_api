@@ -72,7 +72,7 @@ def inspect_token_cache(
     without running Argon2 or unlocking it.
     """
     cache_path = _default_path() if path is None else Path(path)
-    _material, source = PassphraseResolver().resolve(env)
+    source = PassphraseResolver().peek(env)
     if not cache_path.exists():
         return CacheStatus(cache_path, "absent", source, None)
     blob = cache_path.read_bytes()
