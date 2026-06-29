@@ -17,3 +17,6 @@ class EnvVarPassphraseSource:
         if not secret:
             return None
         return PassphraseKek(passphrase=secret.encode("utf-8"))
+
+    def would_resolve(self, env: Mapping[str, str]) -> bool:
+        return bool(env.get(_MASTER_PASSWORD_ENV))

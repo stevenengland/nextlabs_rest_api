@@ -1,6 +1,11 @@
+import base64
+
+import keyring
+
 from mockito import mock, spy2, verify, when
 
 from nextlabs_sdk._auth._token_cache import _cache_factory as cache_factory
+from nextlabs_sdk._auth._token_cache import _keyring_passphrase_source as kps
 from nextlabs_sdk._auth._token_cache import _secret_box as sb
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
@@ -54,6 +59,29 @@ class TestBuildTokenCache:
         )
         assert capsys.readouterr().err == ""
 
+    def test_keyring_path_roundtrips_without_argon2(self, tmp_path):
+        # given no env secret and an available keyring holding a stored key
+        when(keyring).set_password(
+            kps._SERVICE, kps._PROBE_ACCOUNT, kps._PROBE_VALUE
+        ).thenReturn(None)
+        when(keyring).get_password(kps._SERVICE, kps._PROBE_ACCOUNT).thenReturn(
+            kps._PROBE_VALUE
+        )
+        when(keyring).delete_password(kps._SERVICE, kps._PROBE_ACCOUNT).thenReturn(None)
+        stored = b"\x33" * kps._KEK_LEN
+        when(keyring).get_password(kps._SERVICE, kps._KEK_ACCOUNT).thenReturn(
+            base64.b64encode(stored).decode("ascii")
+        )
+        spy2(sb._derive_kek)
+        # when a cache is built and a token is saved then loaded back
+        cache = cache_factory.build_token_cache(path=tmp_path / "t.json", env={})
+        cache.save("a", _tok())
+        loaded = cache.load("a")
+        # then the cache is encrypted, round-trips, and no Argon2 derivation runs
+        assert isinstance(cache, EncryptedFileTokenCache)
+        assert loaded == _tok()
+        verify(sb, times=0)._derive_kek(...)
+
 
 class TestInspectTokenCache:
     def test_inspect_reports_without_unlocking(self, tmp_path):
@@ -84,3 +112,21 @@ class TestInspectTokenCache:
         status = cache_factory.inspect_token_cache(path=path, env={})
         assert status.state == "plaintext"
         assert status.suite_id is None
+
+    def test_inspect_reports_keyring_label_without_generating_key(self, tmp_path):
+        # given an available keyring but no stored key yet
+        when(keyring).set_password(
+            kps._SERVICE, kps._PROBE_ACCOUNT, kps._PROBE_VALUE
+        ).thenReturn(None)
+        when(keyring).get_password(kps._SERVICE, kps._PROBE_ACCOUNT).thenReturn(
+            kps._PROBE_VALUE
+        )
+        when(keyring).delete_password(kps._SERVICE, kps._PROBE_ACCOUNT).thenReturn(None)
+        # when the absent cache is inspected
+        status = cache_factory.inspect_token_cache(
+            path=tmp_path / "tokens.json", env={}
+        )
+        # then the keyring label is reported without persisting a fresh key
+        assert status.state == "absent"
+        assert status.source == "keyring"
+        verify(keyring, times=0).set_password(kps._SERVICE, kps._KEK_ACCOUNT, ...)
