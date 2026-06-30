@@ -113,15 +113,16 @@ def obligation(name: str, params: dict[str, str]) -> dict[str, Any]:
 
 
 def revision_with_obligations(
-    number: int, obligations: list[dict[str, Any]]
+    number: int, obligations: list[dict[str, Any]], *, deny: bool = False
 ) -> PolicyRevision:
+    field = "denyObligations" if deny else "allowObligations"
     policy = Policy.model_validate(
         {
             "id": 82,
             "name": "P",
             "status": "DRAFT",
             "effectType": "ALLOW",
-            "allowObligations": obligations,
+            field: obligations,
         }
     )
     return PolicyRevision(

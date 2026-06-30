@@ -242,3 +242,143 @@ def test_cross_policy_show_all_reveals_identity_fields():
     result = diff_payloads(old, new, cross_policy=True, show_all=True)
 
     assert any(c.path == ("name",) for c in result.changes)
+
+
+from nextlabs_sdk._cli._diff._identity import ObligationSummary
+
+
+def test_added_obligation_expands_payload_field_lines():
+    """Given a payload that adds an obligation carrying params and policyModelId.
+
+    When diffing without show_all.
+    Then a summary-header add is emitted plus per-field add lines for the
+    obligation's policyModelId and each params entry, nested under the
+    obligation's name.
+    """
+    # given
+    old = {"name": "P", "allowObligations": []}
+    new = {
+        "name": "P",
+        "allowObligations": [
+            {
+                "id": None,
+                "policyModelId": 7,
+                "name": "data_masking",
+                "params": {"col": "ssn"},
+            }
+        ],
+    }
+    # when
+    result = diff_payloads(old, new)
+    obl = [c for c in result.changes if c.path and c.path[0] == "allowObligations"]
+    # then
+    assert any(
+        c.kind == "add"
+        and c.path == ("allowObligations",)
+        and isinstance(c.new, ObligationSummary)
+        for c in obl
+    )
+    assert any(
+        c.kind == "add"
+        and c.path == ("allowObligations", "data_masking", "policyModelId")
+        and c.new == 7
+        for c in obl
+    )
+    assert any(
+        c.kind == "add"
+        and c.path == ("allowObligations", "data_masking", "params", "col")
+        and c.new == "ssn"
+        for c in obl
+    )
+
+
+def test_removed_obligation_expands_payload_field_lines():
+    """Given a payload that removes an obligation carrying params.
+
+    When diffing without show_all.
+    Then a summary-header remove is emitted plus per-field remove lines carrying
+    the removed obligation's params under its name.
+    """
+    # given
+    old = {
+        "name": "P",
+        "allowObligations": [
+            {
+                "id": None,
+                "policyModelId": 0,
+                "name": "data_masking",
+                "params": {"col": "ssn"},
+            }
+        ],
+    }
+    new = {"name": "P", "allowObligations": []}
+    # when
+    result = diff_payloads(old, new)
+    obl = [c for c in result.changes if c.path and c.path[0] == "allowObligations"]
+    # then
+    assert any(
+        c.kind == "remove"
+        and c.path == ("allowObligations",)
+        and isinstance(c.old, ObligationSummary)
+        for c in obl
+    )
+    assert any(
+        c.kind == "remove"
+        and c.path == ("allowObligations", "data_masking", "params", "col")
+        and c.old == "ssn"
+        for c in obl
+    )
+
+
+def test_noise_field_inside_added_obligation_is_hidden_by_default():
+    """Given an added obligation whose payload carries a deployment-noise field.
+
+    When diffing without show_all.
+    Then the noise field surfaces in no visible change and is counted as hidden.
+    """
+    # given
+    old = {"name": "P", "allowObligations": []}
+    new = {
+        "name": "P",
+        "allowObligations": [
+            {
+                "id": None,
+                "policyModelId": 0,
+                "name": "data_masking",
+                "params": {"col": "ssn"},
+                "lastUpdatedDate": 123,
+            }
+        ],
+    }
+    # when
+    result = diff_payloads(old, new)
+    # then
+    assert not any(c.path and c.path[-1] == "lastUpdatedDate" for c in result.changes)
+    assert result.hidden_noise_count == 1
+
+
+def test_noise_field_inside_added_obligation_is_revealed_with_show_all():
+    """Given an added obligation whose payload carries a deployment-noise field.
+
+    When diffing with show_all.
+    Then the noise field's value is no longer suppressed.
+    """
+    # given
+    old = {"name": "P", "allowObligations": []}
+    new = {
+        "name": "P",
+        "allowObligations": [
+            {
+                "id": None,
+                "policyModelId": 0,
+                "name": "data_masking",
+                "params": {"col": "ssn"},
+                "lastUpdatedDate": 123,
+            }
+        ],
+    }
+    # when
+    result = diff_payloads(old, new, show_all=True)
+    # then
+    assert result.hidden_noise_count == 0
+    assert any("lastUpdatedDate" in repr(c.new) for c in result.changes)

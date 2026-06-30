@@ -22,6 +22,7 @@ _KIND_ADD: Literal["add"] = "add"
 _KIND_REMOVE: Literal["remove"] = "remove"
 _KIND_CHANGE: Literal["change"] = "change"
 _UNKNOWN_LABEL: str = "?"
+_OBLIGATION_HEADER_FIELDS: frozenset[str] = frozenset(("id", "name"))
 
 _NOISE_FIELDS: frozenset[str] = frozenset(
     (
@@ -248,6 +249,9 @@ def _diff_obligation_field(
                     new=None,
                 )
             )
+            _expand_obligation(
+                old_obl, path=path + (label,), kind=_KIND_REMOVE, changes=changes
+            )
         else:
             changes.append(
                 FieldChange(
@@ -257,6 +261,49 @@ def _diff_obligation_field(
                     new=ObligationSummary(name=label),
                 )
             )
+            _expand_obligation(
+                new_obl, path=path + (label,), kind=_KIND_ADD, changes=changes
+            )
+
+
+def _expand_obligation(
+    obligation: Mapping[str, object] | None,
+    *,
+    path: tuple[str, ...],
+    kind: Literal["add", "remove"],
+    changes: list[FieldChange],
+) -> None:
+    """Emit a field-line change per leaf of an added/removed obligation payload.
+
+    The obligation's header fields (its ``name`` and the always-null ``id``)
+    are skipped because the name is already shown on the summary header; every
+    remaining field, including each nested ``params`` entry, is flattened to a
+    leaf change so the renderer prints it as a ``+``/``-`` field-line nested
+    under that header.
+    """
+    if obligation is None:
+        return
+    for key, child in obligation.items():
+        if key in _OBLIGATION_HEADER_FIELDS:
+            continue
+        _expand_obligation_value(child, path=path + (key,), kind=kind, changes=changes)
+
+
+def _expand_obligation_value(
+    value: object,  # noqa: WPS110
+    *,
+    path: tuple[str, ...],
+    kind: Literal["add", "remove"],
+    changes: list[FieldChange],
+) -> None:
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            _expand_obligation_value(
+                child, path=path + (key,), kind=kind, changes=changes
+            )
+        return
+    old, new = (value, None) if kind == _KIND_REMOVE else (None, value)
+    changes.append(FieldChange(path=path, kind=kind, old=old, new=new))
 
 
 def _obligation_label(obligation: Mapping[str, object] | None) -> str:
