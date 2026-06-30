@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
+from types import MappingProxyType
 from typing import Annotated
 
 import click
@@ -25,6 +26,7 @@ from nextlabs_sdk._cli._account_resolver import (
     build_token_cache,
     build_prefs_store,
     effective_verify_ssl,
+    inspect_token_cache,
 )
 from nextlabs_sdk._cli._account_status_label import account_status_and_refreshable
 from nextlabs_sdk._cli._context import CliContext
@@ -377,6 +379,22 @@ def _render_status_detail(
     Console().print(_build_status_table(target, entry))
 
 
+_KDF_SUITE_NAMES = MappingProxyType({1: "argon2id"})
+
+
+def _render_cache_line(cli_ctx: CliContext) -> None:
+    cache_info = inspect_token_cache(cli_ctx)
+    suite = (
+        _STATUS_NONE
+        if cache_info.suite_id is None
+        else _KDF_SUITE_NAMES.get(cache_info.suite_id, str(cache_info.suite_id))
+    )
+    typer.echo(
+        f"Cache: {cache_info.path} ({cache_info.state}); "
+        f"source: {cache_info.source}; suite: {suite}"
+    )
+
+
 @auth_app.command(name="status")
 @cli_error_handler
 def status(
@@ -385,6 +403,7 @@ def status(
 ) -> None:
     """Show whether a valid cached token exists."""
     cli_ctx: CliContext = ctx.obj
+    _render_cache_line(cli_ctx)
     if show_all:
         _status_all(cli_ctx)
         return

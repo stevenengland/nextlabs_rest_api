@@ -7,7 +7,9 @@ from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
 )
 from nextlabs_sdk._auth._token_cache._cache_factory import (
+    CacheStatus,
     build_token_cache as _factory,
+    inspect_token_cache as _inspect,
 )
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
@@ -31,14 +33,24 @@ def build_active_store(ctx: CliContext) -> ActiveAccountStore:
     return ActiveAccountStore()
 
 
-def build_token_cache(ctx: CliContext) -> TokenCache:
+def _cache_env_and_path(ctx: CliContext) -> tuple[dict[str, str], Path | None]:
     env: dict[str, str] = {}
     if ctx.master_password:
         env["NEXTLABS_MASTER_PASSWORD"] = ctx.master_password
     if ctx.disable_token_encryption:
         env["NEXTLABS_DISABLE_TOKEN_ENCRYPTION"] = "1"
     path = Path(ctx.cache_dir) / "tokens.json" if ctx.cache_dir else None
+    return env, path
+
+
+def build_token_cache(ctx: CliContext) -> TokenCache:
+    env, path = _cache_env_and_path(ctx)
     return _factory(path=path, env=env)
+
+
+def inspect_token_cache(ctx: CliContext) -> CacheStatus:
+    env, path = _cache_env_and_path(ctx)
+    return _inspect(path=path, env=env)
 
 
 def build_prefs_store(ctx: CliContext) -> AccountPreferencesStore:
