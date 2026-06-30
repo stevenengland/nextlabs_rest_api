@@ -5,6 +5,9 @@ from pathlib import Path
 import pytest
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
+    EncryptedFileTokenCache,
+)
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli._account_resolver import (
     build_active_store,
@@ -137,6 +140,17 @@ def test_build_token_cache_respects_cache_dir(tmp_path: Path) -> None:
     cache = build_token_cache(_ctx(cache_dir=str(tmp_path)))
     assert isinstance(cache, FileTokenCache)
     assert cache.path == tmp_path / "tokens.json"
+
+
+def test_master_password_env_var_encrypts_cache(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The secret reaches the factory only through the process environment,
+    # never an argv-exposed CLI flag.
+    monkeypatch.setenv("NEXTLABS_MASTER_PASSWORD", "from-the-env")
+    cache = build_token_cache(_ctx(cache_dir=str(tmp_path)))
+    assert isinstance(cache, EncryptedFileTokenCache)
 
 
 def test_resolved_account_carries_kind_from_active_pointer(

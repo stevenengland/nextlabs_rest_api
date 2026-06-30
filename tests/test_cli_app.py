@@ -42,6 +42,16 @@ def test_app_no_args_shows_help():
     assert "Usage" in result.output
 
 
+def test_master_password_not_accepted_via_argv():
+    # Given the root app
+    # When a value-taking --master-password option is supplied
+    result = runner.invoke(app, ["--master-password", "s3cret", "auth"])
+    # Then it is rejected: the secret must never reach argv, where it would be
+    # visible via ps / /proc / shell history.
+    assert result.exit_code != 0
+    assert "--master-password" not in runner.invoke(app, ["--help"]).output
+
+
 @pytest.mark.parametrize("group", _GROUPS)
 def test_group_without_subcommand_shows_help(group: str):
     # Given a top-level command group

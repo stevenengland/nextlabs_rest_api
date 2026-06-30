@@ -24,6 +24,20 @@ def test_raw_wrap_round_trip():
     assert SecretBox.unlock(blob, RawKek(key=key)).decrypt(blob) == b"payload"
 
 
+def test_raw_wrap_uses_unique_salt_per_seal():
+    # The raw-KEK path must not reuse the (key, wrap-nonce) pair across seals:
+    # a fresh random salt per seal derives a distinct wrap subkey, so two
+    # caches sealed under the same keyring key never reuse a GCM keystream.
+    key = b"\x22" * 32
+    first = SecretBox.seal_new(RawKek(key=key)).encrypt(b"a")
+    second = SecretBox.seal_new(RawKek(key=key)).encrypt(b"b")
+    first_salt = first[7:23]
+    second_salt = second[7:23]
+    assert first_salt != second_salt
+    assert first_salt != b"\x00" * 16
+    assert SecretBox.unlock(second, RawKek(key=key)).decrypt(second) == b"b"
+
+
 def test_wrong_passphrase_rejects():
     blob = SecretBox.seal_new(PassphraseKek(passphrase=b"right")).encrypt(b"x")
     with pytest.raises(TokenCacheError):
