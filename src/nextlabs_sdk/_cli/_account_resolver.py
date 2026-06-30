@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,8 +36,12 @@ def build_active_store(ctx: CliContext) -> ActiveAccountStore:
 
 def _cache_env_and_path(ctx: CliContext) -> tuple[dict[str, str], Path | None]:
     env: dict[str, str] = {}
-    if ctx.master_password:
-        env["NEXTLABS_MASTER_PASSWORD"] = ctx.master_password
+    # The master password is read only from the process environment; it is
+    # never accepted as a CLI flag, which would expose it via argv (ps,
+    # /proc/*/cmdline, shell history).
+    master_password = os.environ.get("NEXTLABS_MASTER_PASSWORD")
+    if master_password:
+        env["NEXTLABS_MASTER_PASSWORD"] = master_password
     if ctx.disable_token_encryption:
         env["NEXTLABS_DISABLE_TOKEN_ENCRYPTION"] = "1"
     path = Path(ctx.cache_dir) / "tokens.json" if ctx.cache_dir else None

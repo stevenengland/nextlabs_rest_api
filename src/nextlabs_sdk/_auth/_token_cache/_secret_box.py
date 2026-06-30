@@ -6,7 +6,9 @@ from types import MappingProxyType
 
 from argon2 import low_level
 from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from nextlabs_sdk.exceptions import TokenCacheError
 
@@ -27,8 +29,8 @@ _SALT_OFFSET = 7
 _WRAPPED_DEK_OFFSET = _SALT_OFFSET + _SALT_LEN
 _HEADER_PREFIX_LEN = _WRAPPED_DEK_OFFSET + _WRAPPED_DEK_LEN
 
-_ZERO_SALT = b"\x00" * _SALT_LEN
 _WRAP_NONCE = b"\x00" * _NONCE_LEN
+_RAW_WRAP_INFO = b"nlbx-raw-kek-wrap"
 
 _ARGON2_TIME_COST = 3
 _ARGON2_MEMORY_COST = 65536
@@ -73,6 +75,22 @@ class Header:
     version: int
     wrap_type: int
     suite_id: int
+
+
+def _derive_raw_wrap_key(key: bytes, salt: bytes) -> bytes:
+    """Derive a per-file DEK-wrapping subkey from a stable raw KEK.
+
+    The raw-KEK (keyring) path stores no Argon2 salt and uses a fixed wrap
+    nonce, so wrapping the DEK directly under the stable key would reuse the
+    ``(key, nonce)`` GCM pair across seals. HKDF over a fresh per-seal salt
+    yields a unique subkey each time, keeping the wrap construction safe.
+    """
+    return HKDF(
+        algorithm=hashes.SHA256(),
+        length=_DEK_LEN,
+        salt=salt,
+        info=_RAW_WRAP_INFO,
+    ).derive(key)
 
 
 def _derive_kek(passphrase: bytes, salt: bytes, suite: _Argon2Suite) -> bytes:
@@ -162,7 +180,8 @@ def _resolve_kek_for_seal(
     kek_source: PassphraseKek | RawKek,
 ) -> tuple[int, int, bytes, bytes]:
     if isinstance(kek_source, RawKek):
-        return _WRAP_RAW, 0, _ZERO_SALT, kek_source.key
+        salt = os.urandom(_SALT_LEN)
+        return _WRAP_RAW, 0, salt, _derive_raw_wrap_key(kek_source.key, salt)
     suite = _SUITES[kek_source.suite_id]
     salt = os.urandom(suite.salt_len)
     kek = _derive_kek(kek_source.passphrase, salt, suite)
@@ -175,7 +194,7 @@ def _resolve_kek_for_unlock(
     salt: bytes,
 ) -> bytes:
     if isinstance(kek_source, RawKek):
-        return kek_source.key
+        return _derive_raw_wrap_key(kek_source.key, salt)
     suite = _SUITES.get(suite_id)
     if suite is None:
         raise TokenCacheError()

@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from nextlabs_sdk._cloudaz._search.payloads import date_payload
 from nextlabs_sdk.exceptions import SearchExpressionError
 
-_DATE_LABEL = "Date"
 _RANGE_SEP = ".."
 _MILLIS_PER_SECOND = 1000
 
@@ -41,7 +41,7 @@ def date_value(raw: str) -> dict[str, Any]:
         return _range_payload(token)
     keyword = token.upper()
     if keyword in DATE_KEYWORDS:
-        return {"type": _DATE_LABEL, "dateOption": keyword}
+        return date_payload(dateOption=keyword)
     raise SearchExpressionError(
         f"date value must be a keyword or from..to range: {raw!r}",
     )
@@ -49,11 +49,10 @@ def date_value(raw: str) -> dict[str, Any]:
 
 def _range_payload(token: str) -> dict[str, Any]:
     from_part, _, to_part = token.partition(_RANGE_SEP)
-    return {
-        "type": _DATE_LABEL,
-        "fromDate": epoch_millis(from_part),
-        "toDate": epoch_millis(to_part),
-    }
+    return date_payload(
+        fromDate=epoch_millis(from_part),
+        toDate=epoch_millis(to_part),
+    )
 
 
 def epoch_millis(bound: str) -> int:

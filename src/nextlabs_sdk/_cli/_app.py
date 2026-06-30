@@ -129,12 +129,6 @@ def main(
         envvar="NEXTLABS_CACHE_DIR",
         help="Override the token cache directory.",
     ),
-    master_password: str | None = typer.Option(
-        None,
-        envvar="NEXTLABS_MASTER_PASSWORD",
-        hide_input=True,
-        help="Master password for the encrypted token cache.",
-    ),
     disable_token_encryption: bool = typer.Option(
         False,
         envvar="NEXTLABS_DISABLE_TOKEN_ENCRYPTION",
@@ -175,6 +169,5 @@ def main(
         verbose=verbose,
         pdp_auth=pdp_auth,
         pdp_client_id=pdp_client_id,
-        master_password=master_password,
         disable_token_encryption=disable_token_encryption,
     )

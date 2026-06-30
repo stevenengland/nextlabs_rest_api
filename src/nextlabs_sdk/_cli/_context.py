@@ -24,5 +24,4 @@ class CliContext:
     verbose: int = 0
     pdp_auth: PdpAuthSource | None = None
     pdp_client_id: str | None = None
-    master_password: str | None = None
     disable_token_encryption: bool = False

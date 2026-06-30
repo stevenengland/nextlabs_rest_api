@@ -5,6 +5,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from nextlabs_sdk._cloudaz._search.payloads import (
+    date_payload,
+    string_payload,
+    text_payload,
+)
+
 
 class SearchFieldType(str, Enum):
     SINGLE = "SINGLE"
@@ -57,14 +63,7 @@ class SavedSearch(BaseModel):
     criteria: dict[str, Any] | None = None
 
 
-_STRING_LABEL = "String"
 _DEFAULT_PAGE_SIZE = 20
-
-
-def _typed_payload(label: str, **entries: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"type": label}
-    out.update(entries)
-    return out
 
 
 class SearchCriteria:  # noqa: WPS214
@@ -95,7 +94,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "type",
             SearchFieldType.MULTI_EXACT_MATCH,
-            _typed_payload(_STRING_LABEL, value=list(types)),
+            string_payload(list(types)),
         )
         return self
 
@@ -103,7 +102,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "effectType",
             SearchFieldType.MULTI_EXACT_MATCH,
-            _typed_payload(_STRING_LABEL, value=list(effect_types)),
+            string_payload(list(effect_types)),
         )
         return self
 
@@ -111,7 +110,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "tags",
             SearchFieldType.NESTED_MULTI,
-            _typed_payload(_STRING_LABEL, value=list(tag_keys)),
+            string_payload(list(tag_keys)),
             nestedField="tags.key",
         )
         return self
@@ -125,11 +124,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "text",
             SearchFieldType.TEXT,
-            _typed_payload(
-                "Text",
-                fields=fields or ["name", "description"],
-                value=text,
-            ),
+            text_payload(text, fields=fields),
         )
         return self
 
@@ -151,7 +146,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             field,
             SearchFieldType.DATE,
-            _typed_payload("Date", **date_entries),
+            date_payload(**date_entries),
         )
         return self
 
@@ -165,7 +160,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "group",
             SearchFieldType.SINGLE_EXACT_MATCH,
-            _typed_payload(_STRING_LABEL, value=group),
+            string_payload(group),
         )
         return self
 
@@ -173,7 +168,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "status",
             SearchFieldType.MULTI,
-            _typed_payload(_STRING_LABEL, value=list(statuses)),
+            string_payload(list(statuses)),
         )
         return self
 
@@ -181,7 +176,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             "modelType",
             SearchFieldType.MULTI,
-            _typed_payload(_STRING_LABEL, value=list(types)),
+            string_payload(list(types)),
         )
         return self
 
@@ -189,7 +184,7 @@ class SearchCriteria:  # noqa: WPS214
         self._append_entry(
             field,
             SearchFieldType.SINGLE_EXACT_MATCH,
-            _typed_payload(_STRING_LABEL, value=match),
+            string_payload(match),
         )
         return self
 
