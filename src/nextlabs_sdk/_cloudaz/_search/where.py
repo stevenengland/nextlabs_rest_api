@@ -13,18 +13,17 @@ from nextlabs_sdk._cloudaz._search.dates import (
     date_value,
     epoch_millis,
 )
+from nextlabs_sdk._cloudaz._search.payloads import (
+    date_payload,
+    string_payload,
+    text_payload,
+)
 from nextlabs_sdk.exceptions import SearchExpressionError
 
-_STRING_LABEL = "String"
-_TEXT_LABEL = "Text"
-_DATE_LABEL = "Date"
 _TEXT_ATTR = "text"
-_TEXT_DEFAULT_FIELDS = ("name", "description")
 _FROM_DATE = "fromDate"
 _TO_DATE = "toDate"
-_TYPE_KEY = "type"
 _VALUE_KEY = "value"
-_FIELDS_KEY = "fields"
 
 _SCALAR_TYPES: MappingProxyType[str, SearchFieldType] = MappingProxyType(
     {
@@ -125,13 +124,13 @@ def _nested_field(node: Filter) -> SearchField:
         return SearchField(
             field=base,
             type=SearchFieldType.NESTED,
-            value={_TYPE_KEY: _STRING_LABEL, _VALUE_KEY: comp_values[0]},
+            value=string_payload(comp_values[0]),
             nestedField=nested_field,
         )
     return SearchField(
         field=base,
         type=SearchFieldType.NESTED_MULTI,
-        value={_TYPE_KEY: _STRING_LABEL, _VALUE_KEY: comp_values},
+        value=string_payload(comp_values),
         nestedField=nested_field,
     )
 
@@ -154,10 +153,7 @@ def _or_group_field(node: LogExpr) -> SearchField:
     return SearchField(
         field=next(iter(names)),
         type=field_type,
-        value={
-            _TYPE_KEY: _STRING_LABEL,
-            _VALUE_KEY: [term.comp_value.value for term in terms],
-        },
+        value=string_payload([term.comp_value.value for term in terms]),
     )
 
 
@@ -200,7 +196,7 @@ def _scalar_field(node: AttrExpr) -> SearchField:
     return SearchField(
         field=name,
         type=_scalar_types(operator),
-        value={_TYPE_KEY: _STRING_LABEL, _VALUE_KEY: comp_value},
+        value=string_payload(comp_value),
     )
 
 
@@ -212,10 +208,7 @@ def _date_bound_field(
     return SearchField(
         field=name,
         type=SearchFieldType.DATE,
-        value={
-            _TYPE_KEY: _DATE_LABEL,
-            _DATE_BOUND_KEYS[operator]: epoch_millis(comp_value),
-        },
+        value=date_payload(**{_DATE_BOUND_KEYS[operator]: epoch_millis(comp_value)}),
     )
 
 
@@ -231,11 +224,7 @@ def _text_field(name: str, comp_value: str) -> SearchField:
     return SearchField(
         field=name,
         type=SearchFieldType.TEXT,
-        value={
-            _TYPE_KEY: _TEXT_LABEL,
-            _FIELDS_KEY: list(_TEXT_DEFAULT_FIELDS),
-            _VALUE_KEY: comp_value,
-        },
+        value=text_payload(comp_value),
     )
 
 

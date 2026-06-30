@@ -4,11 +4,8 @@ from typing import Any
 
 from nextlabs_sdk._cloudaz._search.criteria import SearchField, SearchFieldType
 from nextlabs_sdk._cloudaz._search.dates import date_value
+from nextlabs_sdk._cloudaz._search.payloads import string_payload, text_payload
 from nextlabs_sdk.exceptions import SearchExpressionError
-
-_STRING_LABEL = "String"
-_TEXT_LABEL = "Text"
-_TEXT_DEFAULT_FIELDS = ("name", "description")
 
 
 def parse_field_expr(expr: str) -> SearchField:
@@ -102,13 +99,9 @@ def _value_payload(
     if field_type is SearchFieldType.DATE:
         return date_value(raw_value)
     if field_type is SearchFieldType.TEXT:
-        return {
-            "type": _TEXT_LABEL,
-            "fields": list(_TEXT_DEFAULT_FIELDS),
-            "value": raw_value,
-        }
+        return text_payload(raw_value)
     if is_list:
         parsed: object = [part.strip() for part in raw_value.split(",")]
     else:
         parsed = raw_value
-    return {"type": _STRING_LABEL, "value": parsed}
+    return string_payload(parsed)
