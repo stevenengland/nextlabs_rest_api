@@ -92,6 +92,9 @@ def _confirm_plaintext_or_abort(console: ConsoleIO, cache_path: Path) -> TokenCa
     try:
         confirmed = console.confirm(_CONFIRM_PROMPT)
     except OSError:
+        # The confirmation warning already disclosed plaintext storage; record
+        # it so a later non-interactive build does not repeat the warning.
+        globals()["_WARNED"] = True
         return FileTokenCache(path=cache_path)
     if confirmed:
         return FileTokenCache(path=cache_path)

@@ -232,3 +232,28 @@ class TestInteractiveTokenCache:
         assert isinstance(cache, FileTokenCache)
         assert cache.load("a") == _tok()
         assert "UNENCRYPTED" in capsys.readouterr().err
+
+    def test_unusable_tty_then_non_tty_warns_about_plaintext_only_once(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given a process whose first build hits an unusable controlling terminal
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        unusable = mock()
+        when(unusable).isatty().thenReturn(True)
+        when(unusable).prompt_secret(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        when(unusable).confirm(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=unusable
+        )
+        # and a later build in the same process sees a plain non-interactive console
+        plain = mock()
+        when(plain).isatty().thenReturn(False)
+        # when the second build completes
+        cache_factory.build_token_cache(path=tmp_path / "t.json", env={}, console=plain)
+        # then the user was warned about unencrypted storage only once
+        assert capsys.readouterr().err.count("UNENCRYPTED") == 1
