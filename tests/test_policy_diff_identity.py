@@ -287,17 +287,19 @@ def test_added_and_removed_obligations_are_reported():
     """Given one obligation replaced by a differently-named obligation.
 
     When diffing the two payloads.
-    Then one add and one remove are produced, each carrying the name.
+    Then one add and one remove summary header are produced, each carrying the
+    name (the expanded content lines nest beneath them).
     """
     old = {"denyObligations": [_obl("log", {"level": "info"})]}
     new = {"denyObligations": [_obl("alert", {"channel": "ops"})]}
 
     changes = _obligation_changes(diff_payloads(old, new), "denyObligations")
-    kinds = sorted(change.kind for change in changes)
+    headers = [change for change in changes if change.path == ("denyObligations",)]
+    kinds = sorted(change.kind for change in headers)
 
     assert kinds == ["add", "remove"]
-    added = next(change for change in changes if change.kind == "add")
-    removed = next(change for change in changes if change.kind == "remove")
+    added = next(change for change in headers if change.kind == "add")
+    removed = next(change for change in headers if change.kind == "remove")
     assert added.new == ObligationSummary(name="alert")
     assert removed.old == ObligationSummary(name="log")
 
@@ -306,7 +308,8 @@ def test_extra_obligation_in_colliding_group_is_reported_as_added():
     """Given a colliding-name group that gains an extra obligation.
 
     When diffing the two payloads.
-    Then the unpaired obligation is reported as added, not a change.
+    Then the unpaired obligation's summary header is reported as added, not a
+    change.
     """
     old = {"allowObligations": [_obl("data_masking", {"col": "a"})]}
     new = {
@@ -317,9 +320,10 @@ def test_extra_obligation_in_colliding_group_is_reported_as_added():
     }
 
     changes = _obligation_changes(diff_payloads(old, new), "allowObligations")
+    headers = [change for change in changes if change.path == ("allowObligations",)]
 
-    assert [change.kind for change in changes] == ["add"]
-    assert changes[0].new == ObligationSummary(name="data_masking")
+    assert [change.kind for change in headers] == ["add"]
+    assert headers[0].new == ObligationSummary(name="data_masking")
 
 
 def test_tag_identity_key_prefers_key_then_label():

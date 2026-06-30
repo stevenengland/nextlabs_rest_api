@@ -269,3 +269,106 @@ def test_both_shared_name_obligations_report_changed_params(
     output = strip_ansi(result.output)
     assert "ssn_hash" in output
     assert "dob_hash" in output
+
+
+def test_added_obligation_renders_expanded_content(stub: tuple[Any, Any]) -> None:
+    """Given two revisions where an obligation is added, when running diff, then
+    its params and policyModelId render as nested field-lines under the added
+    summary header, not just the name."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(revision_with_obligations(2, []))
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(
+            3, [obligation("data_masking", {"col": "ssn", "region": "eu"})]
+        )
+    )
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "allowObligations: data_masking" in output
+    assert "params.col" in output and "ssn" in output
+    assert "region" in output and "eu" in output
+    assert "policyModelId" in output
+
+
+def test_removed_obligation_renders_expanded_content(stub: tuple[Any, Any]) -> None:
+    """Given two revisions where an obligation is removed, when running diff,
+    then its params render as nested remove field-lines under the removed
+    summary header."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_obligations(2, [obligation("data_masking", {"col": "ssn"})])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(revision_with_obligations(3, []))
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "allowObligations: data_masking" in output
+    assert "params.col" in output and "ssn" in output
+
+
+def test_added_obligations_render_each_param_shape(stub: tuple[Any, Any]) -> None:
+    """Given two revisions adding a data_masking and an enforce_table_list
+    obligation, when running diff, then the distinct param fields of each shape
+    are rendered."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(revision_with_obligations(2, []))
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(
+            3,
+            [
+                obligation("data_masking", {"mask_fields": "ssn,dob"}),
+                obligation("enforce_table_list", {"tables": "orders,users"}),
+            ],
+        )
+    )
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "params.mask_fields" in output and "ssn,dob" in output
+    assert "params.tables" in output and "orders,users" in output
+
+
+def test_added_deny_obligation_expands_like_allow(stub: tuple[Any, Any]) -> None:
+    """Given two revisions where a denyObligations entry is added, when running
+    diff, then its content expands identically to an allowObligations add."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_obligations(2, [], deny=True)
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(
+            3, [obligation("data_masking", {"col": "ssn"})], deny=True
+        )
+    )
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "denyObligations: data_masking" in output
+    assert "params.col" in output and "ssn" in output
+
+
+def test_unified_added_obligation_keeps_json_body_unchanged(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions where an obligation is added, when running diff with
+    --format unified, then the obligation is rendered in the JSON body and the
+    semantic dotted field-line style does not leak into the unified output."""
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(revision_with_obligations(2, []))
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(3, [obligation("data_masking", {"col": "ssn"})])
+    )
+    result = runner.invoke(
+        app, [*GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    assert result.exit_code == 0
+    output = strip_ansi(result.output)
+    assert "@@" in output
+    assert '"name": "data_masking"' in output
+    assert "allowObligations.data_masking" not in output
