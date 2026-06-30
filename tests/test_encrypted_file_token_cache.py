@@ -120,12 +120,15 @@ def test_failed_write_leaves_plaintext_intact_and_rerun_completes(tmp_path: Path
     assert path.read_bytes() == original_bytes
     assert EncryptedFileTokenCache(path=path, kek_source=_kek()).load("acct") == legacy
 
-    # And re-running the save after recovery completes the migration
+    # And re-running the save after recovery completes the migration,
+    # persisting both the existing and the newly-added token
+    added = _tok(access_token="added")
     when(os).replace(...).thenCallOriginalImplementation()
-    cache.save("acct2", _tok(access_token="added"))
+    cache.save("acct2", added)
     assert path.read_bytes().startswith(b"NLBX")
     fresh = EncryptedFileTokenCache(path=path, kek_source=_kek())
     assert fresh.load("acct") == legacy
+    assert fresh.load("acct2") == added
 
 
 def test_dir_and_file_modes_preserved_across_migration(tmp_path: Path):
