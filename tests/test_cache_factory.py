@@ -1,4 +1,5 @@
 import base64
+import io
 
 import keyring
 import pytest
@@ -207,3 +208,27 @@ class TestInteractiveTokenCache:
         )
         # then the decision is read through the controlling terminal, not stdin
         verify(console, times=1).confirm(ANY)
+
+    def test_unusable_tty_degrades_to_plaintext_and_loads_legacy(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given no source, an unavailable keyring, an isatty-true terminal whose
+        # I/O raises io.UnsupportedOperation, and a legacy plaintext tokens.json
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        when(console).confirm(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        path = tmp_path / "tokens.json"
+        FileTokenCache(path=path).save("a", _tok())
+        # when a cache is built on the unusable controlling terminal
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then it degrades to plaintext without aborting and the legacy token loads
+        assert isinstance(cache, FileTokenCache)
+        assert cache.load("a") == _tok()
+        assert "UNENCRYPTED" in capsys.readouterr().err

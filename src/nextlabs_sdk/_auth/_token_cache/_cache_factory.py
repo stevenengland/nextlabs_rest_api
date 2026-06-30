@@ -83,8 +83,17 @@ def build_token_cache(
 
 
 def _confirm_plaintext_or_abort(console: ConsoleIO, cache_path: Path) -> TokenCache:
+    """Gate plaintext storage behind a confirmation on the controlling terminal.
+
+    An unusable terminal cannot be prompted, so it degrades to plaintext rather
+    than aborting, honouring the "encrypt when possible, never abort" policy.
+    """
     print(_CONFIRM_WARNING, file=sys.stderr)
-    if console.confirm(_CONFIRM_PROMPT):
+    try:
+        confirmed = console.confirm(_CONFIRM_PROMPT)
+    except OSError:
+        return FileTokenCache(path=cache_path)
+    if confirmed:
         return FileTokenCache(path=cache_path)
     raise TokenCacheError()
 

@@ -1,4 +1,5 @@
 import base64
+import io
 
 import keyring
 from keyring.errors import KeyringLocked, NoKeyringError
@@ -157,6 +158,19 @@ class TestInteractivePassphraseSource:
         # when the source is resolved
         # then an empty entry yields no material so the resolver falls through
         assert InteractivePassphraseSource(console).resolve({}) is None
+
+    def test_unusable_tty_reports_unavailable_without_escaping(self):
+        # given an isatty-true console whose secret prompt raises on a
+        # non-seekable controlling terminal
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        # when the source is resolved
+        result = InteractivePassphraseSource(console).resolve({})
+        # then the terminal is treated as unavailable and the error never escapes
+        assert result is None
 
     def test_resolver_returns_tty_label_for_interactive_source(self):
         # given no env secret and an interactive terminal supplying a passphrase

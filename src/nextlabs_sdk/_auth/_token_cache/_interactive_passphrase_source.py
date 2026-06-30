@@ -15,7 +15,10 @@ class InteractivePassphraseSource:
     key-encryption key. A non-interactive input stream reports unavailable
     without reading, so the resolver falls through to the next source instead of
     blocking on a prompt that can never be answered. An empty entry is also
-    treated as unavailable, deferring to the plaintext confirmation gate.
+    treated as unavailable, deferring to the plaintext confirmation gate. An
+    ``isatty()``-true terminal whose I/O raises ``OSError`` (such as a
+    non-seekable ``/dev/tty``) is likewise reported unavailable rather than
+    letting the error escape.
     """
 
     source_label = "tty"
@@ -26,7 +29,10 @@ class InteractivePassphraseSource:
     def resolve(self, env: Mapping[str, str]) -> PassphraseKek | None:
         if not self._console.isatty():
             return None
-        passphrase = self._console.prompt_secret(_PROMPT)
+        try:
+            passphrase = self._console.prompt_secret(_PROMPT)
+        except OSError:
+            return None
         if not passphrase:
             return None
         return PassphraseKek(passphrase=passphrase.encode("utf-8"))
