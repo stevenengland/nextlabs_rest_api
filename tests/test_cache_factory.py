@@ -1,4 +1,5 @@
 import base64
+import io
 
 import keyring
 import pytest
@@ -207,3 +208,52 @@ class TestInteractiveTokenCache:
         )
         # then the decision is read through the controlling terminal, not stdin
         verify(console, times=1).confirm(ANY)
+
+    def test_unusable_tty_degrades_to_plaintext_and_loads_legacy(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given no source, an unavailable keyring, an isatty-true terminal whose
+        # I/O raises io.UnsupportedOperation, and a legacy plaintext tokens.json
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        when(console).confirm(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        path = tmp_path / "tokens.json"
+        FileTokenCache(path=path).save("a", _tok())
+        # when a cache is built on the unusable controlling terminal
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then it degrades to plaintext without aborting and the legacy token loads
+        assert isinstance(cache, FileTokenCache)
+        assert cache.load("a") == _tok()
+        assert "UNENCRYPTED" in capsys.readouterr().err
+
+    def test_unusable_tty_then_non_tty_warns_about_plaintext_only_once(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given a process whose first build hits an unusable controlling terminal
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        unusable = mock()
+        when(unusable).isatty().thenReturn(True)
+        when(unusable).prompt_secret(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        when(unusable).confirm(ANY).thenRaise(
+            io.UnsupportedOperation("File or stream is not seekable.")
+        )
+        cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=unusable
+        )
+        # and a later build in the same process sees a plain non-interactive console
+        plain = mock()
+        when(plain).isatty().thenReturn(False)
+        # when the second build completes
+        cache_factory.build_token_cache(path=tmp_path / "t.json", env={}, console=plain)
+        # then the user was warned about unencrypted storage only once
+        assert capsys.readouterr().err.count("UNENCRYPTED") == 1
