@@ -10,7 +10,12 @@ from nextlabs_sdk._cli._diff._identity import (
     TagSummary,
 )
 from nextlabs_sdk._cli._diff._inline import highlight_pair
-from nextlabs_sdk._cli._diff._models import DiffHeader, DiffResult, FieldChange
+from nextlabs_sdk._cli._diff._models import (
+    CountMarker,
+    DiffHeader,
+    DiffResult,
+    FieldChange,
+)
 
 _GLYPH_ADD = "[green]+[/green]"
 _GLYPH_REMOVE = "[red]-[/red]"
@@ -187,6 +192,22 @@ def _render_typed_change(con: Console, field: str, change: FieldChange) -> None:
         _render_scalar_change(con, field, change)
 
 
+def _markers_by_section(markers: tuple[CountMarker, ...]) -> dict[str, CountMarker]:
+    """Index single-segment count markers by their field name for header lookup."""
+    indexed: dict[str, CountMarker] = {}
+    for marker in markers:
+        if len(marker.path) == 1:
+            indexed[marker.path[0]] = marker
+    return indexed
+
+
+def _count_suffix(marker: CountMarker | None) -> str:
+    """Render the ``[old → new]`` header suffix for a changed-count field."""
+    if marker is None:
+        return ""
+    return f" \\[{marker.old_count} {_ARROW} {marker.new_count}]"
+
+
 def render_semantic(
     diff: DiffResult,
     header: DiffHeader,
@@ -215,8 +236,9 @@ def render_semantic(
     for change in diff.changes:
         sections.setdefault(change.path[0], []).append(change)
 
+    markers = _markers_by_section(diff.count_markers)
     for section, changes in sections.items():
-        con.print(f"\n[bold]{section}[/bold]")
+        con.print(f"\n[bold]{section}[/bold]{_count_suffix(markers.get(section))}")
         for change in changes:
             field = ".".join(str(segment) for segment in change.path)
             _render_change(con, field, change)

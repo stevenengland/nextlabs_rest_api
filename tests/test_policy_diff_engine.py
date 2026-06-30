@@ -382,3 +382,66 @@ def test_noise_field_inside_added_obligation_is_revealed_with_show_all():
     # then
     assert result.hidden_noise_count == 0
     assert any("lastUpdatedDate" in repr(c.new) for c in result.changes)
+
+
+def test_count_marker_retained_when_obligation_list_shrinks():
+    """Given two payloads whose allow-obligation list shrinks from one to zero.
+
+    When diffing.
+    Then a count marker records the old and new element counts for that field.
+    """
+    old = {"name": "P", "allowObligations": [{"id": None, "name": "a", "params": {}}]}
+    new = {"name": "P", "allowObligations": []}
+
+    result = diff_payloads(old, new)
+
+    markers = {
+        marker.path: (marker.old_count, marker.new_count)
+        for marker in result.count_markers
+    }
+    assert markers[("allowObligations",)] == (1, 0)
+
+
+def test_no_count_marker_when_list_length_unchanged():
+    """Given two payloads whose tag list swaps one element for another.
+
+    When diffing.
+    Then no count marker is produced for the tag field, because the length held.
+    """
+    old = {"name": "P", "tags": [{"key": "a"}, {"key": "b"}]}
+    new = {"name": "P", "tags": [{"key": "a"}, {"key": "c"}]}
+
+    result = diff_payloads(old, new)
+
+    assert all(marker.path != ("tags",) for marker in result.count_markers)
+
+
+def test_count_marker_for_component_slot_counts_members_not_groups():
+    """Given a component slot whose single group grows from one member to two.
+
+    When diffing.
+    Then the count marker reflects member count, not the number of groups.
+    """
+    old = {
+        "name": "P",
+        "subjectComponents": [
+            {"operator": "AND", "components": [{"id": 5, "name": "E"}]}
+        ],
+    }
+    new = {
+        "name": "P",
+        "subjectComponents": [
+            {
+                "operator": "AND",
+                "components": [{"id": 5, "name": "E"}, {"id": 6, "name": "O"}],
+            }
+        ],
+    }
+
+    result = diff_payloads(old, new)
+
+    markers = {
+        marker.path: (marker.old_count, marker.new_count)
+        for marker in result.count_markers
+    }
+    assert markers[("subjectComponents",)] == (1, 2)

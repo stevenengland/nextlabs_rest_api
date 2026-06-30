@@ -17,11 +17,26 @@ class FieldChange:
 
 
 @dataclass(frozen=True)
+class CountMarker:
+    """Old and new element counts for a list-typed field whose length changed.
+
+    Carried alongside the changes so the semantic renderer can annotate the
+    field's header with an ``[old → new]`` marker. Only emitted when the counts
+    actually differ.
+    """
+
+    path: tuple[str, ...]
+    old_count: int
+    new_count: int
+
+
+@dataclass(frozen=True)
 class DiffResult:
     """The structured result of comparing two policy payloads."""
 
     changes: tuple[FieldChange, ...]
     hidden_noise_count: int
+    count_markers: tuple[CountMarker, ...] = ()
 
 
 @dataclass(frozen=True)

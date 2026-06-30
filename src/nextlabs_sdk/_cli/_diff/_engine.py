@@ -12,10 +12,11 @@ from nextlabs_sdk._cli._diff._identity import (
     OBLIGATION_FIELDS,
     TAG_FIELDS,
     ObligationSummary,
+    flatten_slot,
     pair_obligations,
 )
 from nextlabs_sdk._cli._diff._identity import TagSummary, pair_tags
-from nextlabs_sdk._cli._diff._models import DiffResult, FieldChange
+from nextlabs_sdk._cli._diff._models import CountMarker, DiffResult, FieldChange
 from nextlabs_sdk._cli._diff._slot import compare_slot
 
 _KIND_ADD: Literal["add"] = "add"
@@ -139,7 +140,40 @@ def diff_payloads(
     return DiffResult(
         changes=tuple(visible_changes),
         hidden_noise_count=hidden_noise_count,
+        count_markers=tuple(_collect_count_markers(old, new)),
     )
+
+
+def _collect_count_markers(
+    old: Mapping[str, object], new: Mapping[str, object]
+) -> list[CountMarker]:
+    """Record old/new element counts for top-level list fields that changed size.
+
+    Obligations, tags and generic arrays count their list elements directly;
+    component slots count their flattened members so a component added within an
+    existing group is recognised even though the group list itself is unchanged.
+    A marker is emitted only when the two counts differ.
+    """
+    markers: list[CountMarker] = []
+    for key in old.keys() | new.keys():
+        old_value = old.get(key)
+        new_value = new.get(key)
+        if not isinstance(old_value, list) and not isinstance(new_value, list):
+            continue
+        old_count, new_count = _element_counts(key, old_value, new_value)
+        if old_count != new_count:
+            markers.append(
+                CountMarker(path=(key,), old_count=old_count, new_count=new_count)
+            )
+    return markers
+
+
+def _element_counts(key: str, old_value: object, new_value: object) -> tuple[int, int]:
+    if key in COMPONENT_SLOT_FIELDS:
+        return len(flatten_slot(old_value)), len(flatten_slot(new_value))
+    old_count = len(old_value) if isinstance(old_value, list) else 0
+    new_count = len(new_value) if isinstance(new_value, list) else 0
+    return old_count, new_count
 
 
 def _strip_identity_fields(payload: Mapping[str, object]) -> dict[str, object]:

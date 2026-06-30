@@ -16,8 +16,11 @@ from tests._policy_diff_helpers import (
     entry,
     grouped,
     make_stub,
+    obligation,
     revision,
+    revision_with_obligations,
     revision_with_subject_groups,
+    revision_with_subjects,
     revision_with_tags,
     runner,
 )
@@ -265,3 +268,183 @@ def test_diff_unified_ignores_cosmetic_operator_change_matching_semantic(
     output = strip_ansi(result.output)
     assert "operator" not in output
     assert "grouping" not in output
+
+
+def _revision_with_attributes(number: int, attributes: list[str]) -> Any:
+    policy = Policy.model_validate(
+        {
+            "id": 82,
+            "name": "P",
+            "status": "DRAFT",
+            "effectType": "ALLOW",
+            "attributes": attributes,
+        }
+    )
+    return PolicyRevision(
+        id=10, revision=number, action_type="DE", policy_detail=policy
+    )
+
+
+def test_obligation_count_change_annotates_header_with_marker(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose allow-obligation list shrinks from two to one,
+    when running diff, then the obligation field header carries an [2 → 1]
+    count marker."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_obligations(
+            2, [obligation("a", {"p": "1"}), obligation("b", {"p": "2"})]
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(3, [obligation("a", {"p": "1"})])
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "allowObligations" in output
+    assert "[2 → 1]" in output
+
+
+def test_tag_count_change_annotates_header_with_marker(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose tag list grows from one to two, when running
+    diff, then the tags field header carries an [1 → 2] count marker."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_tags(2, [Tag(id=1, key="a", label="A")])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_tags(
+            3, [Tag(id=1, key="a", label="A"), Tag(id=2, key="b", label="B")]
+        )
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "[1 → 2]" in output
+
+
+def test_equal_count_tag_swap_shows_no_marker(stub: tuple[Any, Any]) -> None:
+    """Given two revisions whose two-tag list swaps one tag for another, when
+    running diff, then no count marker is shown because the count is unchanged."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_tags(
+            2, [Tag(id=1, key="a", label="A"), Tag(id=2, key="b", label="B")]
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_tags(
+            3, [Tag(id=1, key="a", label="A"), Tag(id=3, key="c", label="C")]
+        )
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "[2 → 2]" not in output
+
+
+def test_component_count_change_annotates_header_with_marker(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose subject slot grows from one component to two,
+    when running diff, then the slot header carries an [1 → 2] count marker."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_subjects(2, [component(5, "Engineers")])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_subjects(3, [component(5, "Engineers"), component(6, "Ops")])
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "[1 → 2]" in output
+
+
+def test_equal_count_component_swap_shows_no_marker(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose single-component slot swaps one component for
+    another, when running diff, then no count marker is shown."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_subjects(2, [component(5, "Engineers")])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_subjects(3, [component(7, "Auditors")])
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "[1 → 1]" not in output
+
+
+def test_generic_array_count_change_annotates_header_with_marker(
+    stub: tuple[Any, Any],
+) -> None:
+    """Given two revisions whose generic ``attributes`` array grows from one to
+    three, when running diff, then its header carries an [1 → 3] count marker."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        _revision_with_attributes(2, ["a"])
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        _revision_with_attributes(3, ["a", "b", "c"])
+    )
+    # when
+    result = runner.invoke(app, [*GLOBAL_OPTS, "policies", "diff", "10"])
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "[1 → 3]" in output
+
+
+def test_count_marker_absent_in_unified_format(stub: tuple[Any, Any]) -> None:
+    """Given an obligation count change, when running diff with --format
+    unified, then no semantic count marker leaks into the unified output."""
+    # given
+    _, mock_policies = stub
+    when(mock_policies).list_history(10).thenReturn([entry(2), entry(3)])
+    when(mock_policies).get_revision(10, 2).thenReturn(
+        revision_with_obligations(
+            2, [obligation("a", {"p": "1"}), obligation("b", {"p": "2"})]
+        )
+    )
+    when(mock_policies).get_revision(10, 3).thenReturn(
+        revision_with_obligations(3, [obligation("a", {"p": "1"})])
+    )
+    # when
+    result = runner.invoke(
+        app, [*GLOBAL_OPTS, "policies", "diff", "10", "--format", "unified"]
+    )
+    output = strip_ansi(result.output)
+    # then
+    assert result.exit_code == 0
+    assert "@@" in output
+    assert "[2 → 1]" not in output
