@@ -40,3 +40,7 @@ def main() -> None:
 
     app_module = importlib.import_module("nextlabs_sdk._cli._app")
     app_module.app()
+
+
+if __name__ == "__main__":
+    main()
