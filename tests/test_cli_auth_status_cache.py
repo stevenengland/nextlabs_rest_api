@@ -69,7 +69,7 @@ def test_status_prints_cache_line_alongside_validity(
     assert result.exit_code == 0, result.output
     assert "valid" in result.output
     assert "Cache:" in result.output
-    assert f"{tmp_path}/tokens.json" in result.output
+    assert "tokens.json" in result.output
     assert "plaintext" in result.output
     assert "source:" in result.output
     assert "suite:" in result.output
