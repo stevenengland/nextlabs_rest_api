@@ -7,6 +7,7 @@ import pytest
 import typer
 
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk._auth._token_cache._console_io import ConsoleIO
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
@@ -233,6 +234,26 @@ def _isatty_true() -> bool:
     return True
 
 
+def _no_cache_passphrase(_console: ConsoleIO, _prompt: str) -> str:
+    return ""
+
+
+def _accept_plaintext(_console: ConsoleIO, _prompt: str) -> bool:
+    return True
+
+
+def _decline_cache_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Answer the token-cache passphrase gate without touching ``/dev/tty``.
+
+    On a TTY with no passphrase source the cache factory prompts for a
+    passphrase and then a plaintext confirmation; here the user supplies no
+    passphrase and accepts plaintext, so the cache stays a ``FileTokenCache``
+    and the login-password prompt under test runs unchanged.
+    """
+    monkeypatch.setattr(ConsoleIO, "prompt_secret", _no_cache_passphrase)
+    monkeypatch.setattr(ConsoleIO, "confirm", _accept_plaintext)
+
+
 def _seed_token(
     cache_dir: Path,
     *,
@@ -350,6 +371,7 @@ def test_tty_prompt_supplies_password_when_cache_empty(
 ):
     captured = _capture_cloudaz_kwargs(monkeypatch)
     monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    _decline_cache_encryption(monkeypatch)
     prompts: list[tuple[str, bool]] = []
 
     def _fake_prompt(text: str, *, hide_input: bool = False, **_: object) -> str:

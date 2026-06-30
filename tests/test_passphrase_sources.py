@@ -2,11 +2,14 @@ import base64
 
 import keyring
 from keyring.errors import KeyringLocked, NoKeyringError
-from mockito import ANY, captor, verify, when
+from mockito import ANY, captor, mock, verify, when
 
 from nextlabs_sdk._auth._token_cache import _keyring_passphrase_source as kps
 from nextlabs_sdk._auth._token_cache._env_passphrase_source import (
     EnvVarPassphraseSource,
+)
+from nextlabs_sdk._auth._token_cache._interactive_passphrase_source import (
+    InteractivePassphraseSource,
 )
 from nextlabs_sdk._auth._token_cache._keyring_passphrase_source import (
     KeyringPassphraseSource,
@@ -123,3 +126,48 @@ class TestPassphraseResolver:
         # then the keyring source supplies the material under the keyring label
         assert material == RawKek(key=stored)
         assert label == "keyring"
+
+
+class TestInteractivePassphraseSource:
+    def test_tty_prompt_returns_passphrase_kek(self):
+        # given an interactive terminal that yields a typed passphrase
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("hunter2")
+        # when the source is resolved
+        result = InteractivePassphraseSource(console).resolve({})
+        # then the typed secret becomes Argon2id passphrase material
+        assert result == PassphraseKek(passphrase=b"hunter2")
+
+    def test_non_tty_reports_unavailable_without_reading(self):
+        # given a non-interactive input stream
+        console = mock()
+        when(console).isatty().thenReturn(False)
+        # when the source is resolved
+        result = InteractivePassphraseSource(console).resolve({})
+        # then it yields no material and never blocks on a read
+        assert result is None
+        verify(console, times=0).prompt_secret(ANY)
+
+    def test_empty_passphrase_reports_unavailable(self):
+        # given an interactive terminal where the user enters nothing
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        # when the source is resolved
+        # then an empty entry yields no material so the resolver falls through
+        assert InteractivePassphraseSource(console).resolve({}) is None
+
+    def test_resolver_returns_tty_label_for_interactive_source(self):
+        # given no env secret and an interactive terminal supplying a passphrase
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("pw")
+        resolver = PassphraseResolver(
+            sources=(EnvVarPassphraseSource(), InteractivePassphraseSource(console))
+        )
+        # when the resolver runs with an empty environment
+        material, label = resolver.resolve({})
+        # then the interactive source supplies the material under the tty label
+        assert material == PassphraseKek(passphrase=b"pw")
+        assert label == "tty"
