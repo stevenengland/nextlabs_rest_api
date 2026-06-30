@@ -15,6 +15,7 @@ from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli import _auth_cmd
 from nextlabs_sdk._cli._app import app
+from nextlabs_sdk.exceptions import TokenCacheError
 
 runner = CliRunner()
 
@@ -133,6 +134,47 @@ def test_status_renders_labels_from_read_only_inspector(
     assert "Cache:" in result.output
     assert f"source: {source_label}" in result.output
     assert "suite: argon2id" in result.output
+
+
+def test_status_labels_raw_wrapped_suite(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given a keyring (raw-key) wrapped cache whose header suite id is 0
+    _isolate_cache(tmp_path, monkeypatch)
+    when(_auth_cmd).inspect_token_cache(...).thenReturn(
+        CacheStatus(
+            path=Path(f"{tmp_path}/tokens.json"),
+            state="encrypted",
+            source="keyring",
+            suite_id=0,
+        )
+    )
+
+    # When status is rendered
+    result = runner.invoke(app, ["auth", "status"])
+
+    # Then the raw wrap is labelled rather than shown as a bare integer
+    assert "suite: raw" in result.output
+    assert "suite: 0" not in result.output
+
+
+def test_status_survives_unreadable_cache_header(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given a valid token but an inspector that cannot parse the cache header
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_plaintext_token(tmp_path)
+    when(_auth_cmd).inspect_token_cache(...).thenRaise(TokenCacheError())
+
+    # When status is rendered
+    result = runner.invoke(app, ["auth", "status"])
+
+    # Then validity output still appears and the command does not abort
+    assert result.exit_code == 0, result.output
+    assert "valid" in result.output
+    assert "unreadable" in result.output
 
 
 def test_status_all_prints_cache_line(

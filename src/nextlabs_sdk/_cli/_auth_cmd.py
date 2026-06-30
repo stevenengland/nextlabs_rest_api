@@ -35,6 +35,7 @@ from nextlabs_sdk._cli._expiry_format import format_expiry
 from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import print_success
 from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
+from nextlabs_sdk.exceptions import TokenCacheError
 
 auth_app = make_group("Authentication commands")
 
@@ -379,11 +380,17 @@ def _render_status_detail(
     Console().print(_build_status_table(target, entry))
 
 
-_KDF_SUITE_NAMES = MappingProxyType({1: "argon2id"})
+_KDF_SUITE_NAMES = MappingProxyType({0: "raw", 1: "argon2id"})
+
+_CACHE_LINE_UNREADABLE = "Cache: unreadable (cache header could not be parsed)"
 
 
 def _render_cache_line(cli_ctx: CliContext) -> None:
-    cache_info = inspect_token_cache(cli_ctx)
+    try:
+        cache_info = inspect_token_cache(cli_ctx)
+    except TokenCacheError:
+        typer.echo(_CACHE_LINE_UNREADABLE)
+        return
     suite = (
         _STATUS_NONE
         if cache_info.suite_id is None
