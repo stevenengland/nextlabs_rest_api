@@ -170,14 +170,17 @@ class TestInteractiveTokenCache:
         console = mock()
         when(console).isatty().thenReturn(True)
         when(console).prompt_secret(ANY).thenReturn("")
+        when(console).message(ANY).thenReturn(None)
         when(console).confirm(ANY).thenReturn(True)
+        path = tmp_path / "t.json"
         # when the cache is built
-        cache = cache_factory.build_token_cache(
-            path=tmp_path / "t.json", env={}, console=console
-        )
-        # then a plaintext cache is returned after warning how to encrypt later
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then a plaintext cache is returned after a terminal hint on how to
+        # encrypt later, with no duplicate stderr warning
         assert isinstance(cache, FileTokenCache)
-        assert "NEXTLABS_MASTER_PASSWORD" in capsys.readouterr().err
+        verify(console, times=1).message(cache_factory._HINT_FRESH.format(path=path))
+        assert "NEXTLABS_MASTER_PASSWORD" in cache_factory._HINT_FRESH
+        assert capsys.readouterr().err == ""
 
     def test_no_source_tty_confirm_no_aborts_without_writing(
         self, tmp_path, monkeypatch
@@ -306,6 +309,51 @@ class TestRememberPlaintextChoice:
         assert isinstance(cache, FileTokenCache)
         verify(console, times=0).message(ANY)
         verify(console, times=0).confirm(...)
+        verify(console, times=0).prompt_secret(ANY)
+
+    def test_unremembered_choice_still_prompts_and_encrypts(
+        self, tmp_path, monkeypatch
+    ):
+        # given an ack store that has not remembered plaintext, no source, a TTY,
+        # and a non-empty passphrase entered at the prompt
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("hunter2")
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(False)
+        path = tmp_path / "t.json"
+        # when the cache is built and a token round-trips
+        cache = cache_factory.build_token_cache(
+            path=path, env={}, console=console, ack_store=ack
+        )
+        cache.save("a", _tok())
+        # then the passphrase was requested and encrypts the cache
+        assert isinstance(cache, EncryptedFileTokenCache)
+        assert cache.load("a") == _tok()
+        verify(console, times=1).prompt_secret(ANY)
+
+    def test_plaintext_confirm_shows_hint_without_duplicate_stderr_warning(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        # given an existing plaintext cache, no source, a TTY, an empty
+        # passphrase, and a yes confirmation
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        path = tmp_path / "tokens.json"
+        FileTokenCache(path=path).save("a", _tok())
+        console = self._no_source_tty_console()
+        when(console).confirm(ANY).thenReturn(True)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then only the state-aware terminal hint discloses the exposure; no
+        # duplicate stderr warning is emitted
+        assert isinstance(cache, FileTokenCache)
+        verify(console, times=1).message(
+            cache_factory._HINT_LEGACY_PLAINTEXT.format(path=path)
+        )
+        assert capsys.readouterr().err == ""
 
     def test_declining_remember_does_not_persist(self, tmp_path, monkeypatch):
         # given no source, a TTY, plaintext confirmed, but the remember prompt declined
@@ -428,4 +476,28 @@ class TestStateAwareHints:
         assert excinfo.value.message == expected_hint
         verify(console, times=1).message(expected_hint)
         verify(console, times=0).confirm(ANY)
+        assert path.read_bytes() == before
+
+    def test_lockout_aborts_without_touching_file_non_interactive(
+        self, tmp_path, monkeypatch
+    ):
+        # given an encrypted cache that no available source can unlock, no TTY
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        path = tmp_path / "tokens.json"
+        cache_factory.build_token_cache(
+            path=path, env={"NEXTLABS_MASTER_PASSWORD": "pw"}
+        ).save("a", _tok())
+        before = path.read_bytes()
+        console = mock()
+        when(console).isatty().thenReturn(False)
+        when(console).message(ANY).thenReturn(None)
+        # when the cache is built with no resolvable passphrase source and no TTY
+        with pytest.raises(TokenCacheError) as excinfo:
+            cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then the lockout hint is shown and the encrypted file is left untouched,
+        # instead of silently degrading to a plaintext cache
+        expected_hint = cache_factory._HINT_LOCKOUT.format(path=path)
+        assert excinfo.value.message == expected_hint
+        verify(console, times=1).message(expected_hint)
         assert path.read_bytes() == before

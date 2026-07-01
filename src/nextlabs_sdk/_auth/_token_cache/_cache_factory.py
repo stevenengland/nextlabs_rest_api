@@ -38,11 +38,6 @@ _PLAINTEXT_WARNING = (
     "warning: token cache is stored UNENCRYPTED; set NEXTLABS_MASTER_PASSWORD "
     "to encrypt it, or NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1 to silence this warning"
 )
-_CONFIRM_WARNING = (
-    "warning: no passphrase source is available, so the token cache would be "
-    "stored UNENCRYPTED. Set NEXTLABS_MASTER_PASSWORD or configure an OS keyring "
-    "to encrypt it later."
-)
 _CONFIRM_PROMPT = "Store the token cache unencrypted anyway? [y/N]: "
 
 _HINT_FRESH = (
@@ -81,25 +76,27 @@ def build_token_cache(
 ) -> TokenCache:
     """Build a token cache, encrypting when a passphrase source is present.
 
-    Sources are consulted in order: ``NEXTLABS_MASTER_PASSWORD``, the OS
-    keyring, then an interactive TTY passphrase prompt. With no source and a
-    TTY present the caller is warned and asked to confirm plaintext storage;
-    declining raises :class:`TokenCacheError` without writing anything. With no
-    source and no TTY the cache falls back to plaintext and emits a single
-    process-wide warning to stderr; it never aborts. Setting
-    ``NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1`` silences the non-interactive warning.
+    Non-interactive sources are consulted in order: ``NEXTLABS_MASTER_PASSWORD``
+    then the OS keyring. On a TTY with no such source the remembered plaintext
+    choice is honoured first — a remembered choice returns a plaintext cache
+    silently, never prompting — and only otherwise is the caller offered an
+    interactive passphrase (encrypting on any non-empty entry). An empty entry
+    falls through to a plaintext confirmation gate; declining raises
+    :class:`TokenCacheError` without writing anything. With no source and no TTY
+    the cache falls back to plaintext and emits a single process-wide warning to
+    stderr; it never aborts. Setting ``NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1``
+    silences that non-interactive warning.
 
-    When ``ack_store`` is supplied and reports a remembered plaintext choice,
-    the no-source TTY branch returns a plaintext cache silently. It is consulted
-    only when no source resolves, so configuring a passphrase later upgrades to
-    encryption without resetting the remembered choice.
+    The remembered choice is consulted only when no non-interactive source
+    resolves, so configuring a passphrase later upgrades to encryption without
+    resetting the remembered choice. It is checked after the lockout guard, so
+    acknowledging plaintext never clobbers an existing encrypted cache.
     """
     console = console or ConsoleIO()
     resolver = PassphraseResolver(
         sources=(
             EnvVarPassphraseSource(),
             KeyringPassphraseSource(),
-            InteractivePassphraseSource(console),
         )
     )
     material, _label = resolver.resolve(env)
@@ -109,52 +106,89 @@ def build_token_cache(
         return EncryptedFileTokenCache(path=cache_path, kek_source=material)
 
     if console.isatty():
-        return _confirm_plaintext_or_abort(console, cache_path, env, ack_store)
+        return _resolve_on_tty(console, cache_path, env, ack_store)
 
+    _abort_if_locked_out(console, cache_path, env)
     _warn_plaintext_once(env)
     return FileTokenCache(path=cache_path)
 
 
-def _confirm_plaintext_or_abort(
+def _resolve_on_tty(
     console: ConsoleIO,
     cache_path: Path,
     env: Mapping[str, str],
     ack_store: PlaintextAckStore | None,
 ) -> TokenCache:
-    """Gate plaintext storage behind a confirmation on the controlling terminal.
+    """Resolve the cache on a usable terminal, encrypting when possible.
 
-    Emits a state-aware hint first: a first-time hint for an absent cache and a
-    plaintext-exposure hint for an existing unencrypted one, both falling
-    through to the confirm gate. An encrypted cache that no source can unlock is
-    a lockout: the hint is shown and the build aborts without touching the file,
-    so the encrypted tokens are never overwritten with plaintext.
+    The remembered plaintext choice is consulted *before* the interactive
+    passphrase prompt, so acknowledging plaintext genuinely stops the CLI from
+    asking again — the prompt never fires for a remembered choice. The lockout
+    guard still runs first, so a remembered choice can never clobber an existing
+    encrypted cache. With no remembered choice the caller is offered a passphrase
+    (encrypting on any non-empty entry) and only an empty entry falls through to
+    the plaintext confirmation gate.
+    """
+    status = _abort_if_locked_out(console, cache_path, env)
+    if ack_store is not None and ack_store.is_acknowledged():
+        return FileTokenCache(path=cache_path)
+    material = InteractivePassphraseSource(console).resolve(env)
+    if material is not None:
+        return EncryptedFileTokenCache(path=cache_path, kek_source=material)
+    return _confirm_plaintext_or_abort(console, cache_path, status, ack_store, env)
 
-    A remembered plaintext choice short-circuits the hint and confirm gate, but
-    only after the lockout check, so acknowledging plaintext never clobbers an
-    existing encrypted cache. On confirmation the caller is offered a one-time
-    prompt to remember the choice for future runs.
 
-    An unusable terminal cannot be prompted, so it degrades to plaintext rather
-    than aborting, honouring the "encrypt when possible, never abort" policy.
+def _abort_if_locked_out(
+    console: ConsoleIO, cache_path: Path, env: Mapping[str, str]
+) -> CacheStatus:
+    """Raise if ``cache_path`` holds an encrypted cache no source can unlock.
+
+    Shared by both the interactive and non-interactive branches of
+    :func:`build_token_cache` so the lockout guarantee ("never fall back to
+    plaintext for that file") holds regardless of ``console.isatty()``.
+    Returns the inspected status so the interactive caller, which needs it for
+    its other hints, does not inspect the file twice.
     """
     status = inspect_token_cache(path=cache_path, env=env)
     if status.state == "encrypted":
         hint = _HINT_LOCKOUT.format(path=cache_path)
         console.message(hint)
         raise TokenCacheError(hint)
-    if ack_store is not None and ack_store.is_acknowledged():
-        return FileTokenCache(path=cache_path)
+    return status
+
+
+def _confirm_plaintext_or_abort(
+    console: ConsoleIO,
+    cache_path: Path,
+    status: CacheStatus,
+    ack_store: PlaintextAckStore | None,
+    env: Mapping[str, str],
+) -> TokenCache:
+    """Gate plaintext storage behind a confirmation on the controlling terminal.
+
+    Emits a state-aware hint first: a first-time hint for an absent cache and a
+    plaintext-exposure hint for an existing unencrypted one. The hint already
+    discloses that storage is unencrypted and how to encrypt later, so no
+    separate stderr warning is emitted here — it would only duplicate the hint.
+
+    Reached only from :func:`_resolve_on_tty`, after the lockout guard, the
+    remembered-choice short-circuit, and an empty interactive passphrase entry.
+    On confirmation the caller is offered a one-time prompt to remember the
+    choice for future runs.
+
+    An unusable terminal cannot be prompted, so it degrades to plaintext rather
+    than aborting, honouring the "encrypt when possible, never abort" policy; the
+    degradation emits the one-time plaintext warning to stderr so the disclosure
+    survives even when the tty hint could not be written.
+    """
     if status.state == "absent":
         console.message(_HINT_FRESH.format(path=cache_path))
     elif status.state == "plaintext":
         console.message(_HINT_LEGACY_PLAINTEXT.format(path=cache_path))
-    print(_CONFIRM_WARNING, file=sys.stderr)
     try:
         confirmed = console.confirm(_CONFIRM_PROMPT)
     except OSError:
-        # The confirmation warning already disclosed plaintext storage; record
-        # it so a later non-interactive build does not repeat the warning.
-        globals()["_WARNED"] = True
+        _warn_plaintext_once(env)
         return FileTokenCache(path=cache_path)
     if confirmed:
         if ack_store is not None:
