@@ -41,11 +41,14 @@ class ConsoleIO:
         except OSError:
             return
 
-    def confirm(self, prompt: str) -> bool:
+    def confirm(self, prompt: str, *, default: bool = False) -> bool:
         with (
             open(_TTY_PATH, "w", encoding=_ENCODING) as writer,
             open(_TTY_PATH, "r", encoding=_ENCODING) as reader,
         ):
             writer.write(prompt)
             writer.flush()
-            return reader.readline().strip().lower() in {"y", "yes"}
+            answer = reader.readline().strip().lower()
+        if not answer:
+            return default
+        return answer in {"y", "yes"}

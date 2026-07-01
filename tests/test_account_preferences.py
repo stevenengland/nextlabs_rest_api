@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._cli._account_preferences import AccountPreferences
+from nextlabs_sdk._cli._account_preferences import (
+    AccountPreferences,
+    GlobalCachePreferences,
+)
 
 
 def test_to_dict_round_trip_preserves_verify_ssl():
@@ -73,4 +76,28 @@ def test_from_dict_rejects_non_string_pdp_field(field: str):
     with pytest.raises(TypeError, match=field):
         AccountPreferences.from_dict(
             {"schema_version": 1, "verify_ssl": True, field: 42},
+        )
+
+
+def test_global_cache_prefs_round_trip_true():
+    prefs = GlobalCachePreferences(plaintext_acknowledged=True)
+    assert GlobalCachePreferences.from_dict(prefs.to_dict()) == prefs
+
+
+def test_global_cache_prefs_serialises_reserved_shape():
+    payload = GlobalCachePreferences(plaintext_acknowledged=True).to_dict()
+    assert payload == {"schema_version": 1, "plaintext_acknowledged": True}
+
+
+def test_global_cache_prefs_rejects_bad_schema_version():
+    with pytest.raises(TypeError):
+        GlobalCachePreferences.from_dict(
+            {"schema_version": 2, "plaintext_acknowledged": True}
+        )
+
+
+def test_global_cache_prefs_rejects_non_bool_flag():
+    with pytest.raises(TypeError):
+        GlobalCachePreferences.from_dict(
+            {"schema_version": 1, "plaintext_acknowledged": "yes"}
         )

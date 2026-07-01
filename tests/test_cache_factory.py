@@ -260,6 +260,91 @@ class TestInteractiveTokenCache:
         assert capsys.readouterr().err.count("UNENCRYPTED") == 1
 
 
+class TestRememberPlaintextChoice:
+    def _no_source_tty_console(self) -> Any:
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        when(console).message(ANY).thenReturn(None)
+        return console
+
+    def test_confirm_then_accept_remember_persists_and_prints_saved_notice(
+        self, tmp_path, monkeypatch
+    ):
+        # given no source, a TTY, plaintext confirmed, and the remember prompt accepted
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = self._no_source_tty_console()
+        when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
+        when(console).confirm(cache_factory._REMEMBER_PROMPT, default=True).thenReturn(
+            True
+        )
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(False)
+        when(ack).remember().thenReturn(None)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console, ack_store=ack
+        )
+        # then the choice is persisted and the saved notice is shown
+        assert isinstance(cache, FileTokenCache)
+        verify(ack, times=1).remember()
+        verify(console, times=1).message(cache_factory._SAVED_NOTICE)
+
+    def test_acknowledged_returns_plaintext_silently(self, tmp_path, monkeypatch):
+        # given a prior remembered plaintext choice and no source on a TTY
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = self._no_source_tty_console()
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(True)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console, ack_store=ack
+        )
+        # then a plaintext cache is returned with no hint and no prompt
+        assert isinstance(cache, FileTokenCache)
+        verify(console, times=0).message(ANY)
+        verify(console, times=0).confirm(...)
+
+    def test_declining_remember_does_not_persist(self, tmp_path, monkeypatch):
+        # given no source, a TTY, plaintext confirmed, but the remember prompt declined
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = self._no_source_tty_console()
+        when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
+        when(console).confirm(cache_factory._REMEMBER_PROMPT, default=True).thenReturn(
+            False
+        )
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(False)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console, ack_store=ack
+        )
+        # then nothing is persisted and no saved notice is shown
+        assert isinstance(cache, FileTokenCache)
+        verify(ack, times=0).remember()
+        verify(console, times=0).message(cache_factory._SAVED_NOTICE)
+
+    def test_source_present_ignores_acknowledgement_and_encrypts(
+        self, tmp_path, monkeypatch
+    ):
+        # given a remembered plaintext choice but a resolvable passphrase source
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(True)
+        # when the cache is built with an env passphrase present
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json",
+            env={"NEXTLABS_MASTER_PASSWORD": "pw"},
+            ack_store=ack,
+        )
+        # then the remembered choice is ignored and the cache is encrypted
+        assert isinstance(cache, EncryptedFileTokenCache)
+        verify(ack, times=0).is_acknowledged()
+
+
 class TestStateAwareHints:
     def _no_source_tty_console(self) -> Any:
         console = mock()

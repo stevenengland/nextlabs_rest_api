@@ -238,7 +238,9 @@ def _no_cache_passphrase(_console: ConsoleIO, _prompt: str) -> str:
     return ""
 
 
-def _accept_plaintext(_console: ConsoleIO, _prompt: str) -> bool:
+def _accept_plaintext(
+    _console: ConsoleIO, _prompt: str, *, default: bool = False
+) -> bool:
     return True
 
 

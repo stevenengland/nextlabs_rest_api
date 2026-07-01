@@ -60,3 +60,32 @@ class AccountPreferences:
             pdp_url=_optional_str(payload, "pdp_url"),
             pdp_auth_source=_optional_str(payload, "pdp_auth_source"),
         )
+
+
+@dataclass(frozen=True)
+class GlobalCachePreferences:
+    """Process-wide token-cache preferences, shared across all accounts.
+
+    Persisted once under a reserved key rather than per account, so a
+    remembered plaintext-storage choice applies to every CLI command.
+
+    Attributes:
+        plaintext_acknowledged: Whether the user has acknowledged storing the
+            token cache unencrypted and asked not to be prompted again.
+    """
+
+    plaintext_acknowledged: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": _SCHEMA_VERSION,
+            "plaintext_acknowledged": self.plaintext_acknowledged,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> GlobalCachePreferences:
+        _check_schema_version(payload)
+        acknowledged = payload.get("plaintext_acknowledged")
+        if not isinstance(acknowledged, bool):
+            raise TypeError("plaintext_acknowledged must be a bool")
+        return cls(plaintext_acknowledged=acknowledged)

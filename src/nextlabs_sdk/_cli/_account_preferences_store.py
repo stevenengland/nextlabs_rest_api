@@ -5,12 +5,17 @@ import os
 import tempfile
 from pathlib import Path
 
-from nextlabs_sdk._cli._account_preferences import AccountPreferences
+from nextlabs_sdk._cli._account_preferences import (
+    AccountPreferences,
+    GlobalCachePreferences,
+)
 
 _FILE_MODE = 0o600
 _DIR_MODE = 0o700
 _FILENAME = "account_prefs.json"
 _PACKAGE_DIR = "nextlabs-sdk"
+# Reserved global key; real account keys always contain "|" so cannot collide.
+_GLOBAL_CACHE_KEY = "__token_cache__"
 
 
 def _default_path() -> Path:
@@ -63,8 +68,24 @@ class AccountPreferencesStore:
         if entries.pop(key, None) is not None:
             self._write_all(entries)
 
-    def keys(self) -> list[str]:
-        return list(self._read_all().keys())
+    def load_global_cache(self) -> GlobalCachePreferences | None:
+        """Return the reserved global cache preferences, or ``None``.
+
+        A malformed or missing record reads as "not acknowledged" rather than
+        raising, mirroring :meth:`load` for per-account entries.
+        """
+        entry = self._read_all().get(_GLOBAL_CACHE_KEY)
+        if not isinstance(entry, dict):
+            return None
+        try:
+            return GlobalCachePreferences.from_dict(entry)
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def save_global_cache(self, prefs: GlobalCachePreferences) -> None:
+        entries = self._read_all()
+        entries[_GLOBAL_CACHE_KEY] = prefs.to_dict()
+        self._write_all(entries)
 
     def _read_all(self) -> dict[str, object]:
         if not self._path.exists():

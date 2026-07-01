@@ -14,6 +14,9 @@ from nextlabs_sdk._auth._token_cache._cache_factory import (
 )
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
+from nextlabs_sdk._cli._account_prefs_plaintext_ack_store import (
+    AccountPrefsPlaintextAckStore,
+)
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._context import CliContext
 
@@ -50,7 +53,8 @@ def _cache_env_and_path(ctx: CliContext) -> tuple[dict[str, str], Path | None]:
 
 def build_token_cache(ctx: CliContext) -> TokenCache:
     env, path = _cache_env_and_path(ctx)
-    return _factory(path=path, env=env)
+    ack_store = AccountPrefsPlaintextAckStore(build_prefs_store(ctx))
+    return _factory(path=path, env=env, ack_store=ack_store)
 
 
 def inspect_token_cache(ctx: CliContext) -> CacheStatus:
