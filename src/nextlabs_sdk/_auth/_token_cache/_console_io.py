@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import sys
 
+_TTY_PATH = "/dev/tty"
+_ENCODING = "utf-8"
+
 
 class ConsoleIO:
     """Console abstraction over the controlling terminal (POSIX ``/dev/tty``).
@@ -20,13 +23,28 @@ class ConsoleIO:
     def prompt_secret(self, prompt: str) -> str:
         import getpass
 
-        with open("/dev/tty", "w", encoding="utf-8") as tty:
+        with open(_TTY_PATH, "w", encoding=_ENCODING) as tty:
             return getpass.getpass(prompt, stream=tty)
+
+    def message(self, text: str) -> None:
+        """Write one line to the controlling terminal, ignoring an unusable one.
+
+        Unlike stderr diagnostics, hints go to ``/dev/tty`` so they appear next
+        to the prompt and survive stdout/stderr redirection. A terminal that
+        cannot be opened is treated as non-interactive: the hint is dropped
+        rather than raising, mirroring the other prompt handles.
+        """
+        try:
+            with open(_TTY_PATH, "w", encoding=_ENCODING) as writer:
+                writer.write(f"{text}\n")
+                writer.flush()
+        except OSError:
+            return
 
     def confirm(self, prompt: str) -> bool:
         with (
-            open("/dev/tty", "w", encoding="utf-8") as writer,
-            open("/dev/tty", "r", encoding="utf-8") as reader,
+            open(_TTY_PATH, "w", encoding=_ENCODING) as writer,
+            open(_TTY_PATH, "r", encoding=_ENCODING) as reader,
         ):
             writer.write(prompt)
             writer.flush()
