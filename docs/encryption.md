@@ -35,9 +35,12 @@ to plaintext with a single stderr warning and never aborts — set
 
 ## Interactive hints
 
-When no passphrase source resolves and a confirmation prompt is about to
-be shown, the CLI first prints one state-aware hint to the controlling
-terminal (`/dev/tty`), so it survives stdout/stderr redirection:
+When no passphrase source resolves and a controlling terminal is
+present, the CLI prints one state-aware hint to that terminal
+(`/dev/tty`) — so it survives stdout/stderr redirection — before
+deciding what happens next. Fresh and legacy plaintext fall through to
+a confirmation prompt (below); lockout instead aborts immediately, with
+no prompt shown:
 
 - **Fresh** — no cache file exists yet:
 
@@ -54,7 +57,8 @@ terminal (`/dev/tty`), so it survives stdout/stderr redirection:
   > online documentation for details.
 
 - **Lockout** — a cache file exists and is encrypted, but no source can
-  unlock it (see [Lockout abort](#lockout-abort) below).
+  unlock it. No confirmation prompt follows (see
+  [Lockout abort](#lockout-abort) below).
 
 ## Remembered choice
 
