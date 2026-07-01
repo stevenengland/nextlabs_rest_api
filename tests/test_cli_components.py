@@ -19,6 +19,8 @@ from nextlabs_sdk.cloudaz import (
 )
 from nextlabs_sdk._cloudaz._component_models import (
     ComponentGroupType,
+    ComponentHistoryEntry,
+    ComponentRevision,
     ComponentStatus,
     DeploymentResult,
 )
@@ -357,3 +359,153 @@ def test_components_find_dependencies(stub: tuple[Any, Any, Any]) -> None:
 
     assert result.exit_code == 0, result.output
     assert "PolA" in result.output
+
+
+def _make_history_entry() -> ComponentHistoryEntry:
+    return ComponentHistoryEntry(
+        id=1,
+        revision=3,
+        name="Host Name",
+        action_type="DEPLOY",
+        created_by="admin",
+        modified_by="editor",
+        active_from=1700000000,
+        active_to=1700003600,
+    )
+
+
+def _make_component_revision() -> ComponentRevision:
+    return ComponentRevision(
+        id=1,
+        revision=3,
+        name="Host Name",
+        action_type="DEPLOY",
+        created_by="admin",
+        modified_by="editor",
+        active_from=1700000000,
+        active_to=1700003600,
+        component_detail=_make_component(),
+    )
+
+
+# --- history (table vs json) ---
+
+
+def test_components_history_table(stub: tuple[Any, Any, Any]) -> None:
+    """Given a component with revision history, when `history` is invoked
+    in table mode, then a titled table shows audit-relevant fields."""
+    _, mock_comp, _ = stub
+    entries = [_make_history_entry()]
+    when(mock_comp).list_history(1).thenReturn(entries)
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "history", "1"])
+
+    assert result.exit_code == 0, result.output
+    output = strip_ansi(result.output)
+    assert "DEPLOY" in output
+    assert "admin" in output
+    assert "editor" in output
+
+
+def test_components_history_json(stub: tuple[Any, Any, Any]) -> None:
+    """Given a component with revision history, when `history --output
+    json` is invoked, then the raw list of history entries is emitted as
+    JSON."""
+    _, mock_comp, _ = stub
+    entries = [_make_history_entry()]
+    when(mock_comp).list_history(1).thenReturn(entries)
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "--output", "json", "components", "history", "1"]
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, list)
+    assert parsed[0]["revision"] == 3
+    assert parsed[0]["action_type"] == "DEPLOY"
+
+
+# --- view-revision (table vs json) ---
+
+
+def test_components_view_revision_table(stub: tuple[Any, Any, Any]) -> None:
+    """Given a valid revision, when `view-revision` is invoked in table
+    mode, then key identifying fields are rendered as a table."""
+    _, mock_comp, _ = stub
+    when(mock_comp).get_revision(1, 3).thenReturn(_make_component_revision())
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "components", "view-revision", "1", "3"]
+    )
+
+    assert result.exit_code == 0, result.output
+    output = strip_ansi(result.output)
+    assert "DEPLOY" in output
+    assert "admin" in output
+
+
+def test_components_view_revision_json(stub: tuple[Any, Any, Any]) -> None:
+    """Given a valid revision, when `view-revision --output json` is
+    invoked, then the full ComponentRevision including componentDetail is
+    emitted."""
+    _, mock_comp, _ = stub
+    when(mock_comp).get_revision(1, 3).thenReturn(_make_component_revision())
+
+    result = runner.invoke(
+        app,
+        [*_GLOBAL_OPTS, "--output", "json", "components", "view-revision", "1", "3"],
+    )
+
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert parsed["revision"] == 3
+    assert "component_detail" in parsed
+    assert parsed["component_detail"]["name"] == "Host Name"
+
+
+def test_components_view_revision_defaults_revision_to_zero(
+    stub: tuple[Any, Any, Any],
+) -> None:
+    """Given only a revision_id, when `view-revision` is invoked without a
+    revision number, then revision defaults to 0."""
+    _, mock_comp, _ = stub
+    when(mock_comp).get_revision(1, 0).thenReturn(_make_component_revision())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "view-revision", "1"])
+
+    assert result.exit_code == 0, result.output
+    output = strip_ansi(result.output)
+    assert "admin" in output
+
+
+# --- error handling (history + view-revision) ---
+
+
+def test_components_history_not_found(stub: tuple[Any, Any, Any]) -> None:
+    """Given a non-existent component ID, when `history` is invoked, then
+    the error handler surfaces a non-zero exit code with no traceback."""
+    _, mock_comp, _ = stub
+    when(mock_comp).list_history(999).thenRaise(NotFoundError(message="HTTP 404"))
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "components", "history", "999"])
+
+    assert result.exit_code == 1
+    assert "Not found" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_components_view_revision_not_found(stub: tuple[Any, Any, Any]) -> None:
+    """Given a non-existent revision, when `view-revision` is invoked,
+    then the error handler surfaces a non-zero exit code with no
+    traceback."""
+    _, mock_comp, _ = stub
+    when(mock_comp).get_revision(999, 1).thenRaise(NotFoundError(message="HTTP 404"))
+
+    result = runner.invoke(
+        app, [*_GLOBAL_OPTS, "components", "view-revision", "999", "1"]
+    )
+
+    assert result.exit_code == 1
+    assert "Not found" in result.output
+    assert "Traceback" not in result.output
