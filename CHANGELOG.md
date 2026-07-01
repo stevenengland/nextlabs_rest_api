@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.14.0 - 2026-07-01
+
+### nextlabs-sdk 0.14.0
+
+#### Features
+
+- feat(cli): add components history and view-revision commands (#<!---->192) @stevenengland ([#295](https://github.com/stevenengland/nextlabs_rest_api/pull/295))
+- feat(cli): surface remembered plaintext choice in auth status @stevenengland ([#289](https://github.com/stevenengland/nextlabs_rest_api/pull/289))
+- feat(token-cache): remember plaintext-storage choice across CLI runs @stevenengland ([#288](https://github.com/stevenengland/nextlabs_rest_api/pull/288))
+- feat(token-cache): state-aware plaintext hints and lockout guard @stevenengland ([#287](https://github.com/stevenengland/nextlabs_rest_api/pull/287))
+- feat(diff): element-count marker on list-typed field headers @stevenengland ([#281](https://github.com/stevenengland/nextlabs_rest_api/pull/281))
+- feat(policy-diff): expand added/removed obligation content in semantic diff @stevenengland ([#280](https://github.com/stevenengland/nextlabs_rest_api/pull/280))
+- feat(cli): report token cache encryption in auth status @stevenengland ([#262](https://github.com/stevenengland/nextlabs_rest_api/pull/262))
+- feat(token-cache): interactive TTY passphrase source and plaintext confirmation gate @stevenengland ([#260](https://github.com/stevenengland/nextlabs_rest_api/pull/260))
+- feat(token-cache): add keyring passphrase source with raw KEK @stevenengland ([#259](https://github.com/stevenengland/nextlabs_rest_api/pull/259))
+- feat(token-cache): encrypt CLI token cache at rest via NEXTLABS_MASTER_PASSWORD @stevenengland ([#258](https://github.com/stevenengland/nextlabs_rest_api/pull/258))
+
+#### Bug Fixes
+
+- fix(diff): hide noise-subtree changes at any path segment (#<!---->293) @stevenengland ([#294](https://github.com/stevenengland/nextlabs_rest_api/pull/294))
+- fix(PRD): #<!---->282 cleanup — capstone findings @stevenengland ([#291](https://github.com/stevenengland/nextlabs_rest_api/pull/291))
+- fix(token-cache): degrade to plaintext on a non-seekable controlling tty @stevenengland ([#279](https://github.com/stevenengland/nextlabs_rest_api/pull/279))
+- fix(token-cache): address #<!---->263 second-pass review findings @stevenengland ([#271](https://github.com/stevenengland/nextlabs_rest_api/pull/271))
+- fix(cli): add __main__ guard so debugger can attach to entrypoint @stevenengland ([#268](https://github.com/stevenengland/nextlabs_rest_api/pull/268))
+
+#### Documentation
+
+- docs: document token-cache encryption and remembered choice (#<!---->286) @stevenengland ([#290](https://github.com/stevenengland/nextlabs_rest_api/pull/290))
+
+#### Maintenance
+
+<details>
+<summary>4 changes</summary>
+- refactor(search): mark payload label constants private (#<!---->263) @stevenengland ([#273](https://github.com/stevenengland/nextlabs_rest_api/pull/273))
+- test(policy-diff): split test_cli_policy_diff into themed modules (#<!---->263 F4) @stevenengland ([#275](https://github.com/stevenengland/nextlabs_rest_api/pull/275))
+- test(policy-diff): split test_cli_policy_diff into themed modules (#<!---->263 F4) @stevenengland ([#272](https://github.com/stevenengland/nextlabs_rest_api/pull/272))
+- test(token-cache): verify organic legacy→encrypted migration (#<!---->134) @stevenengland ([#261](https://github.com/stevenengland/nextlabs_rest_api/pull/261))
+
+</details>
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.13.0...0.14.0
+
 ## 0.13.0 - 2026-06-26
 
 ### nextlabs-sdk 0.13.0
