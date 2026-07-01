@@ -14,6 +14,8 @@ from nextlabs_sdk._auth._token_cache._cache_factory import CacheStatus
 from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
 from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
 from nextlabs_sdk._cli import _auth_cmd
+from nextlabs_sdk._cli._account_preferences import GlobalCachePreferences
+from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.exceptions import TokenCacheError
 
@@ -192,3 +194,42 @@ def test_status_all_prints_cache_line(
     assert result.exit_code == 0, result.output
     assert "Cache:" in result.output
     assert "plaintext" in result.output
+
+
+def _remember_plaintext_choice(tmp_path: object) -> None:
+    AccountPreferencesStore(path=f"{tmp_path}/account_prefs.json").save_global_cache(
+        GlobalCachePreferences(plaintext_acknowledged=True),
+    )
+
+
+def test_status_reports_remembered_plaintext_choice(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given a remembered plaintext-storage choice on disk
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_plaintext_token(tmp_path)
+    _remember_plaintext_choice(tmp_path)
+
+    # When status is rendered
+    result = runner.invoke(app, ["auth", "status"])
+
+    # Then the remembered choice is reported as yes
+    assert result.exit_code == 0, result.output
+    assert "Remembered plaintext choice: yes" in result.output
+
+
+def test_status_reports_no_remembered_plaintext_choice(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given no remembered plaintext-storage choice on disk
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_plaintext_token(tmp_path)
+
+    # When status is rendered
+    result = runner.invoke(app, ["auth", "status"])
+
+    # Then the remembered choice is reported as no
+    assert result.exit_code == 0, result.output
+    assert "Remembered plaintext choice: no" in result.output

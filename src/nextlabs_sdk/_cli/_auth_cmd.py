@@ -19,6 +19,9 @@ from nextlabs_sdk._cli._account_menu import (
     known_accounts,
     select_account,
 )
+from nextlabs_sdk._cli._account_prefs_plaintext_ack_store import (
+    AccountPrefsPlaintextAckStore,
+)
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_resolver import (
     ResolvedAccount,
@@ -402,6 +405,12 @@ def _render_cache_line(cli_ctx: CliContext) -> None:
     )
 
 
+def _render_remembered_choice_line(cli_ctx: CliContext) -> None:
+    ack_store = AccountPrefsPlaintextAckStore(build_prefs_store(cli_ctx))
+    remembered = "yes" if ack_store.is_acknowledged() else "no"
+    typer.echo(f"Remembered plaintext choice: {remembered}")
+
+
 @auth_app.command(name="status")
 @cli_error_handler
 def status(
@@ -411,6 +420,7 @@ def status(
     """Show whether a valid cached token exists."""
     cli_ctx: CliContext = ctx.obj
     _render_cache_line(cli_ctx)
+    _render_remembered_choice_line(cli_ctx)
     if show_all:
         _status_all(cli_ctx)
         return
