@@ -111,8 +111,28 @@ def build_token_cache(
     if console.isatty():
         return _confirm_plaintext_or_abort(console, cache_path, env, ack_store)
 
+    _abort_if_locked_out(console, cache_path, env)
     _warn_plaintext_once(env)
     return FileTokenCache(path=cache_path)
+
+
+def _abort_if_locked_out(
+    console: ConsoleIO, cache_path: Path, env: Mapping[str, str]
+) -> CacheStatus:
+    """Raise if ``cache_path`` holds an encrypted cache no source can unlock.
+
+    Shared by both the interactive and non-interactive branches of
+    :func:`build_token_cache` so the lockout guarantee ("never fall back to
+    plaintext for that file") holds regardless of ``console.isatty()``.
+    Returns the inspected status so the interactive caller, which needs it for
+    its other hints, does not inspect the file twice.
+    """
+    status = inspect_token_cache(path=cache_path, env=env)
+    if status.state == "encrypted":
+        hint = _HINT_LOCKOUT.format(path=cache_path)
+        console.message(hint)
+        raise TokenCacheError(hint)
+    return status
 
 
 def _confirm_plaintext_or_abort(
@@ -126,8 +146,8 @@ def _confirm_plaintext_or_abort(
     Emits a state-aware hint first: a first-time hint for an absent cache and a
     plaintext-exposure hint for an existing unencrypted one, both falling
     through to the confirm gate. An encrypted cache that no source can unlock is
-    a lockout: the hint is shown and the build aborts without touching the file,
-    so the encrypted tokens are never overwritten with plaintext.
+    a lockout, handled by :func:`_abort_if_locked_out` before this method is
+    reached.
 
     A remembered plaintext choice short-circuits the hint and confirm gate, but
     only after the lockout check, so acknowledging plaintext never clobbers an
@@ -137,11 +157,7 @@ def _confirm_plaintext_or_abort(
     An unusable terminal cannot be prompted, so it degrades to plaintext rather
     than aborting, honouring the "encrypt when possible, never abort" policy.
     """
-    status = inspect_token_cache(path=cache_path, env=env)
-    if status.state == "encrypted":
-        hint = _HINT_LOCKOUT.format(path=cache_path)
-        console.message(hint)
-        raise TokenCacheError(hint)
+    status = _abort_if_locked_out(console, cache_path, env)
     if ack_store is not None and ack_store.is_acknowledged():
         return FileTokenCache(path=cache_path)
     if status.state == "absent":

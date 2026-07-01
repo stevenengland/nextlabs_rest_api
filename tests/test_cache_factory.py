@@ -429,3 +429,27 @@ class TestStateAwareHints:
         verify(console, times=1).message(expected_hint)
         verify(console, times=0).confirm(ANY)
         assert path.read_bytes() == before
+
+    def test_lockout_aborts_without_touching_file_non_interactive(
+        self, tmp_path, monkeypatch
+    ):
+        # given an encrypted cache that no available source can unlock, no TTY
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        path = tmp_path / "tokens.json"
+        cache_factory.build_token_cache(
+            path=path, env={"NEXTLABS_MASTER_PASSWORD": "pw"}
+        ).save("a", _tok())
+        before = path.read_bytes()
+        console = mock()
+        when(console).isatty().thenReturn(False)
+        when(console).message(ANY).thenReturn(None)
+        # when the cache is built with no resolvable passphrase source and no TTY
+        with pytest.raises(TokenCacheError) as excinfo:
+            cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then the lockout hint is shown and the encrypted file is left untouched,
+        # instead of silently degrading to a plaintext cache
+        expected_hint = cache_factory._HINT_LOCKOUT.format(path=path)
+        assert excinfo.value.message == expected_hint
+        verify(console, times=1).message(expected_hint)
+        assert path.read_bytes() == before
