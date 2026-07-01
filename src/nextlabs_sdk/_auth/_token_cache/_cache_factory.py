@@ -116,11 +116,12 @@ def _confirm_plaintext_or_abort(
     """
     status = inspect_token_cache(path=cache_path, env=env)
     if status.state == "encrypted":
-        console.message(_HINT_LOCKOUT.format(path=cache_path))
-        raise TokenCacheError()
+        hint = _HINT_LOCKOUT.format(path=cache_path)
+        console.message(hint)
+        raise TokenCacheError(hint)
     if status.state == "absent":
         console.message(_HINT_FRESH.format(path=cache_path))
-    else:
+    elif status.state == "plaintext":
         console.message(_HINT_LEGACY_PLAINTEXT.format(path=cache_path))
     print(_CONFIRM_WARNING, file=sys.stderr)
     try:

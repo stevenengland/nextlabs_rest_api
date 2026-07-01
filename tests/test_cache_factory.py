@@ -313,10 +313,12 @@ class TestStateAwareHints:
         console = self._no_source_tty_console()
         when(console).confirm(ANY).thenReturn(True)
         # when the cache is built with no resolvable passphrase source
-        with pytest.raises(TokenCacheError):
+        with pytest.raises(TokenCacheError) as excinfo:
             cache_factory.build_token_cache(path=path, env={}, console=console)
-        # then the lockout hint is shown, the confirm gate is skipped, and the
-        # encrypted file is left untouched
-        verify(console, times=1).message(cache_factory._HINT_LOCKOUT.format(path=path))
+        # then the lockout hint is shown, carried on the exception for callers,
+        # the confirm gate is skipped, and the encrypted file is left untouched
+        expected_hint = cache_factory._HINT_LOCKOUT.format(path=path)
+        assert excinfo.value.message == expected_hint
+        verify(console, times=1).message(expected_hint)
         verify(console, times=0).confirm(ANY)
         assert path.read_bytes() == before
