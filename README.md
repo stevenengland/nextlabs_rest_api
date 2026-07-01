@@ -479,14 +479,22 @@ The file is written `0600` inside a `0700` directory; writes are atomic
 (temp file + `os.replace`). The cache key is
 `"{token_url}|{username}|{client_id}"` so multiple profiles coexist.
 
-**Encryption at rest.** When `NEXTLABS_MASTER_PASSWORD` is set, the CLI
-stores the cache as an `EncryptedFileTokenCache` — an `NLBX` envelope
-where a random data key (DEK) encrypts the payload under AES-256-GCM and
-is itself wrapped by a key derived from the passphrase (Argon2id). The
-cache migrates organically: a legacy plaintext `tokens.json` is read
-once and rewritten encrypted on the next write. Without a passphrase the
-CLI keeps a plaintext cache and prints a one-time stderr warning; set
-`NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1` to silence it.
+**Encryption at rest.** The CLI encrypts the cache whenever a passphrase
+source resolves — `NEXTLABS_MASTER_PASSWORD`, then the OS keyring, then
+an interactive TTY prompt — storing it as an `EncryptedFileTokenCache`:
+an `NLBX` envelope where a random data key (DEK) encrypts the payload
+under AES-256-GCM and is itself wrapped by a key derived from the
+resolved source (Argon2id for a passphrase, HKDF-SHA256 for a keyring
+key). The cache migrates organically: a legacy plaintext `tokens.json`
+is read once and rewritten encrypted on the next write.
+
+With no source and no terminal, the CLI keeps a plaintext cache and
+prints a one-time stderr warning; set
+`NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1` to silence it. On a terminal it
+asks for confirmation instead, and can remember that choice so it stops
+asking — see [`docs/encryption.md`](docs/encryption.md) for the
+interactive hints, the lockout case, and how to reset a remembered
+choice.
 
 Refresh tokens are used transparently when available; on refresh failure
 the CLI falls back to the password grant (if `--password` /
@@ -698,4 +706,5 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
-[Changelog](CHANGELOG.md) · [Troubleshooting](docs/troubleshooting.md)
+[Changelog](CHANGELOG.md) · [Troubleshooting](docs/troubleshooting.md) ·
+[Encryption](docs/encryption.md)
