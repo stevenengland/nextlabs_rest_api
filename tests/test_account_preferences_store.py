@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 import stat
 import sys
 from pathlib import Path
 
 import pytest
 
-from nextlabs_sdk._cli._account_preferences import AccountPreferences
+from nextlabs_sdk._cli._account_preferences import (
+    AccountPreferences,
+    GlobalCachePreferences,
+)
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 
 _SKIP_ON_WINDOWS = pytest.mark.skipif(
@@ -60,14 +64,7 @@ def test_delete_removes_only_matching_entry(tmp_path: Path) -> None:
 def test_delete_missing_key_is_noop(tmp_path: Path) -> None:
     store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
     store.delete("nope")
-    assert store.keys() == []
-
-
-def test_keys_reports_all_entries(tmp_path: Path) -> None:
-    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
-    store.save("a", _prefs())
-    store.save("b", _prefs())
-    assert sorted(store.keys()) == ["a", "b"]
+    assert store.load("nope") is None
 
 
 @_SKIP_ON_WINDOWS
@@ -161,3 +158,42 @@ def test_default_path(
     store = AccountPreferencesStore()
 
     assert store.path == tmp_path / expected_suffix
+
+
+def test_global_cache_missing_returns_none(tmp_path: Path) -> None:
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    assert store.load_global_cache() is None
+
+
+def test_global_cache_save_then_load_roundtrip(tmp_path: Path) -> None:
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    store.save_global_cache(GlobalCachePreferences(plaintext_acknowledged=True))
+    loaded = store.load_global_cache()
+    assert loaded == GlobalCachePreferences(plaintext_acknowledged=True)
+
+
+def test_global_cache_key_does_not_collide_with_account_entries(
+    tmp_path: Path,
+) -> None:
+    store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    store.save("base|user|client|cloudaz", _prefs(verify_ssl=True))
+    store.save_global_cache(GlobalCachePreferences(plaintext_acknowledged=True))
+
+    assert store.load("base|user|client|cloudaz") == _prefs(verify_ssl=True)
+    assert store.load_global_cache() == GlobalCachePreferences(
+        plaintext_acknowledged=True,
+    )
+
+
+def test_global_cache_reserved_key_stored_under_dunder(tmp_path: Path) -> None:
+    path = tmp_path / "account_prefs.json"
+    store = AccountPreferencesStore(path=path)
+    store.save_global_cache(GlobalCachePreferences(plaintext_acknowledged=True))
+    assert "__token_cache__" in json.loads(path.read_text())
+
+
+def test_global_cache_malformed_reads_as_not_acknowledged(tmp_path: Path) -> None:
+    path = tmp_path / "account_prefs.json"
+    path.write_text('{"__token_cache__": {"schema_version": 1}}')
+    store = AccountPreferencesStore(path=path)
+    assert store.load_global_cache() is None

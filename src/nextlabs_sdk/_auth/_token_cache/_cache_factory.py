@@ -26,6 +26,9 @@ from nextlabs_sdk._auth._token_cache._keyring_passphrase_source import (
 from nextlabs_sdk._auth._token_cache._passphrase_resolver import (
     PassphraseResolver,
 )
+from nextlabs_sdk._auth._token_cache._plaintext_ack_store import (
+    PlaintextAckStore,
+)
 from nextlabs_sdk._auth._token_cache._secret_box import SecretBox, read_header
 from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 from nextlabs_sdk.exceptions import TokenCacheError
@@ -59,6 +62,12 @@ _HINT_LOCKOUT = (
     "keyring, or delete {path} to start fresh. See the project's online "
     "documentation for details."
 )
+_REMEMBER_PROMPT = "Remember this choice so I stop asking? [Y/n]: "
+_SAVED_NOTICE = (
+    "Saved. The CLI won't ask again. To re-enable encryption, set "
+    "NEXTLABS_MASTER_PASSWORD or an OS keyring; nextlabs auth status shows the "
+    "cache location and current choice."
+)
 
 _WARNED = False
 
@@ -68,6 +77,7 @@ def build_token_cache(
     path: Path | str | None = None,
     env: Mapping[str, str] = os.environ,
     console: ConsoleIO | None = None,
+    ack_store: PlaintextAckStore | None = None,
 ) -> TokenCache:
     """Build a token cache, encrypting when a passphrase source is present.
 
@@ -78,6 +88,11 @@ def build_token_cache(
     source and no TTY the cache falls back to plaintext and emits a single
     process-wide warning to stderr; it never aborts. Setting
     ``NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1`` silences the non-interactive warning.
+
+    When ``ack_store`` is supplied and reports a remembered plaintext choice,
+    the no-source TTY branch returns a plaintext cache silently. It is consulted
+    only when no source resolves, so configuring a passphrase later upgrades to
+    encryption without resetting the remembered choice.
     """
     console = console or ConsoleIO()
     resolver = PassphraseResolver(
@@ -94,14 +109,17 @@ def build_token_cache(
         return EncryptedFileTokenCache(path=cache_path, kek_source=material)
 
     if console.isatty():
-        return _confirm_plaintext_or_abort(console, cache_path, env)
+        return _confirm_plaintext_or_abort(console, cache_path, env, ack_store)
 
     _warn_plaintext_once(env)
     return FileTokenCache(path=cache_path)
 
 
 def _confirm_plaintext_or_abort(
-    console: ConsoleIO, cache_path: Path, env: Mapping[str, str]
+    console: ConsoleIO,
+    cache_path: Path,
+    env: Mapping[str, str],
+    ack_store: PlaintextAckStore | None,
 ) -> TokenCache:
     """Gate plaintext storage behind a confirmation on the controlling terminal.
 
@@ -111,6 +129,11 @@ def _confirm_plaintext_or_abort(
     a lockout: the hint is shown and the build aborts without touching the file,
     so the encrypted tokens are never overwritten with plaintext.
 
+    A remembered plaintext choice short-circuits the hint and confirm gate, but
+    only after the lockout check, so acknowledging plaintext never clobbers an
+    existing encrypted cache. On confirmation the caller is offered a one-time
+    prompt to remember the choice for future runs.
+
     An unusable terminal cannot be prompted, so it degrades to plaintext rather
     than aborting, honouring the "encrypt when possible, never abort" policy.
     """
@@ -119,6 +142,8 @@ def _confirm_plaintext_or_abort(
         hint = _HINT_LOCKOUT.format(path=cache_path)
         console.message(hint)
         raise TokenCacheError(hint)
+    if ack_store is not None and ack_store.is_acknowledged():
+        return FileTokenCache(path=cache_path)
     if status.state == "absent":
         console.message(_HINT_FRESH.format(path=cache_path))
     elif status.state == "plaintext":
@@ -132,8 +157,31 @@ def _confirm_plaintext_or_abort(
         globals()["_WARNED"] = True
         return FileTokenCache(path=cache_path)
     if confirmed:
+        if ack_store is not None:
+            _offer_to_remember(console, ack_store)
         return FileTokenCache(path=cache_path)
     raise TokenCacheError()
+
+
+def _offer_to_remember(console: ConsoleIO, ack_store: PlaintextAckStore) -> None:
+    """Ask whether to persist the plaintext choice, defaulting to yes.
+
+    Accepting records the acknowledgement and prints the saved notice so later
+    no-source builds stay silent. An unusable terminal or a failed preferences
+    write skips persistence and proceeds plaintext for this run only, so a
+    best-effort convenience never aborts an otherwise-successful build.
+    """
+    try:
+        remember = console.confirm(_REMEMBER_PROMPT, default=True)
+    except OSError:
+        return
+    if not remember:
+        return
+    try:
+        ack_store.remember()
+    except OSError:
+        return
+    console.message(_SAVED_NOTICE)
 
 
 @dataclass(frozen=True)
