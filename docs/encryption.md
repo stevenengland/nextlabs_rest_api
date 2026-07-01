@@ -19,7 +19,9 @@ time it runs:
 3. **Interactive TTY prompt** — on a controlling terminal, the CLI asks
    for a passphrase and derives Argon2id key material from it. An empty
    entry, a non-interactive stream, or an unusable `/dev/tty` is treated
-   as unavailable.
+   as unavailable. A [remembered plaintext choice](#remembered-choice)
+   is consulted before this prompt, so once remembered the CLI never
+   asks for a passphrase again.
 
 If a source resolves, the cache becomes an `EncryptedFileTokenCache`: an
 `NLBX` envelope where a random data key (DEK) encrypts the payload under
@@ -73,11 +75,13 @@ Accepting (the default) persists the acknowledgement and prints:
 > NEXTLABS_MASTER_PASSWORD or an OS keyring; nextlabs auth status shows
 > the cache location and current choice.
 
-Once remembered, later runs with no passphrase source skip both the
-hint and the confirmation prompt and build a plaintext cache silently.
-The remembered choice is consulted only when no passphrase source
-resolves, so configuring `NEXTLABS_MASTER_PASSWORD` or a keyring later
-upgrades the cache to encryption without needing to reset anything.
+Once remembered, later runs with no environment or keyring passphrase
+source skip the interactive passphrase prompt, the hint, and the
+confirmation prompt, and build a plaintext cache silently. The
+remembered choice is consulted after the keyring but before the
+interactive passphrase prompt, so configuring `NEXTLABS_MASTER_PASSWORD`
+or a keyring later upgrades the cache to encryption without needing to
+reset anything.
 
 The choice is global — shared by every account — and stored under a
 reserved key in the same JSON file as other CLI account preferences
