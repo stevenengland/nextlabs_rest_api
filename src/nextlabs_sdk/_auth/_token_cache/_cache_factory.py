@@ -167,16 +167,21 @@ def _offer_to_remember(console: ConsoleIO, ack_store: PlaintextAckStore) -> None
     """Ask whether to persist the plaintext choice, defaulting to yes.
 
     Accepting records the acknowledgement and prints the saved notice so later
-    no-source builds stay silent. An unusable terminal skips persistence and
-    proceeds plaintext for this run only.
+    no-source builds stay silent. An unusable terminal or a failed preferences
+    write skips persistence and proceeds plaintext for this run only, so a
+    best-effort convenience never aborts an otherwise-successful build.
     """
     try:
         remember = console.confirm(_REMEMBER_PROMPT, default=True)
     except OSError:
         return
-    if remember:
+    if not remember:
+        return
+    try:
         ack_store.remember()
-        console.message(_SAVED_NOTICE)
+    except OSError:
+        return
+    console.message(_SAVED_NOTICE)
 
 
 @dataclass(frozen=True)

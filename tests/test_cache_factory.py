@@ -327,6 +327,28 @@ class TestRememberPlaintextChoice:
         verify(ack, times=0).remember()
         verify(console, times=0).message(cache_factory._SAVED_NOTICE)
 
+    def test_remember_write_failure_degrades_silently_without_notice(
+        self, tmp_path, monkeypatch
+    ):
+        # given plaintext confirmed and accepted, but persisting the choice fails
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = self._no_source_tty_console()
+        when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
+        when(console).confirm(cache_factory._REMEMBER_PROMPT, default=True).thenReturn(
+            True
+        )
+        ack = mock()
+        when(ack).is_acknowledged().thenReturn(False)
+        when(ack).remember().thenRaise(PermissionError("prefs not writable"))
+        # when the cache is built
+        cache = cache_factory.build_token_cache(
+            path=tmp_path / "t.json", env={}, console=console, ack_store=ack
+        )
+        # then the build still returns plaintext and no saved notice is shown
+        assert isinstance(cache, FileTokenCache)
+        verify(console, times=0).message(cache_factory._SAVED_NOTICE)
+
     def test_source_present_ignores_acknowledgement_and_encrypts(
         self, tmp_path, monkeypatch
     ):
