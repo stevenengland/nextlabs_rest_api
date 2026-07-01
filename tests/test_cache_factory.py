@@ -1,5 +1,6 @@
 import base64
 import io
+from typing import Any
 
 import keyring
 import pytest
@@ -257,3 +258,65 @@ class TestInteractiveTokenCache:
         cache_factory.build_token_cache(path=tmp_path / "t.json", env={}, console=plain)
         # then the user was warned about unencrypted storage only once
         assert capsys.readouterr().err.count("UNENCRYPTED") == 1
+
+
+class TestStateAwareHints:
+    def _no_source_tty_console(self) -> Any:
+        console = mock()
+        when(console).isatty().thenReturn(True)
+        when(console).prompt_secret(ANY).thenReturn("")
+        when(console).message(ANY).thenReturn(None)
+        return console
+
+    def test_fresh_prints_first_time_hint_then_confirms(self, tmp_path, monkeypatch):
+        # given no source, a TTY, and no cache on disk yet
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        console = self._no_source_tty_console()
+        when(console).confirm(ANY).thenReturn(True)
+        path = tmp_path / "tokens.json"
+        # when the cache is built
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then the fresh hint is shown before the unchanged confirm gate
+        assert isinstance(cache, FileTokenCache)
+        verify(console, times=1).message(cache_factory._HINT_FRESH.format(path=path))
+        verify(console, times=1).confirm(ANY)
+
+    def test_legacy_plaintext_prints_hint_then_confirms(self, tmp_path, monkeypatch):
+        # given no source, a TTY, and an existing unencrypted cache
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        path = tmp_path / "tokens.json"
+        FileTokenCache(path=path).save("a", _tok())
+        console = self._no_source_tty_console()
+        when(console).confirm(ANY).thenReturn(True)
+        # when the cache is built
+        cache = cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then the legacy-plaintext hint is shown before the unchanged confirm gate
+        assert isinstance(cache, FileTokenCache)
+        verify(console, times=1).message(
+            cache_factory._HINT_LEGACY_PLAINTEXT.format(path=path)
+        )
+        verify(console, times=1).confirm(ANY)
+
+    def test_lockout_prints_hint_and_aborts_without_touching_file(
+        self, tmp_path, monkeypatch
+    ):
+        # given an encrypted cache that no available source can unlock
+        monkeypatch.setattr(cache_factory, "_WARNED", False)
+        _keyring_unavailable()
+        path = tmp_path / "tokens.json"
+        cache_factory.build_token_cache(
+            path=path, env={"NEXTLABS_MASTER_PASSWORD": "pw"}
+        ).save("a", _tok())
+        before = path.read_bytes()
+        console = self._no_source_tty_console()
+        when(console).confirm(ANY).thenReturn(True)
+        # when the cache is built with no resolvable passphrase source
+        with pytest.raises(TokenCacheError):
+            cache_factory.build_token_cache(path=path, env={}, console=console)
+        # then the lockout hint is shown, the confirm gate is skipped, and the
+        # encrypted file is left untouched
+        verify(console, times=1).message(cache_factory._HINT_LOCKOUT.format(path=path))
+        verify(console, times=0).confirm(ANY)
+        assert path.read_bytes() == before

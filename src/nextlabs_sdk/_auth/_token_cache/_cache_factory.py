@@ -42,6 +42,24 @@ _CONFIRM_WARNING = (
 )
 _CONFIRM_PROMPT = "Store the token cache unencrypted anyway? [y/N]: "
 
+_HINT_FRESH = (
+    "No token cache yet; it will be created at {path}. It can be encrypted at "
+    "rest, but no passphrase source is set (NEXTLABS_MASTER_PASSWORD or an OS "
+    "keyring). See the project's online documentation for details."
+)
+_HINT_LEGACY_PLAINTEXT = (
+    "Your existing token cache at {path} is UNENCRYPTED and may contain "
+    "access/refresh tokens in plain text. Set NEXTLABS_MASTER_PASSWORD or an OS "
+    "keyring to re-encrypt it on the next write. See the project's online "
+    "documentation for details."
+)
+_HINT_LOCKOUT = (
+    "Your token cache at {path} is ENCRYPTED but no passphrase source is "
+    "available to unlock it. Set the original NEXTLABS_MASTER_PASSWORD / "
+    "keyring, or delete {path} to start fresh. See the project's online "
+    "documentation for details."
+)
+
 _WARNED = False
 
 
@@ -76,18 +94,34 @@ def build_token_cache(
         return EncryptedFileTokenCache(path=cache_path, kek_source=material)
 
     if console.isatty():
-        return _confirm_plaintext_or_abort(console, cache_path)
+        return _confirm_plaintext_or_abort(console, cache_path, env)
 
     _warn_plaintext_once(env)
     return FileTokenCache(path=cache_path)
 
 
-def _confirm_plaintext_or_abort(console: ConsoleIO, cache_path: Path) -> TokenCache:
+def _confirm_plaintext_or_abort(
+    console: ConsoleIO, cache_path: Path, env: Mapping[str, str]
+) -> TokenCache:
     """Gate plaintext storage behind a confirmation on the controlling terminal.
+
+    Emits a state-aware hint first: a first-time hint for an absent cache and a
+    plaintext-exposure hint for an existing unencrypted one, both falling
+    through to the confirm gate. An encrypted cache that no source can unlock is
+    a lockout: the hint is shown and the build aborts without touching the file,
+    so the encrypted tokens are never overwritten with plaintext.
 
     An unusable terminal cannot be prompted, so it degrades to plaintext rather
     than aborting, honouring the "encrypt when possible, never abort" policy.
     """
+    status = inspect_token_cache(path=cache_path, env=env)
+    if status.state == "encrypted":
+        console.message(_HINT_LOCKOUT.format(path=cache_path))
+        raise TokenCacheError()
+    if status.state == "absent":
+        console.message(_HINT_FRESH.format(path=cache_path))
+    else:
+        console.message(_HINT_LEGACY_PLAINTEXT.format(path=cache_path))
     print(_CONFIRM_WARNING, file=sys.stderr)
     try:
         confirmed = console.confirm(_CONFIRM_PROMPT)
