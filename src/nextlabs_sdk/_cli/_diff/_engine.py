@@ -53,6 +53,15 @@ _CROSS_POLICY_IDENTITY_FIELDS: frozenset[str] = frozenset(
 )
 
 
+def _is_noise_path(path: tuple[str, ...]) -> bool:
+    """Check whether any segment of a change path is a noise field.
+
+    A change beneath a noise field (e.g. ``deploymentRequest.id``) is noise
+    even though its own leaf name (``id``) is not itself a noise field.
+    """
+    return any(segment in _NOISE_FIELDS for segment in path)
+
+
 def canonicalise(payload: Mapping[str, object], *, show_all: bool = False) -> object:
     """Reduce a policy payload to a stable, comparison-ready form.
 
@@ -131,7 +140,7 @@ def diff_payloads(
     noise_changes = []
     visible_changes = []
     for change in changes:
-        if not show_all and change.path and change.path[-1] in _NOISE_FIELDS:
+        if not show_all and _is_noise_path(change.path):
             noise_changes.append(change)
         else:
             visible_changes.append(change)

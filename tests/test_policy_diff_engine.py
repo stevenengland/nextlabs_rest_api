@@ -51,6 +51,37 @@ def test_deployment_noise_excluded_by_default():
     assert result.hidden_noise_count == 3
 
 
+def test_nested_noise_field_hidden_by_default():
+    """Given payloads differing only in a leaf nested under a noise field.
+
+    When diffing without show_all.
+    Then the nested change is hidden and counted as noise, even though the
+    differing leaf itself (``id``) is not a noise field name.
+    """
+    old = {"name": "P", "deploymentRequest": {"id": 1}}
+    new = {"name": "P", "deploymentRequest": {"id": 2}}
+
+    result = diff_payloads(old, new)
+
+    assert result.changes == ()
+    assert result.hidden_noise_count == 1
+
+
+def test_nested_noise_field_visible_with_show_all():
+    """Given the same nested noise-subtree change as the default-mode case.
+
+    When diffing with show_all.
+    Then the nested change is reported instead of hidden.
+    """
+    old = {"name": "P", "deploymentRequest": {"id": 1}}
+    new = {"name": "P", "deploymentRequest": {"id": 2}}
+
+    result = diff_payloads(old, new, show_all=True)
+
+    assert any(c.path == ("deploymentRequest", "id") for c in result.changes)
+    assert result.hidden_noise_count == 0
+
+
 def test_version_change_stays_visible():
     """Given payloads differing only in version.
 
