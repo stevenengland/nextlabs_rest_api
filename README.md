@@ -481,7 +481,9 @@ client = CloudAzClient(
 
 The file is written `0600` inside a `0700` directory; writes are atomic
 (temp file + `os.replace`). The cache key is
-`"{token_url}|{username}|{client_id}"` so multiple profiles coexist.
+`"{url}|{username}|{client_id}|{kind}"` so CloudAz and PDP profiles
+coexist. For CloudAz entries, `url` includes `/cas/oidc/accessToken`;
+for PDP entries, it is the raw PDP/auth base URL.
 
 **Encryption at rest.** The CLI encrypts the cache whenever a passphrase
 source resolves — `NEXTLABS_MASTER_PASSWORD`, then the OS keyring, then
