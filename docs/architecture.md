@@ -8,7 +8,7 @@ Compact module map for orientation. Deep details live in code and docstrings.
 
 | Module | Responsibility | Key exports |
 |---|---|---|
-| `nextlabs_sdk` | Package root; re-exports public clients and errors | `CloudAzClient`, `AsyncCloudAzClient`, `PdpClient`, `AsyncPdpClient` |
+| `nextlabs_sdk` | Package root; re-exports public clients and cross-cutting helpers | `CloudAzClient`, `AsyncCloudAzClient`, `PdpClient`, `AsyncPdpClient`, `HttpConfig`, `RetryConfig` |
 | `nextlabs_sdk.cloudaz` | CloudAz Console API client (sync + async) | `CloudAzClient`, `AsyncCloudAzClient`, response/request models |
 | `nextlabs_sdk.pdp` | PDP REST client (sync + async) | `PdpClient`, `AsyncPdpClient`, evaluation payload models |
 | `nextlabs_sdk.exceptions` | Public error hierarchy | `NextLabsError` and subclasses |
