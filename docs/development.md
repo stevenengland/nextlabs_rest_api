@@ -56,18 +56,14 @@ To run hooks manually:
 pre-commit run --all-files
 ```
 
-## Docker Build
+## Package Build
 
 ```bash
-# Via script (builds + exports tar):
-./tools/build_docker_container.sh
-
-# Skip tar export:
-./tools/build_docker_container.sh --no-tar
-
-# Via Compose:
-docker compose -f docker/compose.yaml up --build
+python ./tools/build.py
 ```
+
+There is no project-level Docker image or Compose build checked in. The
+`.devcontainer/` Compose files are only for the VS Code development container.
 
 ## Local setup without the dev container
 
