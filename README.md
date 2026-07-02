@@ -226,13 +226,17 @@ nextlabs pdp eval --subject alice --resource doc-42 \
 ```text
 auth             login | logout | status | test | accounts | use
 tags             list (positional <tag_type>) | get | create | delete
-components       search | get | create | update | delete
-component-types  list | get | create | update | delete
-policies         search | get | diff | export-all | tags
-audit-logs       search (--start-date / --end-date in epoch-ms)
-reports          ...
-dashboard        ...
-pdp              eval | permissions
+components       search | get | get-active | history | view-revision | create | modify | delete | deploy | undeploy | ...
+component-types  search | get | get-active | create | modify | delete | clone | ...
+policies         search | get | get-active | history | view-revision | diff | export | export-all | deploy | undeploy | ...
+audit-logs       search | export | list-users
+activity-logs    search | get-by-row-id | log | export | export-by-row-id
+reports          list | get | create | modify | delete | widgets | enforcements | export | ...
+reporter-audit-logs search
+dashboard        alerts | top-users | top-resources | top-policies | alerts-by-monitor-tags
+operators        list | list-by-type | list-types
+system-config    get
+pdp              eval | permissions | explain
 ```
 
 Use `nextlabs <group> --help` for the exact flags of each subcommand.
