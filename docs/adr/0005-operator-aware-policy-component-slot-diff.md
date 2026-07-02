@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft — drives PRD #235 (originates from bug report #216).
+Accepted — implemented. Originated from PRD #235 and bug report #216.
 
 ## Context
 

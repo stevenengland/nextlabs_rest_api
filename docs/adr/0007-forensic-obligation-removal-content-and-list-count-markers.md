@@ -2,9 +2,7 @@
 
 ## Status
 
-Draft — drives PRD #264. To be finalised as the implementation slice lands
-(decision text below is settled; `Consequences` / migration notes will be
-confirmed against the merged implementation).
+Accepted — implemented. Originated from PRD #264.
 
 ## Context
 
@@ -118,7 +116,7 @@ Scope covers both `allowObligations` and `denyObligations`.
 
 ## Consequences
 
-> To be confirmed against the merged slice.
+Confirmed by the merged implementation.
 
 Easier:
 

@@ -2,13 +2,10 @@
 
 ## Status
 
-Proposed — in progress.
+Accepted — implemented.
 
-This ADR is authored **before** implementation and is finalized incrementally
-as the #130 slices land. Decisions in "Decision" are locked; items in
-"Open items to finalize during implementation" are expected to be filled in
-(with exact values, offsets, and wording) as each slice is built, after which
-the status moves to **Accepted**.
+The implementation has landed. The historical slice plan remains below for
+traceability; the implementation confirmations capture the resolved values.
 
 Tracking: PRD [#130](https://github.com/stevenengland/nextlabs_rest_api/issues/130).
 Builds on ADR 0001 (public API surface) and ADR 0002 (CLI convenience-command
@@ -236,25 +233,20 @@ read-path mutation, no race, no prompt inside `load`.
 * **Neutral:** the suite-id approach trades free-form KDF tuning for a versioned
   table; tuning requires a code change plus a new suite-id.
 
-## Open items to finalize during implementation
+## Implementation confirmations
 
-These are filled in as the slices land; the ADR moves to **Accepted** once all
-are resolved.
-
-* Exact Argon2id suite parameters (memory cost, iterations, parallelism)
-  targeting ~250–500 ms on a modern laptop, plus the low-cost **test** suite-id
-  used to keep unit/property tests fast.
-* Byte-exact field offsets and lengths of the `NLBX` header (and whether any
-  reserved bytes are kept for forward-compat).
-* Final wording of the plaintext-fallback warning and the `TokenCacheError`
-  message.
-* Whether legacy→encrypted migration (originally slice #134) folds into the
-  tracer slice (it is nearly free given organic migration on write) or remains a
-  small verification-only slice.
-* The confirmed list of `build_file_cache(...)` call sites migrated to
-  `build_token_cache(...)` and the exact `TokenCache` type-widening.
-* Confirmation that the in-process DEK cache never persists across CLI
-  invocations and is not shared between unrelated cache instances.
+* Argon2id suite 1 uses memory cost `65536`, time cost `3`, parallelism `4`,
+  a 16-byte salt, and a 32-byte derived key.
+* The `NLBX` header is fixed-layout: magic `NLBX`, version, wrap type,
+  suite-id, salt, and wrapped DEK. The header is bound as AEAD additional data.
+* The plaintext fallback warning is:
+  `warning: token cache is stored UNENCRYPTED; set NEXTLABS_MASTER_PASSWORD to encrypt it, or NEXTLABS_DISABLE_TOKEN_ENCRYPTION=1 to silence this warning`.
+* `TokenCacheError` uses one generic message for unreadable, undecryptable, or
+  tampered cache data.
+* Legacy plaintext migration is organic: reads leave plaintext untouched; the
+  next encrypted write rewrites the file as an `NLBX` envelope.
+* The in-process DEK cache lives only on each `EncryptedFileTokenCache`
+  instance, so it never persists across CLI invocations.
 
 ## Revised slice plan (supersedes the original #131–#138 cut)
 
