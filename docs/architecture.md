@@ -46,8 +46,8 @@ notice — do not import from tests outside their own module, examples, or docs.
 ## Tests layout (`tests/`)
 
 - Unit tests live beside the modules they cover, in `tests/<area>/`.
-- E2E tests under `tests/e2e/`; require Docker and the `--e2e`/`--all` flag of
-  `tools/tests.py`.
+- E2E tests under `tests/e2e/`; require Docker. Use `tools/tests.py --e2e` or
+  `--all` for suite selection, or pass an explicit `tests/e2e/...` target.
 - Shared fixtures in `tests/conftest.py` (`when`, `unstub`).
 - Large vendor fixture: `tests/_openapi/fixtures/nextlabs-openapi.json`
   (~640 KB). **Grep it, don't view it.**
