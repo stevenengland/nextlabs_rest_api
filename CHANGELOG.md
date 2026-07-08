@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.1 - 2026-07-08
+
+### nextlabs-sdk 0.14.1
+
+#### Bug Fixes
+
+- fix(search): make scim2-filter-parser CLI-only again @stevenengland ([#306](https://github.com/stevenengland/nextlabs_rest_api/pull/306))
+
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.14.0...0.14.1
+
 ## 0.14.0 - 2026-07-01
 
 ### nextlabs-sdk 0.14.0
@@ -23,7 +33,7 @@
 - fix(PRD): #<!---->282 cleanup — capstone findings @stevenengland ([#291](https://github.com/stevenengland/nextlabs_rest_api/pull/291))
 - fix(token-cache): degrade to plaintext on a non-seekable controlling tty @stevenengland ([#279](https://github.com/stevenengland/nextlabs_rest_api/pull/279))
 - fix(token-cache): address #<!---->263 second-pass review findings @stevenengland ([#271](https://github.com/stevenengland/nextlabs_rest_api/pull/271))
-- fix(cli): add __main__ guard so debugger can attach to entrypoint @stevenengland ([#268](https://github.com/stevenengland/nextlabs_rest_api/pull/268))
+- fix(cli): add **main** guard so debugger can attach to entrypoint @stevenengland ([#268](https://github.com/stevenengland/nextlabs_rest_api/pull/268))
 
 #### Documentation
 
@@ -37,10 +47,8 @@
 - test(policy-diff): split test_cli_policy_diff into themed modules (#<!---->263 F4) @stevenengland ([#275](https://github.com/stevenengland/nextlabs_rest_api/pull/275))
 - test(policy-diff): split test_cli_policy_diff into themed modules (#<!---->263 F4) @stevenengland ([#272](https://github.com/stevenengland/nextlabs_rest_api/pull/272))
 - test(token-cache): verify organic legacy→encrypted migration (#<!---->134) @stevenengland ([#261](https://github.com/stevenengland/nextlabs_rest_api/pull/261))
-
 </details>
 **Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.13.0...0.14.0
-
 ## 0.13.0 - 2026-06-26
 
 ### nextlabs-sdk 0.13.0
