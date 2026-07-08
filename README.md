@@ -49,7 +49,8 @@
   `RequestTimeoutError`, `TransportError`, and `ApiError` — all
   subclasses of `NextLabsError`.
 - **Pagination helpers** — `SyncPaginator` / `AsyncPaginator` iterate
-  listed endpoints page-by-page or item-by-item.
+  listed endpoints item-by-item, with `first_page()` exposing page
+  metadata.
 - **Optional CLI** — a `nextlabs` command (Typer + Rich) for scripting,
   admin tasks, and quick exploration. Persistent OIDC token cache, four
   output formats (`table` / `wide` / `detail` / `json`), per-call
@@ -64,7 +65,10 @@ pip install "nextlabs-sdk[cli]"     # + nextlabs CLI (Typer, Rich)
 
 If you install the library without the `[cli]` extra, the `nextlabs`
 command is still registered but will print a friendly error pointing at
-`pip install 'nextlabs-sdk[cli]'` and exit with status `1`.
+`pip install 'nextlabs-sdk[cli]'` and exit with status `1`. The extra also
+supplies `scim2-filter-parser`, which the SCIM `--where` policy search
+(`transpile_where`) requires; calling it without the extra raises a
+`SearchExpressionError` pointing at the same install command.
 
 Requires Python **3.11+**.
 
@@ -147,14 +151,15 @@ subject may perform on a resource.
 ### Pagination
 
 `SyncPaginator` / `AsyncPaginator` are returned by every list method.
-Iterate page-by-page (`.pages()`) or item-by-item (default `__iter__`):
+Iterate item-by-item (default `__iter__`, which walks every page), or grab
+the first `PageResult` for its metadata:
 
 ```python
 for tag in client.tags.list(TagType.COMPONENT):       # one item at a time
     ...
 
-for page in client.tags.list(TagType.COMPONENT).pages():
-    print(page.total, len(page.items))                # PageResult metadata
+page = client.tags.list(TagType.COMPONENT).first_page()
+print(page.total_records, len(page.entries))          # PageResult metadata
 ```
 
 ### Error handling
