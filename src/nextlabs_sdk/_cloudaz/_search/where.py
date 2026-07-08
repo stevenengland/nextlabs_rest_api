@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Any, cast
-
-from scim2_filter_parser.ast import AttrExpr, AttrPath, Filter, LogExpr
-from scim2_filter_parser.lexer import SCIMLexer
-from scim2_filter_parser.parser import SCIMParser, SCIMParserError
+from typing import TYPE_CHECKING, Any, cast
 
 from nextlabs_sdk._cloudaz._search.criteria import SearchField, SearchFieldType
 from nextlabs_sdk._cloudaz._search.dates import (
@@ -19,6 +15,14 @@ from nextlabs_sdk._cloudaz._search.payloads import (
     text_payload,
 )
 from nextlabs_sdk.exceptions import SearchExpressionError
+
+if TYPE_CHECKING:
+    from scim2_filter_parser.ast import AttrExpr, Filter, LogExpr
+
+_SCIM_EXTRA_HINT = (
+    "SCIM --where filtering requires the optional 'scim2-filter-parser' "
+    "package. Install it with: pip install 'nextlabs-sdk[cli]'"
+)
 
 _TEXT_ATTR = "text"
 _FROM_DATE = "fromDate"
@@ -77,25 +81,31 @@ def transpile_where(expr: str) -> list[SearchField]:
 
 def _parse(expr: str) -> Filter:
     try:
-        tree = SCIMParser().parse(SCIMLexer().tokenize(expr))
-    except (SCIMParserError, ValueError) as exc:
+        from scim2_filter_parser import ast as scim_ast, lexer, parser
+    except ImportError:
+        raise SearchExpressionError(_SCIM_EXTRA_HINT) from None
+    try:
+        tree = parser.SCIMParser().parse(lexer.SCIMLexer().tokenize(expr))
+    except (parser.SCIMParserError, ValueError) as exc:
         raise SearchExpressionError(
             f"could not parse --where filter: {expr!r}",
         ) from exc
-    return cast(Filter, tree)
+    return cast(scim_ast.Filter, tree)
 
 
 def _transpile_filter(node: Filter) -> list[SearchField]:
+    from scim2_filter_parser import ast as scim_ast
+
     if node.negated:
         raise _cross_field_error()
     inner = node.expr
-    if isinstance(inner, Filter):
+    if isinstance(inner, scim_ast.Filter):
         if inner.namespace is not None:
             return [_nested_field(inner)]
         return _transpile_filter(inner)
-    if isinstance(inner, AttrExpr):
+    if isinstance(inner, scim_ast.AttrExpr):
         return [_scalar_field(inner)]
-    if isinstance(inner, LogExpr):
+    if isinstance(inner, scim_ast.LogExpr):
         return _transpile_log(inner)
     raise SearchExpressionError("unsupported --where expression")
 
@@ -110,9 +120,11 @@ def _transpile_log(node: LogExpr) -> list[SearchField]:
 
 
 def _nested_field(node: Filter) -> SearchField:
-    namespace = cast(AttrPath, node.namespace)
+    from scim2_filter_parser import ast as scim_ast
+
+    namespace = cast(scim_ast.AttrPath, node.namespace)
     base = namespace.attr_name
-    terms = _flatten_or_side(cast(Filter, node.expr))
+    terms = _flatten_or_side(cast(scim_ast.Filter, node.expr))
     sub_names = {term.attr_path.attr_name for term in terms}
     if len(sub_names) != 1:
         raise SearchExpressionError(
@@ -162,14 +174,16 @@ def _flatten_or(node: LogExpr) -> list[AttrExpr]:
 
 
 def _flatten_or_side(node: Filter) -> list[AttrExpr]:
+    from scim2_filter_parser import ast as scim_ast
+
     if node.negated:
         raise _cross_field_error()
     inner = node.expr
-    if isinstance(inner, Filter):
+    if isinstance(inner, scim_ast.Filter):
         return _flatten_or_side(inner)
-    if isinstance(inner, AttrExpr):
+    if isinstance(inner, scim_ast.AttrExpr):
         return [inner]
-    if isinstance(inner, LogExpr) and inner.op.lower() == "or":
+    if isinstance(inner, scim_ast.LogExpr) and inner.op.lower() == "or":
         return _flatten_or(inner)
     raise _cross_field_error()
 
