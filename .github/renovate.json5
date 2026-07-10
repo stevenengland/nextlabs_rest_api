@@ -9,6 +9,7 @@
     "pep621",
     "pip_requirements",
     "github-actions",
+    "dockerfile",
     "devcontainer",
   ],
 
@@ -34,15 +35,25 @@
       automerge: true,
     },
     {
-      // requirements/constraints.txt pins dev tooling (plus a few
-      // incidental transitive pins); automerge at every severity.
+      // requirements/constraints.txt and dev.txt are dev tooling;
+      // automerge at every severity. Excludes package names pep621 also
+      // declares (e.g. cryptography, incidentally pinned here too) so a
+      // major bump can't land in constraints.txt ahead of the runtime
+      // range review and break resolution against pyproject.toml's cap.
       matchManagers: ["pip_requirements"],
-      matchFileNames: ["requirements/constraints.txt"],
+      matchFileNames: ["requirements/constraints.txt", "requirements/dev.txt"],
+      matchPackageNames: [
+        "!httpx",
+        "!pydantic",
+        "!defusedxml",
+        "!cryptography",
+        "!argon2-cffi",
+      ],
       automerge: true,
       semanticCommitType: "chore",
       semanticCommitScope: "deps-dev",
     },
-    // github-actions and devcontainer (python base image) updates keep
-    // the default automerge:false — manual review.
+    // github-actions, dockerfile and devcontainer (python base image)
+    // updates keep the default automerge:false — manual review.
   ],
 }
