@@ -1,0 +1,5 @@
+# Deliberate transitive pins only. tools/lock.py folds this file into
+# requirements/constraints.txt alongside pyproject.toml and requirements/dev-compile.in.
+# Each entry needs a trailing comment with the reason and an issue reference,
+# e.g.: some-transitive-dep==1.2.3  # CVE-2026-1234, see #123
+# Remove the line and rerun `python tools/lock.py` to restore normal resolution.

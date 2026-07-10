@@ -1,3 +1,0 @@
-# Runtime dependencies are declared in pyproject.toml.
-# This file installs them by referencing the project root.
-.
