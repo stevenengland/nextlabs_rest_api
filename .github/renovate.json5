@@ -2,11 +2,10 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
   // Full Dependabot replacement, scoped to the managers this repo actually
-  // uses. No pip-compile lock exists here (requirements/constraints.txt is
-  // a hand-maintained pin list, not pip-compile output) — pip_requirements
-  // manages it directly instead.
+  // uses.
   enabledManagers: [
     "pep621",
+    "pip-compile",
     "pip_requirements",
     "github-actions",
     "dockerfile",
@@ -19,6 +18,20 @@
   semanticCommits: "enabled",
   semanticCommitType: "fix",
   semanticCommitScope: "deps",
+
+  // Scoped to the one file it's meant for (deliberate transitive pins);
+  // without this it can also match generated requirements/*.txt files
+  // (constraints.txt, dev.txt) and edit pins directly, bypassing the
+  // pip-compile regeneration contract.
+  pip_requirements: {
+    fileMatch: ["^requirements/overrides\\.in$"],
+  },
+
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+    schedule: ["at any time"],
+  },
 
   packageRules: [
     {
@@ -35,25 +48,16 @@
       automerge: true,
     },
     {
-      // requirements/constraints.txt and dev.txt are dev tooling;
-      // automerge at every severity. Excludes package names pep621 also
-      // declares (e.g. cryptography, incidentally pinned here too) so a
-      // major bump can't land in constraints.txt ahead of the runtime
-      // range review and break resolution against pyproject.toml's cap.
-      matchManagers: ["pip_requirements"],
-      matchFileNames: ["requirements/constraints.txt", "requirements/dev.txt"],
-      matchPackageNames: [
-        "!httpx",
-        "!pydantic",
-        "!defusedxml",
-        "!cryptography",
-        "!argon2-cffi",
-      ],
+      // requirements/dev-compile.in is the pip-compile manager's input for
+      // the dev side of the lock; automerge at every severity.
+      matchManagers: ["pip-compile"],
+      matchFileNames: ["requirements/dev-compile.in"],
       automerge: true,
       semanticCommitType: "chore",
       semanticCommitScope: "deps-dev",
     },
-    // github-actions, dockerfile and devcontainer (python base image)
-    // updates keep the default automerge:false — manual review.
+    // github-actions, dockerfile (python base image), devcontainer, and
+    // requirements/overrides.in updates keep the default automerge:false —
+    // manual review.
   ],
 }

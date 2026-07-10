@@ -1,20 +1,4 @@
 # Runtime deps come from pyproject.toml via editable install.
 -e .[cli]
-black
-faker
-isort
-mockito
-mypy
-pre-commit
-pyright
-pytest
-pytest-cov
-pytest-env
-pytest-mock
-pytest-timeout
-strip_ansi
-testcontainers
-types-PyYAML
-types-requests
-wemake-python-styleguide
-wiremock
+# Dev tool names are single-sourced in dev-compile.in.
+-r dev-compile.in

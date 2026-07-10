@@ -38,6 +38,10 @@ jobs:
           python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
           python -m pip install -e . --no-deps
 
+      - name: Verify the dependency lock is up to date
+        shell: bash
+        run: "python tools/lock.py --check"
+
       - name: Perform code checks
         shell: bash
         run: "python ./tools/checks.py"

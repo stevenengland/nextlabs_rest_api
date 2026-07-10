@@ -1,0 +1,22 @@
+# Single source of truth for dev tool names. Committed so Renovate's
+# pip-compile manager and tools/lock.py compile from the same input.
+# requirements/dev.txt references this file instead of duplicating it.
+black
+faker
+isort
+mockito
+mypy
+pip-tools
+pre-commit
+pyright
+pytest
+pytest-cov
+pytest-env
+pytest-mock
+pytest-timeout
+strip-ansi
+testcontainers
+types-PyYAML
+types-requests
+wemake-python-styleguide
+wiremock
