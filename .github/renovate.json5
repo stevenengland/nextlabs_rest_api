@@ -1,0 +1,48 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Full Dependabot replacement, scoped to the managers this repo actually
+  // uses. No pip-compile lock exists here (requirements/constraints.txt is
+  // a hand-maintained pin list, not pip-compile output) — pip_requirements
+  // manages it directly instead.
+  enabledManagers: [
+    "pep621",
+    "pip_requirements",
+    "github-actions",
+    "devcontainer",
+  ],
+
+  branchPrefix: "renovate/",
+  labels: ["dependencies"],
+
+  semanticCommits: "enabled",
+  semanticCommitType: "fix",
+  semanticCommitScope: "deps",
+
+  packageRules: [
+    {
+      // Runtime deps stay expressed as ranges in pyproject.toml; Renovate
+      // widens the floor instead of pinning.
+      matchManagers: ["pep621"],
+      rangeStrategy: "bump",
+    },
+    {
+      // Runtime patch/minor/digest: tested, automerged. Majors fall
+      // through with no automerge rule below — manual review.
+      matchManagers: ["pep621"],
+      matchUpdateTypes: ["patch", "minor", "digest"],
+      automerge: true,
+    },
+    {
+      // requirements/constraints.txt pins dev tooling (plus a few
+      // incidental transitive pins); automerge at every severity.
+      matchManagers: ["pip_requirements"],
+      matchFileNames: ["requirements/constraints.txt"],
+      automerge: true,
+      semanticCommitType: "chore",
+      semanticCommitScope: "deps-dev",
+    },
+    // github-actions and devcontainer (python base image) updates keep
+    // the default automerge:false — manual review.
+  ],
+}
