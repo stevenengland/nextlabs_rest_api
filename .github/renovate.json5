@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Full Dependabot replacement, scoped to the managers this repo actually
+  // uses. No pip-compile lock exists here (requirements/constraints.txt is
+  // a hand-maintained pin list, not pip-compile output) — pip_requirements
+  // manages it directly instead.
+  enabledManagers: [
+    "pep621",
+    "pip_requirements",
+    "github-actions",
+    "dockerfile",
+    "devcontainer",
+  ],
+
+  branchPrefix: "renovate/",
+  labels: ["dependencies"],
+
+  semanticCommits: "enabled",
+  semanticCommitType: "fix",
+  semanticCommitScope: "deps",
+
+  packageRules: [
+    {
+      // Runtime deps stay expressed as ranges in pyproject.toml; Renovate
+      // widens the floor instead of pinning.
+      matchManagers: ["pep621"],
+      rangeStrategy: "bump",
+    },
+    {
+      // Runtime patch/minor/digest: tested, automerged. Majors fall
+      // through with no automerge rule below — manual review.
+      matchManagers: ["pep621"],
+      matchUpdateTypes: ["patch", "minor", "digest"],
+      automerge: true,
+    },
+    {
+      // requirements/constraints.txt and dev.txt are dev tooling;
+      // automerge at every severity. Excludes package names pep621 also
+      // declares (e.g. cryptography, incidentally pinned here too) so a
+      // major bump can't land in constraints.txt ahead of the runtime
+      // range review and break resolution against pyproject.toml's cap.
+      matchManagers: ["pip_requirements"],
+      matchFileNames: ["requirements/constraints.txt", "requirements/dev.txt"],
+      matchPackageNames: [
+        "!httpx",
+        "!pydantic",
+        "!defusedxml",
+        "!cryptography",
+        "!argon2-cffi",
+      ],
+      automerge: true,
+      semanticCommitType: "chore",
+      semanticCommitScope: "deps-dev",
+    },
+    // github-actions, dockerfile and devcontainer (python base image)
+    // updates keep the default automerge:false — manual review.
+  ],
+}
