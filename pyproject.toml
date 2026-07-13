@@ -41,7 +41,7 @@ cli = [
     "keyring>=24,<26",
 ]
 yaml = [
-    "PyYAML>=6.0",
+    "PyYAML>=6.0.3",
 ]
 
 [project.scripts]
