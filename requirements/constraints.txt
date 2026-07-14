@@ -16,7 +16,7 @@ argon2-cffi-bindings==25.1.0
     # via argon2-cffi
 attrs==26.1.0
     # via wemake-python-styleguide
-black==24.4.2
+black==26.5.1
     # via -r requirements/dev-compile.in
 build==1.5.1
     # via pip-tools
@@ -172,6 +172,8 @@ python-discovery==1.4.4
     # via virtualenv
 python-dotenv==1.2.2
     # via testcontainers
+pytokens==0.4.1
+    # via black
 pyyaml==6.0.3
     # via
     #   nextlabs-sdk (pyproject.toml)
