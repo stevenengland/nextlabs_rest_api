@@ -6,6 +6,9 @@ from typing import Annotated
 import typer
 
 from nextlabs_sdk._cli import _client_factory
+
+# Self-aliased: importing this module registers the Policy detail renderer as
+# a side effect. Do not remove even though the name is otherwise unused here.
 from nextlabs_sdk._cli import _policy_detail_renderer as _policy_detail_renderer
 from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
