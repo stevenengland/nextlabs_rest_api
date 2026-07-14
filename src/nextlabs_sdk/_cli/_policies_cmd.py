@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated
 
@@ -13,31 +12,21 @@ from nextlabs_sdk._cli._binary_output import write_bytes
 from nextlabs_sdk._cli._bulk_ids import parse_bulk_ids
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._detail_renderers import register_detail_renderer
-from nextlabs_sdk._cli._diff import (
-    _engine,
-    _format,
-    _models,
-    _render_semantic,
-    _render_unified,
-)
+from nextlabs_sdk._cli._diff import _format, _orchestrate
 from nextlabs_sdk._cli._diff._revision_select import (
     InsufficientRevisionsError,
     UnknownRevisionError,
-    select_policy_revision,
-    select_revisions,
 )
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._factory import make_group
 from nextlabs_sdk._cli._output import ColumnDef, print_error, print_success, render
-from nextlabs_sdk._cli._output_format import OutputFormat
 from nextlabs_sdk._cli._payload_loader import (
     load_payload,
     reject_data_flag,
     require_payload,
 )
 from nextlabs_sdk._cli._policy_search_args import build_search_criteria
-from nextlabs_sdk._cloudaz._policies import PolicyService
-from nextlabs_sdk._cloudaz._policy_models import Policy, PolicyRevision
+from nextlabs_sdk._cloudaz._policy_models import Policy
 
 policies_app = make_group("Policy management commands")
 
@@ -689,7 +678,7 @@ def diff(  # noqa: WPS211
     client = _client_factory.make_cloudaz_client(cli_ctx)
     cross_policy = policy_id_b is not None
     try:
-        old, new = _resolve_diff_revisions(
+        old, new = _orchestrate.resolve_diff_revisions(
             client.policies,
             policy_id,
             policy_id_b,
@@ -699,60 +688,15 @@ def diff(  # noqa: WPS211
     except (InsufficientRevisionsError, UnknownRevisionError) as exc:
         print_error(str(exc))
         raise typer.Exit(code=1) from exc
-    old_payload = old.policy_detail.model_dump(mode="json", by_alias=True)
-    new_payload = new.policy_detail.model_dump(mode="json", by_alias=True)
-    diff_result = _engine.diff_payloads(
-        old_payload, new_payload, show_all=show_all, cross_policy=cross_policy
-    )
-    header = _build_diff_header(old, new, cross_policy=cross_policy)
-    if cli_ctx.output_format is OutputFormat.JSON:
-        print(json.dumps(_models.diff_result_to_dict(diff_result), indent=2))
-    elif diff_format is _format.DiffFormat.UNIFIED:
-        _render_unified.render_unified(
-            _render_unified.UnifiedDiffInput(
-                old=old_payload,
-                new=new_payload,
-                header=header,
-                diff_result=diff_result,
-            ),
+    diff_result = _orchestrate.render_diff(
+        old,
+        new,
+        _orchestrate.DiffRenderOptions(
+            cross_policy=cross_policy,
             show_all=show_all,
-        )
-    else:
-        _render_semantic.render_semantic(diff_result, header, show_all=show_all)
+            output_format=cli_ctx.output_format,
+            diff_format=diff_format,
+        ),
+    )
     if exit_code and diff_result.changes:
         raise typer.Exit(code=1)
-
-
-def _resolve_diff_revisions(
-    policies: PolicyService,
-    policy_id: int,
-    policy_id_b: int | None,
-    *,
-    from_rev: int | None,
-    to_rev: int | None,
-) -> tuple[PolicyRevision, PolicyRevision]:
-    if policy_id_b is None:
-        return select_revisions(policies, policy_id, from_rev=from_rev, to_rev=to_rev)
-    old = select_policy_revision(policies, policy_id, revision=from_rev)
-    new = select_policy_revision(policies, policy_id_b, revision=to_rev)
-    return old, new
-
-
-def _build_diff_header(
-    old: PolicyRevision, new: PolicyRevision, *, cross_policy: bool
-) -> _models.DiffHeader:
-    if cross_policy:
-        return _models.DiffHeader(
-            policy_name=old.policy_detail.name,
-            policy_id=old.policy_detail.id,
-            from_rev=old.revision,
-            to_rev=new.revision,
-            to_policy_name=new.policy_detail.name,
-            to_policy_id=new.policy_detail.id,
-        )
-    return _models.DiffHeader(
-        policy_name=new.policy_detail.name,
-        policy_id=new.policy_detail.id,
-        from_rev=old.revision,
-        to_rev=new.revision,
-    )
