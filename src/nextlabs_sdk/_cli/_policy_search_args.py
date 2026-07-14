@@ -67,7 +67,11 @@ def build_search_criteria(  # noqa: WPS211
 
 
 def _reject_expression_flags(flag_values: list[object]) -> None:
-    provided = [flag for flag, is_set in zip(_EXPRESSION_FLAGS, flag_values) if is_set]
+    provided = [
+        flag
+        for flag, is_set in zip(_EXPRESSION_FLAGS, flag_values, strict=True)
+        if is_set
+    ]
     if provided:
         joined = ", ".join(provided)
         raise SearchExpressionError(
