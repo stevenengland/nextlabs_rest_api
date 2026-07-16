@@ -63,7 +63,6 @@ def query_paginated(
     """
     return PaginatedSpec(
         model=model,
-        method="GET",
         dialect=dialect,
         plan_builder=functools.partial(_build_query_plan, path_template, dialect),
     )
@@ -89,7 +88,6 @@ def search_paginated(
     """
     return PaginatedSpec(
         model=model,
-        method="POST",
         dialect=dialect,
         plan_builder=functools.partial(_build_search_plan, path),
     )

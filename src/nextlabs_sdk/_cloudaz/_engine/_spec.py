@@ -17,6 +17,5 @@ class PaginatedSpec(Generic[_ModelT]):
     """Endpoint spec describing how to build a request for one page."""
 
     model: type[_ModelT]
-    method: str
     dialect: PageDialect
     plan_builder: Callable[[Mapping[str, object], int, int | None], RequestPlan]
