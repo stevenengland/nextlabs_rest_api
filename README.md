@@ -300,6 +300,28 @@ nextlabs policies search --where 'updatedAt ge "2024-01-01" and updatedAt le "20
 nextlabs policies search --where 'text co "invoice"'
 ```
 
+> **Windows shell quoting.** The examples above use a single-quoted outer
+> string with double-quoted values inside — that survives verbatim in
+> POSIX shells (bash/zsh) but **not** in Windows PowerShell, which strips
+> the embedded double quotes when passing arguments to a native command.
+> `--where 'folderPath co "P01"'` then reaches the CLI as
+> `folderPath co P01` and fails with
+> `could not parse --where filter: 'folderPath co P01'`. Escape the inner
+> double quotes so they survive:
+>
+> ```powershell
+> # PowerShell:
+> nextlabs policies search --where 'folderPath co \"P01\"' --page-size 100
+> ```
+>
+> ```bat
+> :: cmd.exe (outer double quotes, escaped inner quotes):
+> nextlabs policies search --where "folderPath co \"P01\"" --page-size 100
+> ```
+>
+> The same rule applies to any `--where` or `--field` value that contains
+> inner double quotes.
+
 The `--where` parser maps SCIM operators to backend **match types** as
 follows:
 
