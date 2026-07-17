@@ -9,6 +9,7 @@ and a single shared spec constant per endpoint for the sync/async pair.
 from __future__ import annotations
 
 import importlib
+import types
 from pathlib import Path
 
 import pytest
@@ -29,10 +30,9 @@ _SYNC_ASYNC_METHOD_PAIRS = (
 )
 
 
-def _spec_names_referenced(method: object) -> set[str]:
+def _spec_names_referenced(method: types.FunctionType) -> set[str]:
     """Return the module-level ``*_SPEC`` constant names a method's body reads."""
-    code = method.__code__  # type: ignore[attr-defined]
-    return {name for name in code.co_names if name.endswith("_SPEC")}
+    return {name for name in method.__code__.co_names if name.endswith("_SPEC")}
 
 
 def test_engine_is_not_on_public_facades():

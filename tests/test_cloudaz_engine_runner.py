@@ -6,7 +6,7 @@ import pytest
 from nextlabs_sdk._cloudaz._component_models import ComponentNameEntry
 from nextlabs_sdk._cloudaz._engine._constructors import query_paginated
 from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
-from nextlabs_sdk.exceptions import ApiError, NextLabsError
+from nextlabs_sdk.exceptions import ApiError
 
 BASE_URL = "https://cloudaz.example.com"
 SPEC = query_paginated(
@@ -125,6 +125,6 @@ def test_malformed_entry_raises_next_labs_error():
     runner = SyncEndpointRunner(client)
 
     paginator = runner.pages(SPEC, {"group": "RESOURCE"})
-    # then only a NextLabsError subclass escapes, never a raw pydantic error
-    with pytest.raises(NextLabsError):
+    # then the malformed entry is translated to ApiError, never a raw pydantic error
+    with pytest.raises(ApiError):
         list(paginator)
