@@ -11,12 +11,28 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import pytest
+
 from nextlabs_sdk._cloudaz._component_search import (
     AsyncComponentSearchService,
     ComponentSearchService,
 )
 
 cs = importlib.import_module("nextlabs_sdk._cloudaz._component_search")
+
+_SYNC_ASYNC_METHOD_PAIRS = (
+    "search",
+    "list_saved_searches",
+    "find_saved_search",
+    "list_names",
+    "list_names_by_type",
+)
+
+
+def _spec_names_referenced(method: object) -> set[str]:
+    """Return the module-level ``*_SPEC`` constant names a method's body reads."""
+    code = method.__code__  # type: ignore[attr-defined]
+    return {name for name in code.co_names if name.endswith("_SPEC")}
 
 
 def test_engine_is_not_on_public_facades():
@@ -38,10 +54,6 @@ def test_component_search_has_no_hand_rolled_assembly():
 
 
 def test_sync_and_async_share_one_spec_per_endpoint():
-    # the spec constants are the single source of truth for the pair
-    assert cs._SEARCH_SPEC is cs._SEARCH_SPEC  # module-level constant exists
-    # both service classes are constructed over the same module constants;
-    # assert the constants are defined exactly once at module scope
     for const_name in (
         "_SEARCH_SPEC",
         "_SAVED_SEARCHES_SPEC",
@@ -54,3 +66,15 @@ def test_sync_and_async_share_one_spec_per_endpoint():
     sync_service: object = ComponentSearchService
     async_service: object = AsyncComponentSearchService
     assert sync_service is not async_service
+
+
+@pytest.mark.parametrize("method_name", _SYNC_ASYNC_METHOD_PAIRS)
+def test_sync_and_async_method_resolve_to_same_spec_constant(method_name):
+    # the sync and async call sites for the same endpoint must reference the
+    # identical module-level spec constant, not independent duplicates
+    sync_specs = _spec_names_referenced(getattr(ComponentSearchService, method_name))
+    async_specs = _spec_names_referenced(
+        getattr(AsyncComponentSearchService, method_name),
+    )
+    assert sync_specs == async_specs
+    assert len(sync_specs) == 1

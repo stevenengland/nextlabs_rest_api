@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TypeVar
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from nextlabs_sdk._cloudaz._response import (
     parse_pageable,
@@ -12,6 +12,7 @@ from nextlabs_sdk._cloudaz._response import (
 )
 from nextlabs_sdk._cloudaz._engine._dialect import PageDialect, PageShape
 from nextlabs_sdk._pagination import PageResult
+from nextlabs_sdk.exceptions import ApiError
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
@@ -39,7 +40,7 @@ def assemble_page(
         raw_items, total_pages, total_records = parse_pageable(response)
         page_size = None
 
-    entries = [model.model_validate(entry) for entry in raw_items]
+    entries = _validate_entries(model, raw_items, response)
     return PageResult(
         entries=entries,
         page_no=page_no,
@@ -47,3 +48,23 @@ def assemble_page(
         total_pages=total_pages,
         total_records=total_records,
     )
+
+
+def _validate_entries(
+    model: type[_ModelT],
+    raw_items: list[object],
+    response: httpx.Response,
+) -> list[_ModelT]:
+    """Validate raw page entries, surfacing schema drift as ``ApiError``.
+
+    ``model.model_validate()`` raises ``pydantic.ValidationError`` on a
+    malformed entry; only :class:`NextLabsError` subclasses may escape the
+    engine boundary, so it is wrapped here.
+    """
+    try:
+        return [model.model_validate(entry) for entry in raw_items]
+    except ValidationError as error:
+        raise ApiError(
+            f"Unexpected response shape: {error}",
+            status_code=response.status_code,
+        ) from error

@@ -6,7 +6,7 @@ import pytest
 from nextlabs_sdk._cloudaz._component_models import ComponentNameEntry
 from nextlabs_sdk._cloudaz._engine._constructors import query_paginated
 from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
-from nextlabs_sdk.exceptions import ApiError
+from nextlabs_sdk.exceptions import ApiError, NextLabsError
 
 BASE_URL = "https://cloudaz.example.com"
 SPEC = query_paginated(
@@ -102,4 +102,29 @@ def test_envelope_error_raises_api_error():
 
     paginator = runner.pages(SPEC, {"group": "RESOURCE"})
     with pytest.raises(ApiError):
+        list(paginator)
+
+
+def test_malformed_entry_raises_next_labs_error():
+    # given a page entry that fails model validation
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "statusCode": "1004",
+                "message": "ok",
+                "data": [{"id": "not-an-int"}],
+                "pageSize": 1,
+                "totalPages": 1,
+                "totalNoOfRecords": 1,
+            },
+            request=request,
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE_URL)
+    runner = SyncEndpointRunner(client)
+
+    paginator = runner.pages(SPEC, {"group": "RESOURCE"})
+    # then only a NextLabsError subclass escapes, never a raw pydantic error
+    with pytest.raises(NextLabsError):
         list(paginator)

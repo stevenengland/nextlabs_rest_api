@@ -151,3 +151,11 @@ def test_envelope_error_raises_api_error():
     # then assembling raises ApiError
     with pytest.raises(ApiError):
         assemble_page(response, ComponentLite, 0, CLASSIC_ENVELOPE)
+
+
+def test_malformed_entry_raises_api_error():
+    # given a classic envelope whose entry fails model validation
+    response = _classic([{"id": "not-an-int"}], page_size=1)
+    # then assembling raises ApiError, not a raw pydantic ValidationError
+    with pytest.raises(ApiError):
+        assemble_page(response, ComponentLite, 0, CLASSIC_ENVELOPE)
