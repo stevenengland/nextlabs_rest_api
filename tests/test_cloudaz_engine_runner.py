@@ -105,7 +105,7 @@ def test_envelope_error_raises_api_error():
         list(paginator)
 
 
-def test_malformed_entry_raises_next_labs_error():
+def test_malformed_entry_raises_api_error():
     # given a page entry that fails model validation
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
