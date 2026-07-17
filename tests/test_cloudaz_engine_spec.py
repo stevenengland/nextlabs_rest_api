@@ -40,3 +40,13 @@ def test_search_paginated_builds_post_plan():
     assert plan.path == "/console/api/v1/component/search"
     assert plan.params is None
     assert plan.json == criteria.page(0).to_dict()
+
+
+def test_search_paginated_interpolates_path_template():
+    # given a search spec whose path template carries a dynamic segment
+    spec = search_paginated(ComponentLite, "/console/api/v1/policy/search/{scope}")
+    criteria = SearchCriteria().filter_group("RESOURCE")
+    # when a plan is built with the dynamic segment in args
+    plan = spec.plan_builder({"scope": "custom", "criteria": criteria}, 0, None)
+    # then the path has the segment substituted
+    assert plan.path == "/console/api/v1/policy/search/custom"

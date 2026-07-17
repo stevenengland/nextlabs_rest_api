@@ -1,31 +1,62 @@
 from __future__ import annotations
 
-import functools
+from collections.abc import Mapping
+
 import httpx
 
+from nextlabs_sdk._cloudaz._engine._async_runner import AsyncEndpointRunner
+from nextlabs_sdk._cloudaz._engine._dialect import CLASSIC_ENVELOPE
+from nextlabs_sdk._cloudaz._engine._request_plan import RequestPlan
+from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
+from nextlabs_sdk._cloudaz._engine._spec import PaginatedSpec
 from nextlabs_sdk._cloudaz._models import Tag, TagType
-from nextlabs_sdk._cloudaz._response import parse_data, parse_paginated
-from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
+from nextlabs_sdk._cloudaz._response import parse_data
+from nextlabs_sdk._pagination import AsyncPaginator, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
+_TAG_TYPE_ARG = "tag_type"
+_SHOW_HIDDEN_ARG = "show_hidden"
+_SHOW_HIDDEN_PARAM = "showHidden"
 
-def _list_params(
+
+def _build_list_plan(
+    args: Mapping[str, object],
     page_no: int,
     page_size: int | None,
-    show_hidden: bool | None,
-) -> dict[str, int | str]:
-    query_params: dict[str, int | str] = {"pageNo": page_no}
+) -> RequestPlan:
+    """Build the ``GET`` plan for listing tags of one type.
+
+    Beyond the classic-envelope page params, this endpoint accepts an
+    optional ``showHidden`` query flag, so it cannot use the generic
+    ``query_paginated`` constructor unchanged.
+    """
+    tag_type = args[_TAG_TYPE_ARG]
+    query_params: dict[str, int | str] = {CLASSIC_ENVELOPE.page_param: page_no}
     if page_size is not None:
-        query_params["pageSize"] = page_size
+        query_params[CLASSIC_ENVELOPE.size_param] = page_size
+    show_hidden = args.get(_SHOW_HIDDEN_ARG)
     if show_hidden is not None:
-        query_params["showHidden"] = "true" if show_hidden else "false"
-    return query_params
+        query_params[_SHOW_HIDDEN_PARAM] = "true" if show_hidden else "false"
+    return RequestPlan(
+        "GET",
+        f"/console/api/v1/config/tags/list/{tag_type}",
+        params=query_params,
+        json=None,
+    )
+
+
+_LIST_SPEC = PaginatedSpec(
+    model=Tag,
+    dialect=CLASSIC_ENVELOPE,
+    plan_builder=_build_list_plan,
+)
 
 
 class TagService:
 
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
+        self._runner = SyncEndpointRunner(client)
 
     def list(
         self,
@@ -34,13 +65,10 @@ class TagService:
         page_size: int | None = None,
         show_hidden: bool | None = None,
     ) -> SyncPaginator[Tag]:
-        return SyncPaginator(
-            fetch_page=functools.partial(
-                self._fetch_page,
-                tag_type,
-                page_size,
-                show_hidden,
-            ),
+        return self._runner.pages(
+            _LIST_SPEC,
+            {_TAG_TYPE_ARG: tag_type.value, _SHOW_HIDDEN_ARG: show_hidden},
+            page_size=page_size,
         )
 
     def get(self, tag_id: int) -> Tag:
@@ -74,34 +102,12 @@ class TagService:
         )
         raise_for_status(response)
 
-    def _fetch_page(
-        self,
-        tag_type: TagType,
-        page_size: int | None,
-        show_hidden: bool | None,
-        page_no: int,
-    ) -> PageResult[Tag]:
-        response = self._client.get(
-            f"/console/api/v1/config/tags/list/{tag_type.value}",
-            params=_list_params(page_no, page_size, show_hidden),
-        )
-        raw_items, total_pages, total_records, server_page_size = parse_paginated(
-            response,
-        )
-        tags = [Tag.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=tags,
-            page_no=page_no,
-            page_size=len(tags) if server_page_size is None else server_page_size,
-            total_pages=total_pages,
-            total_records=total_records,
-        )
-
 
 class AsyncTagService:
 
     def __init__(self, client: httpx.AsyncClient) -> None:
         self._client = client
+        self._runner = AsyncEndpointRunner(client)
 
     def list(
         self,
@@ -110,13 +116,10 @@ class AsyncTagService:
         page_size: int | None = None,
         show_hidden: bool | None = None,
     ) -> AsyncPaginator[Tag]:
-        return AsyncPaginator(
-            fetch_page=functools.partial(
-                self._fetch_page,
-                tag_type,
-                page_size,
-                show_hidden,
-            ),
+        return self._runner.pages(
+            _LIST_SPEC,
+            {_TAG_TYPE_ARG: tag_type.value, _SHOW_HIDDEN_ARG: show_hidden},
+            page_size=page_size,
         )
 
     async def get(self, tag_id: int) -> Tag:
@@ -149,26 +152,3 @@ class AsyncTagService:
             f"/console/api/v1/config/tags/remove/{tag_id}",
         )
         raise_for_status(response)
-
-    async def _fetch_page(
-        self,
-        tag_type: TagType,
-        page_size: int | None,
-        show_hidden: bool | None,
-        page_no: int,
-    ) -> PageResult[Tag]:
-        response = await self._client.get(
-            f"/console/api/v1/config/tags/list/{tag_type.value}",
-            params=_list_params(page_no, page_size, show_hidden),
-        )
-        raw_items, total_pages, total_records, server_page_size = parse_paginated(
-            response,
-        )
-        tags = [Tag.model_validate(entry) for entry in raw_items]
-        return PageResult(
-            entries=tags,
-            page_no=page_no,
-            page_size=len(tags) if server_page_size is None else server_page_size,
-            total_pages=total_pages,
-            total_records=total_records,
-        )

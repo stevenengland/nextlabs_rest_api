@@ -22,18 +22,19 @@ def _build_query_plan(
     page_size: int | None,
 ) -> RequestPlan:
     path = path_template.format(**args)
-    query_params = {dialect.page_param: page_no}
+    query_params: dict[str, int | str] = {dialect.page_param: page_no}
     if page_size is not None:
         query_params[dialect.size_param] = page_size
     return RequestPlan("GET", path, params=query_params, json=None)
 
 
 def _build_search_plan(
-    path: str,
+    path_template: str,
     args: Mapping[str, object],
     page_no: int,
     page_size: int | None,  # noqa: WPS110
 ) -> RequestPlan:
+    path = path_template.format(**args)
     criteria = cast(SearchCriteria, args["criteria"])
     return RequestPlan(
         "POST",
@@ -70,7 +71,7 @@ def query_paginated(
 
 def search_paginated(
     model: type[_ModelT],
-    path: str,
+    path_template: str,
     *,
     dialect: PageDialect = CLASSIC_ENVELOPE,
 ) -> PaginatedSpec[_ModelT]:
@@ -78,16 +79,21 @@ def search_paginated(
 
     Args:
         model: The response entry model to validate pages against.
-        path: The fixed request path.
+        path_template: A ``str.format`` template interpolated from
+            ``plan_builder``'s ``args`` mapping (e.g.
+            ``"/foo/search/{scope}"``). Endpoints with a fixed path work
+            unchanged, since a template without placeholders formats to
+            itself.
         dialect: The paging query-parameter vocabulary (unused for paging,
             which lives in the request body via ``criteria.page()``).
 
     Returns:
         A ``PaginatedSpec`` whose ``plan_builder`` yields a POST
-        ``RequestPlan`` with the paged ``SearchCriteria`` body.
+        ``RequestPlan`` with the interpolated path and paged
+        ``SearchCriteria`` body.
     """
     return PaginatedSpec(
         model=model,
         dialect=dialect,
-        plan_builder=functools.partial(_build_search_plan, path),
+        plan_builder=functools.partial(_build_search_plan, path_template),
     )
