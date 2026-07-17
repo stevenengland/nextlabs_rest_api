@@ -35,11 +35,12 @@ def _build_query_plan(
     page_size: int | None,
 ) -> RequestPlan:
     path = config.path_template.format(**args)
-    query_params: dict[str, int | str] = {config.dialect.page_param: page_no}
-    if page_size is not None:
-        query_params[config.dialect.size_param] = page_size
+    query_params: dict[str, int | str] = {}
     if config.extra_params is not None:
         query_params.update(config.extra_params(args))
+    query_params[config.dialect.page_param] = page_no
+    if page_size is not None:
+        query_params[config.dialect.size_param] = page_size
     return RequestPlan("GET", path, params=query_params, json=None)
 
 

@@ -89,8 +89,14 @@ def _spec_of(paginator: SyncPaginator[Any] | AsyncPaginator[Any]) -> PaginatedSp
     ``functools.partial(self._fetch_page, spec, args, page_size)`` (see
     ``_runner.py`` / ``_async_runner.py``), so the spec that actually governs
     a call is recoverable straight from the public method's return value.
+
+    Args:
+        paginator: The paginator returned by a service's paginated method.
+
+    Returns:
+        The ``PaginatedSpec`` bound to that paginator's fetch closure.
     """
-    fetch_page = paginator._fetch_page  # noqa: WPS437
+    fetch_page = paginator._fetch_page
     return cast("functools.partial[Any]", fetch_page).args[0]
 
 
