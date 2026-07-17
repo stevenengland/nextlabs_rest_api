@@ -5,10 +5,8 @@ from collections.abc import Mapping
 import httpx
 
 from nextlabs_sdk._cloudaz._engine._async_runner import AsyncEndpointRunner
-from nextlabs_sdk._cloudaz._engine._dialect import CLASSIC_ENVELOPE
-from nextlabs_sdk._cloudaz._engine._request_plan import RequestPlan
+from nextlabs_sdk._cloudaz._engine._constructors import query_paginated
 from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
-from nextlabs_sdk._cloudaz._engine._spec import PaginatedSpec
 from nextlabs_sdk._cloudaz._models import Tag, TagType
 from nextlabs_sdk._cloudaz._response import parse_data
 from nextlabs_sdk._pagination import AsyncPaginator, SyncPaginator
@@ -19,36 +17,18 @@ _SHOW_HIDDEN_ARG = "show_hidden"
 _SHOW_HIDDEN_PARAM = "showHidden"
 
 
-def _build_list_plan(
-    args: Mapping[str, object],
-    page_no: int,
-    page_size: int | None,
-) -> RequestPlan:
-    """Build the ``GET`` plan for listing tags of one type.
-
-    Beyond the classic-envelope page params, this endpoint accepts an
-    optional ``showHidden`` query flag, so it cannot use the generic
-    ``query_paginated`` constructor unchanged.
-    """
-    tag_type = args[_TAG_TYPE_ARG]
-    query_params: dict[str, int | str] = {CLASSIC_ENVELOPE.page_param: page_no}
-    if page_size is not None:
-        query_params[CLASSIC_ENVELOPE.size_param] = page_size
+def _show_hidden_param(args: Mapping[str, object]) -> dict[str, str]:
+    """Derive the optional ``showHidden`` query flag from call args."""
     show_hidden = args.get(_SHOW_HIDDEN_ARG)
-    if show_hidden is not None:
-        query_params[_SHOW_HIDDEN_PARAM] = "true" if show_hidden else "false"
-    return RequestPlan(
-        "GET",
-        f"/console/api/v1/config/tags/list/{tag_type}",
-        params=query_params,
-        json=None,
-    )
+    if show_hidden is None:
+        return {}
+    return {_SHOW_HIDDEN_PARAM: "true" if show_hidden else "false"}
 
 
-_LIST_SPEC = PaginatedSpec(
-    model=Tag,
-    dialect=CLASSIC_ENVELOPE,
-    plan_builder=_build_list_plan,
+_LIST_SPEC = query_paginated(
+    Tag,
+    f"/console/api/v1/config/tags/list/{{{_TAG_TYPE_ARG}}}",
+    extra_params=_show_hidden_param,
 )
 
 
