@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 import typer
 
+from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._active_account._active_account_store import (
+    ActiveAccountStore,
+)
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._error_handler import cli_error_handler
 from nextlabs_sdk._cli._output_format import OutputFormat
@@ -29,6 +33,7 @@ def _make_cli_ctx(
     password: str | None = None,
     base_url: str | None = "https://example.com",
     username: str | None = "user",
+    cache_dir: str | None = None,
 ) -> CliContext:
     return CliContext(
         base_url=base_url,
@@ -40,6 +45,7 @@ def _make_cli_ctx(
         output_format=OutputFormat.TABLE,
         verify=None,
         timeout=30.0,
+        cache_dir=cache_dir,
     )
 
 
@@ -158,6 +164,78 @@ def test_refresh_token_expired_retries_on_tty_after_password_prompt(
     assert calls == [None, "typed-pw"]
     assert prompts and prompts[0][1] is True
     assert "user@https://example.com" in prompts[0][0]
+
+
+def test_refresh_token_expired_prompt_names_active_account_when_username_unset(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    ActiveAccountStore(path=tmp_path / "active_account.json").save(
+        ActiveAccount(
+            base_url="https://active.example.com",
+            username="active-user",
+            client_id="client",
+        )
+    )
+    cli_ctx = _make_cli_ctx(
+        username=None,
+        base_url=None,
+        cache_dir=str(tmp_path),
+    )
+    ctx = _make_typer_context(cli_ctx)
+    prompts: list[str] = []
+
+    def _fake_prompt(label: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append(label)
+        return "typed-pw"
+
+    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> str:
+        if not prompts:
+            raise RefreshTokenExpiredError("refresh rejected")
+        return "ok"
+
+    result = command(ctx)
+
+    assert result == "ok"
+    assert prompts == [
+        "Password for active-user@https://active.example.com (re-auth required)"
+    ]
+    assert "<unknown user>" not in prompts[0]
+
+
+def test_refresh_token_expired_prompt_falls_back_to_generic_label(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cli_ctx = _make_cli_ctx(
+        username=None,
+        base_url=None,
+        cache_dir=str(tmp_path),
+    )
+    ctx = _make_typer_context(cli_ctx)
+    prompts: list[str] = []
+
+    def _fake_prompt(label: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append(label)
+        return "typed-pw"
+
+    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> str:
+        if not prompts:
+            raise RefreshTokenExpiredError("refresh rejected")
+        return "ok"
+
+    result = command(ctx)
+
+    assert result == "ok"
+    assert prompts == ["Password for <unknown user> (re-auth required)"]
 
 
 def test_refresh_token_expired_reraises_when_not_tty(
