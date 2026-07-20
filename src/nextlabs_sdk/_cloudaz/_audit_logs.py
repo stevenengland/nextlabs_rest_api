@@ -18,12 +18,13 @@ from nextlabs_sdk._cloudaz._response import parse_data
 from nextlabs_sdk._pagination import AsyncPaginator, SyncPaginator
 from nextlabs_sdk.exceptions import raise_for_status
 
+_SEARCH_PATH = "/nextlabs-reporter/api/v1/auditLogs/search"
 _EXPORT_PATH = "/nextlabs-reporter/api/v1/auditLogs/export"
 _USERS_PATH = "/nextlabs-reporter/api/v1/auditLogs/users"
 
 _SEARCH_SPEC = search_paginated(
     AuditLogEntry,
-    "/nextlabs-reporter/api/v1/auditLogs/search",
+    _SEARCH_PATH,
     dialect=REPORTER_ENVELOPE,
 )
 
