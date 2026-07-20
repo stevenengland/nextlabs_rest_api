@@ -184,6 +184,7 @@ def test_query_paginated_post_paginates_multiple_pages_with_fixed_body():
 
     # then both POSTs carry the fixed body and the advancing page number
     assert [request.url.params["pageNo"] for request in calls] == ["0", "1"]
+    assert [request.url.params["sortBy"] for request in calls] == ["rowId", "rowId"]
     assert all(json.loads(request.content) == {"name": "x"} for request in calls)
     assert len(results) == 2
 
