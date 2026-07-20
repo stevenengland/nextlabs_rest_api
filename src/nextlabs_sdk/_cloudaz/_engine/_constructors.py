@@ -17,6 +17,7 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 _QueryArgs = Mapping[str, object]
 _ExtraParamsFn = Callable[[_QueryArgs], Mapping[str, str]]
+_JsonBodyFn = Callable[[_QueryArgs], object]
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class _QueryPlanConfig:
     path_template: str
     dialect: PageDialect
     extra_params: _ExtraParamsFn | None
+    json_body: _JsonBodyFn | None = None
 
 
 def _build_query_plan(
@@ -41,7 +43,9 @@ def _build_query_plan(
     query_params[config.dialect.page_param] = page_no
     if page_size is not None:
         query_params[config.dialect.size_param] = page_size
-    return RequestPlan("GET", path, params=query_params, json=None)
+    if config.json_body is None:
+        return RequestPlan("GET", path, params=query_params, json=None)
+    return RequestPlan("POST", path, params=query_params, json=config.json_body(args))
 
 
 def _build_search_plan(
@@ -66,8 +70,9 @@ def query_paginated(
     *,
     dialect: PageDialect = CLASSIC_ENVELOPE,
     extra_params: _ExtraParamsFn | None = None,
+    json_body: _JsonBodyFn | None = None,
 ) -> PaginatedSpec[_ModelT]:
-    """Build a spec for a query-string-paged GET endpoint.
+    """Build a spec for a query-string-paged endpoint.
 
     Args:
         model: The response entry model to validate pages against.
@@ -77,17 +82,22 @@ def query_paginated(
         extra_params: Optional callable deriving additional query
             parameters from ``args``, merged alongside the dialect's page
             params (e.g. a per-call flag beyond ``pageNo``/``pageSize``).
+        json_body: Optional callable deriving a fixed JSON body from
+            ``args``, sent unchanged on every page. When given, the
+            request is issued as ``POST`` instead of ``GET``, still
+            paginating via the dialect's query-string params.
 
     Returns:
-        A ``PaginatedSpec`` whose ``plan_builder`` yields a GET
-        ``RequestPlan`` with the interpolated path and dialect page params.
+        A ``PaginatedSpec`` whose ``plan_builder`` yields a ``RequestPlan``
+        with the interpolated path, dialect page params, and (when
+        ``json_body`` is given) a ``POST`` with that fixed request body.
     """
     return PaginatedSpec(
         model=model,
         dialect=dialect,
         plan_builder=functools.partial(
             _build_query_plan,
-            _QueryPlanConfig(path_template, dialect, extra_params),
+            _QueryPlanConfig(path_template, dialect, extra_params, json_body),
         ),
     )
 

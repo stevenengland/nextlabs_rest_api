@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TypeVar
+import json
+from typing import TypeVar, cast
 
 import httpx
 import pytest
@@ -122,6 +123,50 @@ def test_envelope_error_raises_api_error():
     paginator = runner.pages(SPEC, {"group": "RESOURCE"})
     with pytest.raises(ApiError):
         _collect(paginator)
+
+
+def test_query_paginated_post_sends_fixed_json_body_and_query_params():
+    # given a POST-shaped spec with a fixed body and query-string paging
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "statusCode": "1004",
+                "message": "ok",
+                "data": [_name_entry_data()],
+                "pageSize": 1,
+                "totalPages": 1,
+                "totalNoOfRecords": 1,
+            },
+            request=request,
+        )
+
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url=BASE_URL
+    )
+    runner = AsyncEndpointRunner(client)
+    spec = query_paginated(
+        ComponentNameEntry,
+        "/console/api/v1/component/search/generate",
+        extra_params=lambda args: {"sortBy": cast(str, args["sort_by"])},
+        json_body=lambda args: args["payload"],
+    )
+
+    # when pages() is iterated
+    paginator = runner.pages(spec, {"payload": {"name": "x"}, "sort_by": "rowId"})
+    results = _collect(paginator)
+
+    # then exactly one POST is issued with the fixed body and paging params
+    assert len(calls) == 1
+    request = calls[0]
+    assert request.method == "POST"
+    assert request.url.params["sortBy"] == "rowId"
+    assert request.url.params["pageNo"] == "0"
+    assert json.loads(request.content) == {"name": "x"}
+    assert len(results) == 1
 
 
 def test_malformed_entry_raises_api_error():

@@ -53,6 +53,8 @@ class SyncEndpointRunner:
         plan = spec.plan_builder(args, page_no, page_size)
         if plan.method == "GET":
             response = self._client.get(plan.path, params=plan.params)
-        else:
+        elif plan.params is None:
             response = self._client.post(plan.path, json=plan.json)
+        else:
+            response = self._client.post(plan.path, json=plan.json, params=plan.params)
         return assemble_page(response, spec.model, page_no, spec.dialect)
