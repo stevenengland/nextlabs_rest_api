@@ -10,12 +10,31 @@ carrying divergent per-class definitions.
 
 from __future__ import annotations
 
+import ast
 import importlib
+import inspect
 import re
+import textwrap
 import types
 from pathlib import Path
+from typing import cast
 
 _HAND_ROLLED_PAGE_RESULT = re.compile(r"PageResult\s*\(")
+
+# Sentinel loaded by the ``real`` closure in the AST-scan regression test; it
+# only needs to be a resolvable module-level name ending in ``_SPEC``.
+_REAL_SPEC = object()
+
+
+def _loaded_names(method: types.FunctionType) -> set[str]:
+    """Return the names a method's body *reads* (``Load`` context) via AST."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
+    return {
+        node.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    }
+
 
 _cloudaz_file = importlib.import_module("nextlabs_sdk._cloudaz").__file__
 if _cloudaz_file is None:
@@ -83,8 +102,16 @@ _MIGRATED_SERVICE_PAIRS = (
 
 
 def _spec_names_referenced(method: types.FunctionType) -> set[str]:
-    """Return the module-level ``*_SPEC`` constant names a method's body reads."""
-    return {name for name in method.__code__.co_names if name.endswith("_SPEC")}
+    """Return the module-level ``*_SPEC`` constant names a method's body reads.
+
+    Parses the method's source with ``ast`` and keeps only names actually
+    *loaded* in code (``ast.Name`` in ``Load`` context), so a ``*_SPEC`` token
+    that appears only in a comment, docstring, or string literal cannot make a
+    method look engine-backed. This stays stable across CPython
+    compiler/optimization changes without the textual false positives a plain
+    source regex would admit.
+    """
+    return {name for name in _loaded_names(method) if name.endswith("_SPEC")}
 
 
 def _engine_backed_method_names(cls: type) -> set[str]:
@@ -144,3 +171,26 @@ def test_every_migrated_pair_shares_one_spec_constant_per_endpoint():
                 f"{spec_name} referenced by {method_name} is not a "
                 f"module-level constant on {module_name}"
             )
+
+
+def test_spec_reference_scan_ignores_specs_in_comments_and_strings():
+    """Guard against the textual-scan regression the AST probe replaced.
+
+    An earlier form of ``_spec_names_referenced`` matched ``*_SPEC`` tokens
+    with a source-text regex, so a spec name mentioned only in a comment,
+    docstring, or string literal counted as an engine-backed reference. That
+    let a method satisfy the sync/async parity invariant without actually
+    loading a shared spec. The AST-based probe must only see names that are
+    genuinely *loaded* in code.
+    """
+
+    def decoy() -> str:
+        """Mentions _DECOY_SPEC in a docstring, not in code."""
+        # _DECOY_SPEC referenced here in a comment only.
+        return "_DECOY_SPEC lives in this string too"
+
+    def real() -> object:
+        return _REAL_SPEC
+
+    assert _spec_names_referenced(cast(types.FunctionType, decoy)) == set()
+    assert _spec_names_referenced(cast(types.FunctionType, real)) == {"_REAL_SPEC"}

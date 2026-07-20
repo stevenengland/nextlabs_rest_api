@@ -92,6 +92,7 @@ def test_async_search_returns_paginator():
     when(client).post(
         "/console/api/v1/policyModel/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(_envelope(data=[_component_type_data()]))
 
     paginator = service.search(criteria)

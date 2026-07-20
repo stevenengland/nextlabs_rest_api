@@ -84,7 +84,7 @@ def test_search_returns_paginator(
 ) -> None:
     svc, client = service
     criteria = SearchCriteria().filter_type("RESOURCE")
-    when(client).post(_SEARCH, json=criteria.page(0).to_dict()).thenReturn(
+    when(client).post(_SEARCH, json=criteria.page(0).to_dict(), params=None).thenReturn(
         _make_envelope([_make_component_type_data()])
     )
 
@@ -111,10 +111,10 @@ def test_search_paginates_multiple_pages(
         type="SUBJECT",
     )
 
-    when(client).post(_SEARCH, json=criteria.page(0).to_dict()).thenReturn(
+    when(client).post(_SEARCH, json=criteria.page(0).to_dict(), params=None).thenReturn(
         _make_envelope([ct1], total_pages=2, total_records=2)
     )
-    when(client).post(_SEARCH, json=criteria.page(1).to_dict()).thenReturn(
+    when(client).post(_SEARCH, json=criteria.page(1).to_dict(), params=None).thenReturn(
         _make_envelope([ct2], page_no=1, total_pages=2, total_records=2)
     )
 

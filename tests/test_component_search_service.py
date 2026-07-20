@@ -118,6 +118,7 @@ def test_search_returns_paginator(client, service):
     when(client).post(
         "/console/api/v1/component/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(_make_envelope(data=[_component_lite()]))
 
     paginator = service.search(criteria)
@@ -144,10 +145,12 @@ def test_search_paginates_multiple_pages(client, service):
     when(client).post(
         "/console/api/v1/component/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(page0)
     when(client).post(
         "/console/api/v1/component/search",
         json=criteria.page(1).to_dict(),
+        params=None,
     ).thenReturn(page1)
 
     results = list(service.search(criteria))

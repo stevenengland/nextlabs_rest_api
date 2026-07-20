@@ -96,7 +96,7 @@ def _run(coro_factory: Callable[[], Coroutine[Any, Any, _T]]) -> _T:
 def test_async_search_returns_paginator():
     client, service = _make_service()
     query = _make_query()
-    when(client).post(_BASE_PATH, json=_paged_payload(query)).thenReturn(
+    when(client).post(_BASE_PATH, json=_paged_payload(query), params=None).thenReturn(
         _reporter_envelope(content=[_make_enforcement_row()]),
     )
 

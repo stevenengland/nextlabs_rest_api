@@ -4,6 +4,7 @@ import httpx
 
 from nextlabs_sdk._cloudaz._component_type_models import ComponentType
 from nextlabs_sdk._cloudaz._engine._constructors import (
+    CRITERIA_ARG,
     query_paginated,
     search_paginated,
 )
@@ -25,6 +26,7 @@ _FIND_SAVED_SEARCH_SPEC = query_paginated(
 )
 
 _SEARCH_TYPE_ARG = "search_type"
+_NAME_ARG = "name"
 
 
 class ComponentTypeSearchService:
@@ -34,7 +36,7 @@ class ComponentTypeSearchService:
         self._runner = SyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> SyncPaginator[ComponentType]:
-        return self._runner.pages(_SEARCH_SPEC, {"criteria": criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     def save_search(self, payload: dict[str, object]) -> int:
         response = self._client.post(
@@ -76,7 +78,7 @@ class ComponentTypeSearchService:
     ) -> SyncPaginator[SavedSearch]:
         return self._runner.pages(
             _FIND_SAVED_SEARCH_SPEC,
-            {_SEARCH_TYPE_ARG: search_type, "name": name},
+            {_SEARCH_TYPE_ARG: search_type, _NAME_ARG: name},
             page_size=page_size,
         )
 
@@ -88,7 +90,7 @@ class AsyncComponentTypeSearchService:
         self._runner = AsyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> AsyncPaginator[ComponentType]:
-        return self._runner.pages(_SEARCH_SPEC, {"criteria": criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     async def save_search(self, payload: dict[str, object]) -> int:
         response = await self._client.post(
@@ -130,6 +132,6 @@ class AsyncComponentTypeSearchService:
     ) -> AsyncPaginator[SavedSearch]:
         return self._runner.pages(
             _FIND_SAVED_SEARCH_SPEC,
-            {_SEARCH_TYPE_ARG: search_type, "name": name},
+            {_SEARCH_TYPE_ARG: search_type, _NAME_ARG: name},
             page_size=page_size,
         )

@@ -117,7 +117,9 @@ def test_search_returns_paginator(
         total_pages=1,
         total_records=1,
     )
-    when(client).post(path, json=criteria.page(0).to_dict()).thenReturn(response)
+    when(client).post(path, json=criteria.page(0).to_dict(), params=None).thenReturn(
+        response
+    )
 
     paginator = invoke(service, criteria)
 
@@ -149,10 +151,12 @@ def test_search_paginates_multiple_pages(
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(page0)
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(1).to_dict(),
+        params=None,
     ).thenReturn(page1)
 
     results = list(service.search(criteria))

@@ -106,7 +106,7 @@ def _make_service() -> tuple[object, ReportActivityLogService]:
 def test_search_returns_paginator():
     client, service = _make_service()
     query = _make_query()
-    when(client).post(_BASE_PATH, json=_paged_payload(query)).thenReturn(
+    when(client).post(_BASE_PATH, json=_paged_payload(query), params=None).thenReturn(
         _reporter_envelope(content=[_make_enforcement_row()]),
     )
 
@@ -121,12 +121,16 @@ def test_search_returns_paginator():
 def test_search_paginates_multiple_pages():
     client, service = _make_service()
     query = _make_query()
-    when(client).post(_BASE_PATH, json=_paged_payload(query, page=0)).thenReturn(
+    when(client).post(
+        _BASE_PATH, json=_paged_payload(query, page=0), params=None
+    ).thenReturn(
         _reporter_envelope(
             content=[_make_enforcement_row(row_id=1)], total_pages=2, total_elements=2
         ),
     )
-    when(client).post(_BASE_PATH, json=_paged_payload(query, page=1)).thenReturn(
+    when(client).post(
+        _BASE_PATH, json=_paged_payload(query, page=1), params=None
+    ).thenReturn(
         _reporter_envelope(
             content=[_make_enforcement_row(row_id=2)], total_pages=2, total_elements=2
         ),

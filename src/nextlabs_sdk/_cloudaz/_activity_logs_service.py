@@ -9,7 +9,7 @@ from nextlabs_sdk._cloudaz._activity_log_query_models import (
     ActivityLogQuery,
 )
 from nextlabs_sdk._cloudaz._engine._async_runner import AsyncEndpointRunner
-from nextlabs_sdk._cloudaz._engine._constructors import search_paginated
+from nextlabs_sdk._cloudaz._engine._constructors import CRITERIA_ARG, search_paginated
 from nextlabs_sdk._cloudaz._engine._dialect import REPORTER_ENVELOPE
 from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
 from nextlabs_sdk._cloudaz._report_models import EnforcementEntry
@@ -34,7 +34,7 @@ class _ActivityLogCriteria:
     page_size: int
     page_no: int = 0
 
-    def page(self, page_no: int, page_size: int = 20) -> _ActivityLogCriteria:
+    def page(self, page_no: int) -> _ActivityLogCriteria:
         return replace(self, page_no=page_no)
 
     def to_dict(self) -> dict[str, object]:
@@ -60,7 +60,7 @@ class ReportActivityLogService:
         """Search policy activity logs. Returns a paginator over EnforcementEntry."""
         return self._runner.pages(
             _SEARCH_SPEC,
-            {"criteria": _ActivityLogCriteria(query, page_size)},
+            {CRITERIA_ARG: _ActivityLogCriteria(query, page_size)},
         )
 
     def get_by_row_id(self, row_id: int) -> list[ActivityLogAttribute]:
@@ -99,7 +99,7 @@ class AsyncReportActivityLogService:
         """Search policy activity logs. Returns an async paginator over EnforcementEntry."""
         return self._runner.pages(
             _SEARCH_SPEC,
-            {"criteria": _ActivityLogCriteria(query, page_size)},
+            {CRITERIA_ARG: _ActivityLogCriteria(query, page_size)},
         )
 
     async def get_by_row_id(self, row_id: int) -> list[ActivityLogAttribute]:
