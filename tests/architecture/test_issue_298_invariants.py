@@ -99,6 +99,7 @@ def _engine_backed_method_names(cls: type) -> set[str]:
 
 
 def test_no_cloudaz_service_module_hand_rolls_page_result():
+    assert _SERVICE_MODULE_PATHS, "no _cloudaz service modules discovered"
     for module_path in _SERVICE_MODULE_PATHS:
         source = module_path.read_text(encoding="utf-8")
         assert not _HAND_ROLLED_PAGE_RESULT.search(source), (
@@ -133,4 +134,13 @@ def test_every_migrated_pair_shares_one_spec_constant_per_endpoint():
             assert len(sync_specs) == 1, (
                 f"{sync_name}.{method_name} must reference exactly one "
                 "shared spec constant, not a divergent per-class definition"
+            )
+            # Both classes live in the same module (see _MIGRATED_SERVICE_PAIRS),
+            # so the shared name already resolves to one module-level object;
+            # confirm the constant actually exists there rather than trusting
+            # the name alone.
+            spec_name = next(iter(sync_specs))
+            assert hasattr(module, spec_name), (
+                f"{spec_name} referenced by {method_name} is not a "
+                f"module-level constant on {module_name}"
             )
