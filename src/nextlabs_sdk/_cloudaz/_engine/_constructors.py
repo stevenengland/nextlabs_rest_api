@@ -16,7 +16,8 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 _QueryArgs = Mapping[str, object]
-_ExtraParamsFn = Callable[[_QueryArgs], Mapping[str, str]]
+_QueryValue = str | int | bool
+_ExtraParamsFn = Callable[[_QueryArgs], Mapping[str, _QueryValue]]
 _JsonBodyFn = Callable[[_QueryArgs], object]
 
 
@@ -37,7 +38,7 @@ def _build_query_plan(
     page_size: int | None,
 ) -> RequestPlan:
     path = config.path_template.format(**args)
-    query_params: dict[str, int | str] = {}
+    query_params: dict[str, _QueryValue] = {}
     if config.extra_params is not None:
         query_params.update(config.extra_params(args))
     query_params[config.dialect.page_param] = page_no
