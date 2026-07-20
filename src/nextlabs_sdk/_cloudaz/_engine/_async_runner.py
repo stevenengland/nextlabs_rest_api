@@ -53,8 +53,6 @@ class AsyncEndpointRunner:
         plan = spec.plan_builder(args, page_no, page_size)
         if plan.method == "GET":
             response = await self._client.get(plan.path, params=plan.params)
-        elif plan.params is None:
-            response = await self._client.post(plan.path, json=plan.json)
         else:
             response = await self._client.post(
                 plan.path, json=plan.json, params=plan.params

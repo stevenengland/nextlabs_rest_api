@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 
 from nextlabs_sdk._cloudaz._engine._constructors import (
+    CRITERIA_ARG,
     query_paginated,
     search_paginated,
 )
@@ -28,8 +29,8 @@ _FIND_SAVED_SEARCH_SPEC = query_paginated(
     "/console/api/v1/policy/search/savedlist/{name}",
 )
 
-_CRITERIA_ARG = "criteria"
 _SEARCH_ARG = "search"
+_NAME_ARG = "name"
 
 
 class PolicySearchService:  # noqa: WPS214
@@ -39,7 +40,7 @@ class PolicySearchService:  # noqa: WPS214
         self._runner = SyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> SyncPaginator[PolicyLite]:
-        return self._runner.pages(_SEARCH_SPEC, {_CRITERIA_ARG: criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     def search_named(
         self,
@@ -54,7 +55,7 @@ class PolicySearchService:  # noqa: WPS214
         """
         return self._runner.pages(
             _SEARCH_NAMED_SPEC,
-            {_SEARCH_ARG: search, _CRITERIA_ARG: criteria},
+            {_SEARCH_ARG: search, CRITERIA_ARG: criteria},
         )
 
     def save_search(self, payload: dict[str, object]) -> int:
@@ -74,7 +75,7 @@ class PolicySearchService:  # noqa: WPS214
         return self._runner.pages(_SAVED_SEARCHES_SPEC, {})
 
     def find_saved_search(self, name: str) -> SyncPaginator[SavedSearch]:
-        return self._runner.pages(_FIND_SAVED_SEARCH_SPEC, {"name": name})
+        return self._runner.pages(_FIND_SAVED_SEARCH_SPEC, {_NAME_ARG: name})
 
     def delete_search(self, search_id: int) -> None:
         response = self._client.delete(
@@ -90,7 +91,7 @@ class AsyncPolicySearchService:  # noqa: WPS214
         self._runner = AsyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> AsyncPaginator[PolicyLite]:
-        return self._runner.pages(_SEARCH_SPEC, {_CRITERIA_ARG: criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     def search_named(
         self,
@@ -100,7 +101,7 @@ class AsyncPolicySearchService:  # noqa: WPS214
         """Async variant of :py:meth:`PolicySearchService.search_named`."""
         return self._runner.pages(
             _SEARCH_NAMED_SPEC,
-            {_SEARCH_ARG: search, _CRITERIA_ARG: criteria},
+            {_SEARCH_ARG: search, CRITERIA_ARG: criteria},
         )
 
     async def save_search(self, payload: dict[str, object]) -> int:
@@ -120,7 +121,7 @@ class AsyncPolicySearchService:  # noqa: WPS214
         return self._runner.pages(_SAVED_SEARCHES_SPEC, {})
 
     def find_saved_search(self, name: str) -> AsyncPaginator[SavedSearch]:
-        return self._runner.pages(_FIND_SAVED_SEARCH_SPEC, {"name": name})
+        return self._runner.pages(_FIND_SAVED_SEARCH_SPEC, {_NAME_ARG: name})
 
     async def delete_search(self, search_id: int) -> None:
         response = await self._client.delete(

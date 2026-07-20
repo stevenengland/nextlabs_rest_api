@@ -105,6 +105,7 @@ def test_async_search_returns_paginator(
         when(client).post(
             SEARCH_URL,
             json={"startDate": 100, "endDate": 200, "pageNumber": page_no},
+            params=None,
         ).thenReturn(response)
 
     paginator = service.search(query)

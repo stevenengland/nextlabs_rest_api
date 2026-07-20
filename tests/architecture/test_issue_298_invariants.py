@@ -11,11 +11,13 @@ carrying divergent per-class definitions.
 from __future__ import annotations
 
 import importlib
+import inspect
 import re
 import types
 from pathlib import Path
 
 _HAND_ROLLED_PAGE_RESULT = re.compile(r"PageResult\s*\(")
+_SPEC_REFERENCE = re.compile(r"\b(\w+_SPEC)\b")
 
 _cloudaz_file = importlib.import_module("nextlabs_sdk._cloudaz").__file__
 if _cloudaz_file is None:
@@ -83,8 +85,12 @@ _MIGRATED_SERVICE_PAIRS = (
 
 
 def _spec_names_referenced(method: types.FunctionType) -> set[str]:
-    """Return the module-level ``*_SPEC`` constant names a method's body reads."""
-    return {name for name in method.__code__.co_names if name.endswith("_SPEC")}
+    """Return the module-level ``*_SPEC`` constant names a method's body reads.
+
+    Scans the method's own source text rather than its compiled bytecode, so
+    the check stays stable across CPython compiler/optimization changes.
+    """
+    return set(_SPEC_REFERENCE.findall(inspect.getsource(method)))
 
 
 def _engine_backed_method_names(cls: type) -> set[str]:

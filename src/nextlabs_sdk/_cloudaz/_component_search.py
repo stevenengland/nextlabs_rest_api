@@ -7,6 +7,7 @@ from nextlabs_sdk._cloudaz._component_models import (
     ComponentNameEntry,
 )
 from nextlabs_sdk._cloudaz._engine._constructors import (
+    CRITERIA_ARG,
     query_paginated,
     search_paginated,
 )
@@ -37,6 +38,7 @@ _LIST_NAMES_BY_TYPE_SPEC = query_paginated(
 
 _GROUP_ARG = "group"
 _COMPONENT_TYPE_ARG = "component_type"
+_NAME_ARG = "name"
 
 
 class ComponentSearchService:  # noqa: WPS214
@@ -46,7 +48,7 @@ class ComponentSearchService:  # noqa: WPS214
         self._runner = SyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> SyncPaginator[ComponentLite]:
-        return self._runner.pages(_SEARCH_SPEC, {"criteria": criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     def save_search(self, payload: dict[str, object]) -> int:
         response = self._client.post(
@@ -76,7 +78,7 @@ class ComponentSearchService:  # noqa: WPS214
     ) -> SyncPaginator[SavedSearch]:
         return self._runner.pages(
             _FIND_SAVED_SEARCH_SPEC,
-            {"name": name},
+            {_NAME_ARG: name},
             page_size=page_size,
         )
 
@@ -119,7 +121,7 @@ class AsyncComponentSearchService:  # noqa: WPS214
         self._runner = AsyncEndpointRunner(client)
 
     def search(self, criteria: SearchCriteria) -> AsyncPaginator[ComponentLite]:
-        return self._runner.pages(_SEARCH_SPEC, {"criteria": criteria})
+        return self._runner.pages(_SEARCH_SPEC, {CRITERIA_ARG: criteria})
 
     async def save_search(self, payload: dict[str, object]) -> int:
         response = await self._client.post(
@@ -149,7 +151,7 @@ class AsyncComponentSearchService:  # noqa: WPS214
     ) -> AsyncPaginator[SavedSearch]:
         return self._runner.pages(
             _FIND_SAVED_SEARCH_SPEC,
-            {"name": name},
+            {_NAME_ARG: name},
             page_size=page_size,
         )
 

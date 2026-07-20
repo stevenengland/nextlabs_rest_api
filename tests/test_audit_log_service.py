@@ -82,6 +82,7 @@ def test_search_returns_paginator(
     when(client).post(
         _SEARCH,
         json={"startDate": 100, "endDate": 200, "pageNumber": 0},
+        params=None,
     ).thenReturn(_make_reporter_envelope([_make_audit_entry_data()]))
 
     paginator = svc.search(query)
@@ -106,10 +107,12 @@ def test_search_paginates_multiple_pages(
     when(client).post(
         _SEARCH,
         json={"startDate": 100, "endDate": 200, "pageNumber": 0},
+        params=None,
     ).thenReturn(_make_reporter_envelope([entry1], total_pages=2, total_elements=2))
     when(client).post(
         _SEARCH,
         json={"startDate": 100, "endDate": 200, "pageNumber": 1},
+        params=None,
     ).thenReturn(_make_reporter_envelope([entry2], total_pages=2, total_elements=2))
 
     entries = list(svc.search(query))
@@ -140,6 +143,7 @@ def test_search_with_filters(
             "usernames": ["admin"],
             "pageNumber": 0,
         },
+        params=None,
     ).thenReturn(_make_reporter_envelope([], total_elements=0))
 
     assert list(svc.search(query)) == []

@@ -104,6 +104,7 @@ def test_async_search_returns_paginator():
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(_envelope(data=[_policy_lite_data()]))
 
     paginator = service.search(criteria)
@@ -132,10 +133,12 @@ def test_async_search_paginates_multiple_pages():
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(page0)
     when(client).post(
         "/console/api/v1/policy/search",
         json=criteria.page(1).to_dict(),
+        params=None,
     ).thenReturn(page1)
 
     results: list[PolicyLite] = _run(_collect_async(service.search(criteria)))
@@ -212,6 +215,7 @@ def test_async_search_named_returns_paginator():
     when(client).post(
         "/console/api/v1/policy/search/custom-scope",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(_envelope(data=[_policy_lite_data()]))
 
     paginator = service.search_named("custom-scope", criteria)

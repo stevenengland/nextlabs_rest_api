@@ -11,7 +11,7 @@ from nextlabs_sdk._cloudaz._audit_log_models import (
     ExportAuditLogsRequest,
 )
 from nextlabs_sdk._cloudaz._engine._async_runner import AsyncEndpointRunner
-from nextlabs_sdk._cloudaz._engine._constructors import search_paginated
+from nextlabs_sdk._cloudaz._engine._constructors import CRITERIA_ARG, search_paginated
 from nextlabs_sdk._cloudaz._engine._dialect import REPORTER_ENVELOPE
 from nextlabs_sdk._cloudaz._engine._runner import SyncEndpointRunner
 from nextlabs_sdk._cloudaz._response import parse_data
@@ -36,7 +36,7 @@ class _AuditLogCriteria:
     query: AuditLogQuery
     page_no: int = 0
 
-    def page(self, page_no: int, page_size: int = 20) -> _AuditLogCriteria:
+    def page(self, page_no: int) -> _AuditLogCriteria:
         return replace(self, page_no=page_no)
 
     def to_dict(self) -> dict[str, object]:
@@ -53,7 +53,7 @@ class EntityAuditLogService:
     def search(self, query: AuditLogQuery) -> SyncPaginator[AuditLogEntry]:
         return self._runner.pages(
             _SEARCH_SPEC,
-            {"criteria": _AuditLogCriteria(query)},
+            {CRITERIA_ARG: _AuditLogCriteria(query)},
         )
 
     def export(self, request: ExportAuditLogsRequest) -> bytes:
@@ -77,7 +77,7 @@ class AsyncEntityAuditLogService:
     def search(self, query: AuditLogQuery) -> AsyncPaginator[AuditLogEntry]:
         return self._runner.pages(
             _SEARCH_SPEC,
-            {"criteria": _AuditLogCriteria(query)},
+            {CRITERIA_ARG: _AuditLogCriteria(query)},
         )
 
     async def export(self, request: ExportAuditLogsRequest) -> bytes:

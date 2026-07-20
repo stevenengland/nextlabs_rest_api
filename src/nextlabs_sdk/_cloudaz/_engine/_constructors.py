@@ -8,11 +8,16 @@ from typing import TypeVar, cast
 from pydantic import BaseModel
 
 from nextlabs_sdk._cloudaz._engine._dialect import CLASSIC_ENVELOPE, PageDialect
+from nextlabs_sdk._cloudaz._engine._pageable import Pageable
 from nextlabs_sdk._cloudaz._engine._request_plan import RequestPlan
 from nextlabs_sdk._cloudaz._engine._spec import PaginatedSpec
-from nextlabs_sdk._cloudaz._search import SearchCriteria
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+# The args-bag key under which ``search_paginated`` reads the request body's
+# ``Pageable`` criteria. Shared by the engine and every calling service so the
+# body contract lives in exactly one place.
+CRITERIA_ARG = "criteria"
 
 
 _QueryArgs = Mapping[str, object]
@@ -56,7 +61,7 @@ def _build_search_plan(
     page_size: int | None,  # noqa: WPS110
 ) -> RequestPlan:
     path = path_template.format(**args)
-    criteria = cast(SearchCriteria, args["criteria"])
+    criteria = cast(Pageable, args[CRITERIA_ARG])
     return RequestPlan(
         "POST",
         path,

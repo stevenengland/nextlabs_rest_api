@@ -119,6 +119,7 @@ def test_async_search_returns_paginator():
     when(client).post(
         "/console/api/v1/component/search",
         json=criteria.page(0).to_dict(),
+        params=None,
     ).thenReturn(response)
 
     paginator = service.search(criteria)
