@@ -43,7 +43,7 @@ _ARG_POLICY_DECISION = "policy_decision"
 _ARG_SORT_BY = "sort_by"
 _ARG_SORT_ORDER = "sort_order"
 _ARG_REPORT_ID = "report_id"
-_ARG_PAYLOAD = "payload"
+_ARG_REQUEST = "request"
 
 
 def _list_extra_params(args: Mapping[str, object]) -> dict[str, str | bool]:
@@ -65,6 +65,12 @@ def _sort_extra_params(args: Mapping[str, object]) -> dict[str, str]:
     }
 
 
+def _generate_enforcements_body(args: Mapping[str, object]) -> dict[str, object]:
+    """Dump the ad-hoc request fresh on every page (never a stale snapshot)."""
+    request = cast(PolicyActivityReportRequest, args[_ARG_REQUEST])
+    return request.model_dump(by_alias=True, exclude_none=True)
+
+
 _LIST_SPEC = query_paginated(
     PolicyActivityReport,
     _BASE_PATH,
@@ -82,7 +88,7 @@ _GENERATE_ENFORCEMENTS_SPEC = query_paginated(
     f"{_BASE_PATH}/generate/enforcements",
     dialect=REPORTER_ENVELOPE,
     extra_params=_sort_extra_params,
-    json_body=lambda args: args[_ARG_PAYLOAD],
+    json_body=_generate_enforcements_body,
 )
 
 
@@ -205,10 +211,9 @@ class PolicyActivityReportService:  # noqa: WPS214
         page_size: int = 20,
     ) -> SyncPaginator[EnforcementEntry]:
         """Generate enforcement logs for ad-hoc criteria."""
-        payload = self._payload(request)
         return self._runner.pages(
             _GENERATE_ENFORCEMENTS_SPEC,
-            {_ARG_PAYLOAD: payload, _ARG_SORT_BY: sort_by, _ARG_SORT_ORDER: sort_order},
+            {_ARG_REQUEST: request, _ARG_SORT_BY: sort_by, _ARG_SORT_ORDER: sort_order},
             page_size=page_size,
         )
 
@@ -399,10 +404,9 @@ class AsyncPolicyActivityReportService:  # noqa: WPS214
         page_size: int = 20,
     ) -> AsyncPaginator[EnforcementEntry]:
         """Generate enforcement logs for ad-hoc criteria."""
-        payload = self._payload(request)
         return self._runner.pages(
             _GENERATE_ENFORCEMENTS_SPEC,
-            {_ARG_PAYLOAD: payload, _ARG_SORT_BY: sort_by, _ARG_SORT_ORDER: sort_order},
+            {_ARG_REQUEST: request, _ARG_SORT_BY: sort_by, _ARG_SORT_ORDER: sort_order},
             page_size=page_size,
         )
 

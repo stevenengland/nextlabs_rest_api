@@ -339,6 +339,31 @@ def test_async_generate_enforcements(service_client):
     assert len(_run_async(collect())) == 1
 
 
+def test_async_generate_enforcements_dumps_request_at_iteration_not_at_call(
+    service_client,
+):
+    # given a request mutated after generate_enforcements() is called
+    service, client = service_client
+    request = _make_simple_request()
+    paginator = service.generate_enforcements(request)
+    assert request.criteria.filters is not None
+    assert request.criteria.filters.general is not None
+    request.criteria.filters.general.date_mode = "relative"
+    mutated_payload = request.model_dump(by_alias=True, exclude_none=True)
+
+    when(client).post(
+        f"{_BASE_PATH}/generate/enforcements",
+        json=mutated_payload,
+        params=_enforcement_params(),
+    ).thenReturn(_make_envelope(content=[_make_enforcement_data()]))
+
+    async def collect() -> list[EnforcementEntry]:
+        return [e async for e in paginator]
+
+    # then iteration sends the mutated (current) state, not a stale snapshot
+    assert len(_run_async(collect())) == 1
+
+
 def test_async_generate_export(service_client):
     service, client = service_client
     request = _make_simple_request()

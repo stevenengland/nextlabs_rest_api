@@ -457,6 +457,26 @@ def test_generate_enforcements_returns_paginator(client, service):
     assert entries[0].row_id == 2
 
 
+def test_generate_enforcements_dumps_request_at_iteration_not_at_call(client, service):
+    # given a request mutated after generate_enforcements() is called
+    request = _make_simple_request()
+    paginator = service.generate_enforcements(request)
+    assert request.criteria.filters is not None
+    assert request.criteria.filters.general is not None
+    request.criteria.filters.general.date_mode = "relative"
+    mutated_payload = request.model_dump(by_alias=True, exclude_none=True)
+
+    when(client).post(
+        f"{_BASE_PATH}/generate/enforcements",
+        json=mutated_payload,
+        params=_enforce_params(),
+    ).thenReturn(_make_reporter_envelope(content=[_make_enforcement_data()]))
+
+    # then iteration sends the mutated (current) state, not a stale snapshot
+    entries = list(paginator)
+    assert len(entries) == 1
+
+
 # --- generate_export ---
 
 
