@@ -11,12 +11,16 @@ carrying divergent per-class definitions.
 from __future__ import annotations
 
 import importlib
+import re
 import types
 from pathlib import Path
 
-_CLOUDAZ_PKG_DIR = Path(
-    importlib.import_module("nextlabs_sdk._cloudaz").__file__,  # type: ignore[arg-type]
-).parent
+_HAND_ROLLED_PAGE_RESULT = re.compile(r"PageResult\s*\(")
+
+_cloudaz_file = importlib.import_module("nextlabs_sdk._cloudaz").__file__
+if _cloudaz_file is None:
+    raise RuntimeError("nextlabs_sdk._cloudaz has no filesystem location")
+_CLOUDAZ_PKG_DIR = Path(_cloudaz_file).parent
 
 # Non-service infrastructure files under `_cloudaz/`: `_response.py` owns the
 # shared low-level parsers (including the one legitimate `PageResult(...)`
@@ -83,10 +87,21 @@ def _spec_names_referenced(method: types.FunctionType) -> set[str]:
     return {name for name in method.__code__.co_names if name.endswith("_SPEC")}
 
 
+def _engine_backed_method_names(cls: type) -> set[str]:
+    """Return public method names on ``cls`` that reference a ``*_SPEC`` constant."""
+    return {
+        name
+        for name, member in vars(cls).items()
+        if not name.startswith("_")
+        and isinstance(member, types.FunctionType)
+        and _spec_names_referenced(member)
+    }
+
+
 def test_no_cloudaz_service_module_hand_rolls_page_result():
     for module_path in _SERVICE_MODULE_PATHS:
         source = module_path.read_text(encoding="utf-8")
-        assert "PageResult(" not in source, (
+        assert not _HAND_ROLLED_PAGE_RESULT.search(source), (
             f"{module_path.name} hand-rolls PageResult(...) instead of "
             "delegating to the engine's assemble_page()"
         )
@@ -97,15 +112,18 @@ def test_every_migrated_pair_shares_one_spec_constant_per_endpoint():
         module = importlib.import_module(module_name)
         sync_cls = getattr(module, sync_name)
         async_cls = getattr(module, async_name)
-        method_names = {
-            name
-            for name in vars(sync_cls)
-            if not name.startswith("_")
-            and isinstance(vars(sync_cls)[name], types.FunctionType)
-            and _spec_names_referenced(vars(sync_cls)[name])
-        }
+        method_names = _engine_backed_method_names(
+            sync_cls,
+        ) | _engine_backed_method_names(async_cls)
         assert method_names, f"{sync_name} has no engine-backed paginated method"
         for method_name in method_names:
+            assert hasattr(sync_cls, method_name) and hasattr(
+                async_cls,
+                method_name,
+            ), (
+                f"{method_name} is engine-backed on only one of "
+                f"{sync_name}/{async_name} — sync/async parity is broken"
+            )
             sync_specs = _spec_names_referenced(getattr(sync_cls, method_name))
             async_specs = _spec_names_referenced(getattr(async_cls, method_name))
             assert sync_specs == async_specs, (
