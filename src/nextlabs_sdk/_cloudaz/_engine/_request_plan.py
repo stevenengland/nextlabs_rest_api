@@ -9,5 +9,5 @@ class RequestPlan:
 
     method: str
     path: str
-    params: dict[str, int | str] | None = None  # noqa: WPS110
+    params: dict[str, int | str | bool] | None = None  # noqa: WPS110
     json: object | None = None
