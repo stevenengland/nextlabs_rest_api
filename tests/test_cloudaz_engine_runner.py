@@ -150,6 +150,44 @@ def test_query_paginated_post_sends_fixed_json_body_and_query_params():
     assert len(results) == 1
 
 
+def test_query_paginated_post_paginates_multiple_pages_with_fixed_body():
+    # given a two-page POST-shaped spec, each page reusing the same fixed body
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "statusCode": "1004",
+                "message": "ok",
+                "data": [_name_entry_data()],
+                "pageSize": 1,
+                "totalPages": 2,
+                "totalNoOfRecords": 2,
+            },
+            request=request,
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE_URL)
+    runner = SyncEndpointRunner(client)
+    spec = query_paginated(
+        ComponentNameEntry,
+        "/console/api/v1/component/search/generate",
+        extra_params=lambda args: {"sortBy": cast(str, args["sort_by"])},
+        json_body=lambda args: args["payload"],
+    )
+
+    # when pages() is iterated across both pages
+    paginator = runner.pages(spec, {"payload": {"name": "x"}, "sort_by": "rowId"})
+    results = list(paginator)
+
+    # then both POSTs carry the fixed body and the advancing page number
+    assert [request.url.params["pageNo"] for request in calls] == ["0", "1"]
+    assert all(json.loads(request.content) == {"name": "x"} for request in calls)
+    assert len(results) == 2
+
+
 def test_malformed_entry_raises_api_error():
     # given a page entry that fails model validation
     def handler(request: httpx.Request) -> httpx.Response:

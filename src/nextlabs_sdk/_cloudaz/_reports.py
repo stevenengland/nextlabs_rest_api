@@ -47,6 +47,7 @@ _ARG_PAYLOAD = "payload"
 
 
 def _list_extra_params(args: Mapping[str, object]) -> dict[str, str | bool]:
+    """Derive the ``list`` endpoint's filter/sort query params from call args."""
     return {
         _FIELD_TITLE: cast(str, args[_ARG_TITLE]),
         "isShared": cast(bool, args[_ARG_IS_SHARED]),
@@ -57,6 +58,7 @@ def _list_extra_params(args: Mapping[str, object]) -> dict[str, str | bool]:
 
 
 def _sort_extra_params(args: Mapping[str, object]) -> dict[str, str]:
+    """Derive the shared ``sortBy``/``sortOrder`` query params from call args."""
     return {
         _FIELD_SORT_BY: cast(str, args[_ARG_SORT_BY]),
         _FIELD_SORT_ORDER: cast(str, args[_ARG_SORT_ORDER]),
