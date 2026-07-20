@@ -370,6 +370,27 @@ nextlabs policies search \
   --sort updatedAt:desc --page-size 50
 ```
 
+#### Filtering a list-valued field (e.g. `componentIds`)
+
+`componentIds` is a list of exact integer ids on the search-result
+`PolicyLite` shape — find every policy referencing a given component id
+with a scalar `eq`, or any of several ids with a same-field `eq`-OR group
+(collapses into `MULTI_EXACT_MATCH`, not `MULTI`, since these are exact id
+values rather than free text):
+
+```bash
+# Single id:
+nextlabs policies search --where 'componentIds eq "123"'
+
+# Any of several ids, via --where:
+nextlabs policies search --where \
+  'componentIds eq "123" or componentIds eq "456" or componentIds eq "789"'
+
+# Same recipe via --field — an explicit :MULTI_EXACT_MATCH is required,
+# since plain comma-inference on --field defaults to MULTI (contains-style):
+nextlabs policies search --field 'componentIds:MULTI_EXACT_MATCH=123,456,789'
+```
+
 #### `--criteria-file` — raw JSON escape
 
 ```bash
@@ -390,7 +411,15 @@ preserves order. Paging is `--page-no` (default `0`) and `--page-size`
 > **Field names are server-defined.** The CLI does not validate them
 > client-side — a misspelled field name passes through to the backend,
 > which typically returns an empty result set rather than an error. See
-> [`docs/troubleshooting.md`](docs/troubleshooting.md).
+> [`docs/troubleshooting.md`](docs/troubleshooting.md). Search results are
+> shaped like `PolicyLite` (the trimmed listing projection), not the full
+> `Policy` — so the practical, discoverable set of filterable names is
+> oriented around `PolicyLite`'s own fields (`status`, `effectType`,
+> `folderPath`, `tags`, `componentIds`, `obligationModelIds`,
+> `lastUpdatedDate`, ...). Fields that exist only on the full `Policy`
+> model (e.g. `subjectComponents`, `allowObligations`,
+> `environmentConfig`) are not returned by search and are unconfirmed as
+> filter criteria.
 
 ### Recipes
 
