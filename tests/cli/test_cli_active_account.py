@@ -8,8 +8,8 @@ import pytest
 from mockito import mock, when
 from typer.testing import CliRunner
 
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import FileTokenCache
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cli._context import CliContext
@@ -39,14 +39,14 @@ def _mock_cloudaz_client() -> CloudAzClient:
     return cast(CloudAzClient, mock_client)
 
 
-def _capture_factory(monkeypatch: pytest.MonkeyPatch) -> list[CliContext]:
+def _capture_factory() -> list[CliContext]:
     captured: list[CliContext] = []
 
     def _fake(ctx: CliContext) -> CloudAzClient:
         captured.append(ctx)
         return _mock_cloudaz_client()
 
-    monkeypatch.setattr(_client_factory, "make_cloudaz_client", _fake)
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake)
     return captured
 
 
@@ -127,7 +127,6 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 )
 def test_login_sets_active(
     env: Path,
-    monkeypatch: pytest.MonkeyPatch,
     pre_active: tuple[str, str, str] | None,
     base_url: str,
     username: str,
@@ -135,7 +134,7 @@ def test_login_sets_active(
 ):
     if pre_active is not None:
         _write_active(env, *pre_active)
-    _capture_factory(monkeypatch)
+    _capture_factory()
 
     result = runner.invoke(
         app,

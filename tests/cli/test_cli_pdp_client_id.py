@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
 import typer
+from mockito import when
 
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output_format import OutputFormat
@@ -52,28 +55,24 @@ def test_resolve_pdp_flavor_falls_back_to_explicit_client_id() -> None:
     assert result == "foo"
 
 
-def test_resolve_pdp_flavor_rejects_cloudaz_default_when_non_tty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_resolve_pdp_flavor_rejects_cloudaz_default_when_non_tty() -> None:
     ctx = _ctx()
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     with pytest.raises(typer.BadParameter, match="pdp-client-id"):
         resolve_pdp_client_id(ctx, PdpAuthSource.PDP)
 
 
-def test_resolve_pdp_flavor_prompts_on_tty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_resolve_pdp_flavor_prompts_on_tty() -> None:
     ctx = _ctx()
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
     prompts: list[str] = []
 
     def _fake_prompt(text: str, **_: object) -> str:
         prompts.append(text)
         return "prompted-id"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
 
     result = resolve_pdp_client_id(ctx, PdpAuthSource.PDP)
 
@@ -81,16 +80,14 @@ def test_resolve_pdp_flavor_prompts_on_tty(
     assert prompts and "client" in prompts[0].lower()
 
 
-def test_resolve_cloudaz_flavor_falls_back_to_client_id_without_prompt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_resolve_cloudaz_flavor_falls_back_to_client_id_without_prompt() -> None:
     ctx = _ctx()
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     def _fail_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("CloudAz flavor must not prompt")
 
-    monkeypatch.setattr(typer, "prompt", _fail_prompt)
+    when(typer).prompt(...).thenAnswer(_fail_prompt)
 
     result = resolve_pdp_client_id(ctx, PdpAuthSource.CLOUDAZ)
 

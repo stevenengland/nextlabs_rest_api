@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from mockito import when
 from typer.testing import CliRunner
 
 from nextlabs_sdk._cli import _auth_cmd
@@ -10,15 +11,13 @@ from nextlabs_sdk._cli._context import CliContext
 runner = CliRunner()
 
 
-def test_pdp_client_id_option_populates_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_pdp_client_id_option_populates_context() -> None:
     seen: list[CliContext] = []
 
     def _fake_pdp(cli_ctx: CliContext) -> None:
         seen.append(cli_ctx)
 
-    monkeypatch.setattr(_auth_cmd, "_login_pdp", _fake_pdp)
+    when(_auth_cmd)._login_pdp(...).thenAnswer(_fake_pdp)
 
     result = runner.invoke(
         app,
@@ -51,7 +50,7 @@ def test_pdp_client_id_env_var_populates_context(
     def _fake_pdp(cli_ctx: CliContext) -> None:
         seen.append(cli_ctx)
 
-    monkeypatch.setattr(_auth_cmd, "_login_pdp", _fake_pdp)
+    when(_auth_cmd)._login_pdp(...).thenAnswer(_fake_pdp)
 
     result = runner.invoke(
         app,

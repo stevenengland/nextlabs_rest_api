@@ -17,7 +17,7 @@ from nextlabs_sdk.cloudaz import (
     WidgetData,
 )
 from nextlabs_sdk._cloudaz._reports import PolicyActivityReportService
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 
 runner = CliRunner()

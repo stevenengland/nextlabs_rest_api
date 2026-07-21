@@ -5,7 +5,6 @@ import json
 from typing import Any, Callable
 
 import pytest
-from _pytest.capture import CaptureFixture
 from rich.console import Console
 
 from nextlabs_sdk._cli._context import CliContext
@@ -88,7 +87,7 @@ def test_render_table_with_title() -> None:
     ],
 )
 def test_render_json(
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
     payload_factory: Callable[[], Any],
     extractor: Callable[[Any], Any],
 ) -> None:
@@ -100,7 +99,9 @@ def test_render_json(
     assert item["key"] == "dept"
 
 
-def test_render_dispatches_to_json_when_flag_set(capsys: CaptureFixture[str]) -> None:
+def test_render_dispatches_to_json_when_flag_set(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     render(_make_ctx(output_format=OutputFormat.JSON), _make_tag(), TAG_COLUMNS)
 
     parsed = json.loads(capsys.readouterr().out)
@@ -108,7 +109,7 @@ def test_render_dispatches_to_json_when_flag_set(capsys: CaptureFixture[str]) ->
 
 
 def test_render_dispatches_to_table_when_flag_unset(
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     render(_make_ctx(output_format=OutputFormat.TABLE), _make_tag(), TAG_COLUMNS)
 
@@ -129,7 +130,7 @@ def test_render_table_wraps_long_values_without_truncation() -> None:
     assert output.count("x") >= 200
 
 
-def test_render_wide_concatenates_columns(capsys: CaptureFixture[str]) -> None:
+def test_render_wide_concatenates_columns(capsys: pytest.CaptureFixture[str]) -> None:
     wide = (ColumnDef("Status", "status"),)
     base = (ColumnDef("ID", "id"), ColumnDef("Key", "key"))
     render(
@@ -146,7 +147,7 @@ def test_render_wide_concatenates_columns(capsys: CaptureFixture[str]) -> None:
 
 
 def test_render_detail_dispatches_to_detail_renderer(
-    capsys: CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     render(_make_ctx(output_format=OutputFormat.DETAIL), _make_tag(), TAG_COLUMNS)
     output = capsys.readouterr().out

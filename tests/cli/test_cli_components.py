@@ -13,18 +13,18 @@ from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.cloudaz import (
     CloudAzClient,
     Component,
+    ComponentHistoryEntry,
     ComponentLite,
+    ComponentRevision,
     ComponentSearchService,
     ComponentService,
 )
 from nextlabs_sdk._cloudaz._component_models import (
     ComponentGroupType,
-    ComponentHistoryEntry,
-    ComponentRevision,
     ComponentStatus,
     DeploymentResult,
 )
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 
 runner = CliRunner()

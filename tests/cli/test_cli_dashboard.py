@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import pytest
@@ -276,11 +277,8 @@ _FROZEN_NOW_MS = 1_800_000_000_000
 
 
 @pytest.fixture
-def frozen_clock(monkeypatch: pytest.MonkeyPatch) -> int:
-    monkeypatch.setattr(
-        "nextlabs_sdk._cli._time_parser.time.time",
-        lambda: _FROZEN_NOW_MS / 1000,
-    )
+def frozen_clock() -> int:
+    when(time).time().thenReturn(_FROZEN_NOW_MS / 1000)
     return _FROZEN_NOW_MS
 
 

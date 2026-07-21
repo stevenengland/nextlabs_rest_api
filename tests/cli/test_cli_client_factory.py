@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import cast
 
 import pytest
 import typer
+from mockito import when
 
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk import CachedToken
 from nextlabs_sdk._auth._token_cache._console_io import ConsoleIO
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import FileTokenCache
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._account_preferences import AccountPreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
@@ -97,10 +99,8 @@ def _make_ctx(
         ),
     ],
 )
-def test_factory_raises_when_required_field_missing(
-    factory, kwargs, match, monkeypatch
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_factory_raises_when_required_field_missing(factory, kwargs, match):
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
     with pytest.raises(typer.BadParameter, match=match):
         factory(_make_ctx(**kwargs))
 
@@ -116,98 +116,76 @@ def _seed_prefs(cache_dir: Path, *, verify_ssl: bool) -> None:
     )
 
 
-def _verify_passed_to_cloudaz(
-    ctx: CliContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> bool:
+def _verify_passed_to_cloudaz(ctx: CliContext) -> bool:
     captured: dict[str, object] = {}
 
     def _capture(*_args: object, **kwargs: object) -> CloudAzClient:
         captured.update(kwargs)
         return cast(CloudAzClient, object())
 
-    monkeypatch.setattr(_client_factory, "CloudAzClient", _capture)
+    when(_client_factory).CloudAzClient(...).thenAnswer(_capture)
     _client_factory.make_cloudaz_client(ctx)
     config = captured["http_config"]
     return getattr(config, "verify_ssl")
 
 
-def _verify_passed_to_pdp(
-    ctx: CliContext,
-    monkeypatch: pytest.MonkeyPatch,
-) -> bool:
+def _verify_passed_to_pdp(ctx: CliContext) -> bool:
     captured: dict[str, object] = {}
 
     def _capture(*_args: object, **kwargs: object) -> PdpClient:
         captured.update(kwargs)
         return cast(PdpClient, object())
 
-    monkeypatch.setattr(_client_factory, "PdpClient", _capture)
+    when(_client_factory).PdpClient(...).thenAnswer(_capture)
     _client_factory.make_pdp_client(ctx)
     config = captured["http_config"]
     return getattr(config, "verify_ssl")
 
 
-def test_cloudaz_defaults_to_verify_true_when_no_flag_no_prefs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_cloudaz_defaults_to_verify_true_when_no_flag_no_prefs(tmp_path: Path):
     ctx = _make_ctx(cache_dir=str(tmp_path))
-    assert _verify_passed_to_cloudaz(ctx, monkeypatch) is True
+    assert _verify_passed_to_cloudaz(ctx) is True
 
 
-def test_cloudaz_uses_persisted_preference_when_flag_omitted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_cloudaz_uses_persisted_preference_when_flag_omitted(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=False)
     ctx = _make_ctx(cache_dir=str(tmp_path))
-    assert _verify_passed_to_cloudaz(ctx, monkeypatch) is False
+    assert _verify_passed_to_cloudaz(ctx) is False
 
 
-def test_cloudaz_cli_flag_overrides_persisted_false(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_cloudaz_cli_flag_overrides_persisted_false(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=False)
     ctx = _make_ctx(cache_dir=str(tmp_path), verify=True)
-    assert _verify_passed_to_cloudaz(ctx, monkeypatch) is True
+    assert _verify_passed_to_cloudaz(ctx) is True
 
 
-def test_cloudaz_cli_no_verify_overrides_persisted_true(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_cloudaz_cli_no_verify_overrides_persisted_true(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=True)
     ctx = _make_ctx(cache_dir=str(tmp_path), verify=False)
-    assert _verify_passed_to_cloudaz(ctx, monkeypatch) is False
+    assert _verify_passed_to_cloudaz(ctx) is False
 
 
-def test_pdp_defaults_to_verify_true_when_no_flag_no_prefs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_pdp_defaults_to_verify_true_when_no_flag_no_prefs(tmp_path: Path):
     ctx = _make_ctx(cache_dir=str(tmp_path))
-    assert _verify_passed_to_pdp(ctx, monkeypatch) is True
+    assert _verify_passed_to_pdp(ctx) is True
 
 
-def test_pdp_uses_persisted_preference_when_flag_omitted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_pdp_uses_persisted_preference_when_flag_omitted(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=False)
     ctx = _make_ctx(cache_dir=str(tmp_path))
-    assert _verify_passed_to_pdp(ctx, monkeypatch) is False
+    assert _verify_passed_to_pdp(ctx) is False
 
 
-def test_pdp_cli_flag_overrides_persisted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_pdp_cli_flag_overrides_persisted(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=False)
     ctx = _make_ctx(cache_dir=str(tmp_path), verify=True)
-    assert _verify_passed_to_pdp(ctx, monkeypatch) is True
+    assert _verify_passed_to_pdp(ctx) is True
 
 
-def test_non_login_cli_flag_does_not_mutate_persisted_preference(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_non_login_cli_flag_does_not_mutate_persisted_preference(tmp_path: Path):
     _seed_prefs(tmp_path, verify_ssl=False)
     ctx = _make_ctx(cache_dir=str(tmp_path), verify=True)
-    _verify_passed_to_cloudaz(ctx, monkeypatch)
+    _verify_passed_to_cloudaz(ctx)
 
     store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
     entry = store.load("https://example.com|user|client")
@@ -234,17 +212,15 @@ def _isatty_true() -> bool:
     return True
 
 
-def _no_cache_passphrase(_console: ConsoleIO, _prompt: str) -> str:
+def _no_cache_passphrase(_prompt: str) -> str:
     return ""
 
 
-def _accept_plaintext(
-    _console: ConsoleIO, _prompt: str, *, default: bool = False
-) -> bool:
+def _accept_plaintext(_prompt: str, *, default: bool = False) -> bool:
     return True
 
 
-def _decline_cache_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
+def _decline_cache_encryption() -> None:
     """Answer the token-cache passphrase gate without touching ``/dev/tty``.
 
     On a TTY with no passphrase source the cache factory prompts for a
@@ -252,8 +228,8 @@ def _decline_cache_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
     passphrase and accepts plaintext, so the cache stays a ``FileTokenCache``
     and the login-password prompt under test runs unchanged.
     """
-    monkeypatch.setattr(ConsoleIO, "prompt_secret", _no_cache_passphrase)
-    monkeypatch.setattr(ConsoleIO, "confirm", _accept_plaintext)
+    when(ConsoleIO).prompt_secret(...).thenAnswer(_no_cache_passphrase)
+    when(ConsoleIO).confirm(...).thenAnswer(_accept_plaintext)
 
 
 def _seed_token(
@@ -277,30 +253,26 @@ def _seed_token(
     )
 
 
-def _capture_cloudaz_kwargs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> dict[str, object]:
+def _capture_cloudaz_kwargs() -> dict[str, object]:
     captured: dict[str, object] = {}
 
     def _capture(*_args: object, **kwargs: object) -> CloudAzClient:
         captured.update(kwargs)
         return cast(CloudAzClient, object())
 
-    monkeypatch.setattr(_client_factory, "CloudAzClient", _capture)
+    when(_client_factory).CloudAzClient(...).thenAnswer(_capture)
     return captured
 
 
-def test_gate_accepts_cached_refresh_token_when_access_expired(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_gate_accepts_cached_refresh_token_when_access_expired(tmp_path: Path):
     _seed_token(
         tmp_path,
         expires_at=0,
         refresh_token="rt",
         refresh_expires_at=10**12,
     )
-    captured = _capture_cloudaz_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    captured = _capture_cloudaz_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -308,17 +280,15 @@ def test_gate_accepts_cached_refresh_token_when_access_expired(
     assert captured["password"] is None
 
 
-def test_gate_accepts_refresh_token_with_unknown_expiry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_gate_accepts_refresh_token_with_unknown_expiry(tmp_path: Path):
     _seed_token(
         tmp_path,
         expires_at=0,
         refresh_token="rt",
         refresh_expires_at=None,
     )
-    captured = _capture_cloudaz_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    captured = _capture_cloudaz_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -326,61 +296,53 @@ def test_gate_accepts_refresh_token_with_unknown_expiry(
     assert captured["password"] is None
 
 
-def test_gate_rejects_when_refresh_token_known_expired(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_gate_rejects_when_refresh_token_known_expired(tmp_path: Path):
     _seed_token(
         tmp_path,
         expires_at=0,
         refresh_token="rt",
         refresh_expires_at=0,
     )
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     with pytest.raises(typer.BadParameter, match="password"):
         _client_factory.make_cloudaz_client(ctx)
 
 
-def test_gate_rejects_when_no_refresh_token_and_access_expired(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_gate_rejects_when_no_refresh_token_and_access_expired(tmp_path: Path):
     _seed_token(
         tmp_path,
         expires_at=0,
         refresh_token=None,
         refresh_expires_at=None,
     )
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     with pytest.raises(typer.BadParameter, match="password"):
         _client_factory.make_cloudaz_client(ctx)
 
 
-def test_gate_rejects_when_no_cache_entry(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_gate_rejects_when_no_cache_entry(tmp_path: Path):
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     with pytest.raises(typer.BadParameter, match="password"):
         _client_factory.make_cloudaz_client(ctx)
 
 
-def test_tty_prompt_supplies_password_when_cache_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    captured = _capture_cloudaz_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
-    _decline_cache_encryption(monkeypatch)
+def test_tty_prompt_supplies_password_when_cache_empty(tmp_path: Path):
+    captured = _capture_cloudaz_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+    _decline_cache_encryption()
     prompts: list[tuple[str, bool]] = []
 
     def _fake_prompt(text: str, *, hide_input: bool = False, **_: object) -> str:
         prompts.append((text, hide_input))
         return "typed-pw"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -390,25 +352,21 @@ def test_tty_prompt_supplies_password_when_cache_empty(
     assert "user@https://example.com" in prompts[0][0]
 
 
-def test_non_tty_raises_bad_parameter_when_cache_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_non_tty_raises_bad_parameter_when_cache_empty(tmp_path: Path):
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     def _explode(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called in non-TTY mode")
 
-    monkeypatch.setattr(typer, "prompt", _explode)
+    when(typer).prompt(...).thenAnswer(_explode)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     with pytest.raises(typer.BadParameter, match="password"):
         _client_factory.make_cloudaz_client(ctx)
 
 
-def test_explicit_password_bypasses_cache_lookup_and_prompt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    captured = _capture_cloudaz_kwargs(monkeypatch)
+def test_explicit_password_bypasses_cache_lookup_and_prompt(tmp_path: Path):
+    captured = _capture_cloudaz_kwargs()
 
     def _explode_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called when --password is set")
@@ -416,8 +374,8 @@ def test_explicit_password_bypasses_cache_lookup_and_prompt(
     def _explode_cache_load(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("cache must not be consulted when --password is set")
 
-    monkeypatch.setattr(typer, "prompt", _explode_prompt)
-    monkeypatch.setattr(FileTokenCache, "load", _explode_cache_load)
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
+    when(FileTokenCache).load(...).thenAnswer(_explode_cache_load)
 
     ctx = _make_ctx(password="explicit", cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -425,22 +383,20 @@ def test_explicit_password_bypasses_cache_lookup_and_prompt(
     assert captured["password"] == "explicit"
 
 
-def test_fresh_access_token_proceeds_without_password(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_fresh_access_token_proceeds_without_password(tmp_path: Path):
     _seed_token(
         tmp_path,
         expires_at=10**12,
         refresh_token=None,
         refresh_expires_at=None,
     )
-    captured = _capture_cloudaz_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    captured = _capture_cloudaz_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     def _explode_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called for fresh token")
 
-    monkeypatch.setattr(typer, "prompt", _explode_prompt)
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
 
     ctx = _make_ctx(password=None, cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -448,25 +404,21 @@ def test_fresh_access_token_proceeds_without_password(
     assert captured["password"] is None
 
 
-def test_empty_password_is_treated_as_missing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_empty_password_is_treated_as_missing(tmp_path: Path):
     """An empty --password / NEXTLABS_PASSWORD must not bypass the gate."""
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     def _explode_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called in non-TTY mode")
 
-    monkeypatch.setattr(typer, "prompt", _explode_prompt)
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
 
     ctx = _make_ctx(password="", cache_dir=str(tmp_path))
     with pytest.raises(typer.BadParameter, match="password"):
         _client_factory.make_cloudaz_client(ctx)
 
 
-def test_empty_password_falls_back_to_cached_refresh_token(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_empty_password_falls_back_to_cached_refresh_token(tmp_path: Path):
     """Empty password must allow refresh-token fallback rather than bypassing."""
     _seed_token(
         tmp_path,
@@ -474,8 +426,8 @@ def test_empty_password_falls_back_to_cached_refresh_token(
         refresh_token="rt",
         refresh_expires_at=10**12,
     )
-    captured = _capture_cloudaz_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    captured = _capture_cloudaz_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     ctx = _make_ctx(password="", cache_dir=str(tmp_path))
     _client_factory.make_cloudaz_client(ctx)
@@ -486,91 +438,77 @@ def test_empty_password_falls_back_to_cached_refresh_token(
 # ─── PDP auth flavor (--pdp-auth) ──────────────────────────────────────────
 
 
-def _capture_pdp_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+def _capture_pdp_kwargs() -> dict[str, object]:
     captured: dict[str, object] = {}
 
     def _capture(*_args: object, **kwargs: object) -> PdpClient:
         captured.update(kwargs)
         return cast(PdpClient, object())
 
-    monkeypatch.setattr(_client_factory, "PdpClient", _capture)
+    when(_client_factory).PdpClient(...).thenAnswer(_capture)
     return captured
 
 
-def test_pdp_default_flavor_is_cloudaz_when_base_url_set(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    captured = _capture_pdp_kwargs(monkeypatch)
+def test_pdp_default_flavor_is_cloudaz_when_base_url_set():
+    captured = _capture_pdp_kwargs()
     _client_factory.make_pdp_client(_make_ctx())
     assert captured["base_url"] == "https://pdp.example.com"
     assert captured["auth_base_url"] == "https://example.com"
 
 
-def test_pdp_default_flavor_is_pdp_when_base_url_missing(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    captured = _capture_pdp_kwargs(monkeypatch)
+def test_pdp_default_flavor_is_pdp_when_base_url_missing():
+    captured = _capture_pdp_kwargs()
     _client_factory.make_pdp_client(_make_ctx(base_url=None))
     assert captured["base_url"] == "https://pdp.example.com"
     assert captured["auth_base_url"] is None
 
 
-def test_pdp_explicit_flavor_pdp_overrides_default(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    captured = _capture_pdp_kwargs(monkeypatch)
+def test_pdp_explicit_flavor_pdp_overrides_default():
+    captured = _capture_pdp_kwargs()
     _client_factory.make_pdp_client(_make_ctx(pdp_auth=PdpAuthSource.PDP))
     assert captured["auth_base_url"] is None
 
 
-def test_pdp_explicit_flavor_cloudaz_requires_base_url(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_pdp_explicit_flavor_cloudaz_requires_base_url():
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
     with pytest.raises(typer.BadParameter, match="/cas/token"):
         _client_factory.make_pdp_client(
             _make_ctx(base_url=None, pdp_auth=PdpAuthSource.CLOUDAZ),
         )
 
 
-def test_pdp_flavor_pdp_missing_pdp_url_mentions_dpc_oauth(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_pdp_flavor_pdp_missing_pdp_url_mentions_dpc_oauth():
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
     with pytest.raises(typer.BadParameter, match="/dpc/oauth"):
         _client_factory.make_pdp_client(
             _make_ctx(base_url=None, pdp_url=None),
         )
 
 
-def test_pdp_flavor_cloudaz_missing_client_secret_mentions_cas_token(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_pdp_flavor_cloudaz_missing_client_secret_mentions_cas_token():
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
     with pytest.raises(typer.BadParameter, match="/cas/token"):
         _client_factory.make_pdp_client(_make_ctx(client_secret=None))
 
 
-def test_pdp_flavor_pdp_missing_client_secret_mentions_dpc_oauth(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_pdp_flavor_pdp_missing_client_secret_mentions_dpc_oauth():
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
     with pytest.raises(typer.BadParameter, match="/dpc/oauth"):
         _client_factory.make_pdp_client(
             _make_ctx(base_url=None, client_secret=None),
         )
 
 
-def test_pdp_prompts_for_pdp_url_in_tty(monkeypatch: pytest.MonkeyPatch):
-    captured = _capture_pdp_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+def test_pdp_prompts_for_pdp_url_in_tty():
+    captured = _capture_pdp_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
     prompts: list[str] = []
 
     def _fake_prompt(text: str, **_: object) -> str:
         prompts.append(text)
         return "https://prompted-pdp.example.com"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
 
     _client_factory.make_pdp_client(_make_ctx(pdp_url=None))
 
@@ -578,18 +516,16 @@ def test_pdp_prompts_for_pdp_url_in_tty(monkeypatch: pytest.MonkeyPatch):
     assert any("PDP" in p for p in prompts)
 
 
-def test_pdp_prompts_for_base_url_in_tty_when_cloudaz_flavor(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    captured = _capture_pdp_kwargs(monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+def test_pdp_prompts_for_base_url_in_tty_when_cloudaz_flavor():
+    captured = _capture_pdp_kwargs()
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
     prompts: list[str] = []
 
     def _fake_prompt(text: str, **_: object) -> str:
         prompts.append(text)
         return "https://prompted-cloudaz.example.com"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
 
     _client_factory.make_pdp_client(
         _make_ctx(base_url=None, pdp_auth=PdpAuthSource.CLOUDAZ),
@@ -599,11 +535,9 @@ def test_pdp_prompts_for_base_url_in_tty_when_cloudaz_flavor(
     assert any("CloudAz" in p for p in prompts)
 
 
-def test_pdp_explicit_flavor_pdp_reaches_factory_via_cli(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_pdp_explicit_flavor_pdp_reaches_factory_via_cli():
     """--pdp-auth pdp propagates into CliContext and make_pdp_client."""
-    captured = _capture_pdp_kwargs(monkeypatch)
+    captured = _capture_pdp_kwargs()
     ctx = _make_ctx(pdp_auth=PdpAuthSource.PDP)
     _client_factory.make_pdp_client(ctx)
     # With --pdp-auth pdp, base_url is ignored even when set.
@@ -662,10 +596,9 @@ def _seed_active_pdp(
 
 def test_make_pdp_client_uses_cached_credentials_when_active_is_pdp(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_active_pdp(tmp_path)
-    captured = _capture_pdp_kwargs(monkeypatch)
+    captured = _capture_pdp_kwargs()
     ctx = _make_ctx(
         base_url=None,
         username=None,
@@ -685,10 +618,9 @@ def test_make_pdp_client_uses_cached_credentials_when_active_is_pdp(
 
 def test_make_pdp_client_cli_flag_overrides_cached_secret(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_active_pdp(tmp_path)
-    captured = _capture_pdp_kwargs(monkeypatch)
+    captured = _capture_pdp_kwargs()
     ctx = _make_ctx(
         base_url=None,
         username=None,
@@ -706,7 +638,6 @@ def test_make_pdp_client_cli_flag_overrides_cached_secret(
 
 def test_make_pdp_client_cloudaz_flavor_from_cache(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_active_pdp(
         tmp_path,
@@ -714,7 +645,7 @@ def test_make_pdp_client_cloudaz_flavor_from_cache(
         pdp_url="https://pdp.example",
         flavor="cloudaz",
     )
-    captured = _capture_pdp_kwargs(monkeypatch)
+    captured = _capture_pdp_kwargs()
     ctx = _make_ctx(
         base_url=None,
         username=None,
@@ -733,7 +664,6 @@ def test_make_pdp_client_cloudaz_flavor_from_cache(
 
 def test_make_cloudaz_client_rejects_active_pdp_account(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Active PDP account must not bleed into CloudAz clients (#59 review)."""
     _seed_active_pdp(tmp_path)
@@ -746,7 +676,7 @@ def test_make_cloudaz_client_rejects_active_pdp_account(
         pdp_url=None,
         cache_dir=str(tmp_path),
     )
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     with pytest.raises(typer.BadParameter, match="PDP account"):
         _client_factory.make_cloudaz_client(ctx)
@@ -755,10 +685,8 @@ def test_make_cloudaz_client_rejects_active_pdp_account(
 # ─── PDP client-id resolver integration (#61) ─────────────────────────────
 
 
-def test_make_pdp_client_uses_pdp_client_id_flag(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured = _capture_pdp_kwargs(monkeypatch)
+def test_make_pdp_client_uses_pdp_client_id_flag() -> None:
+    captured = _capture_pdp_kwargs()
 
     _client_factory.make_pdp_client(
         _make_ctx(pdp_client_id="pdp-only-id"),
@@ -769,10 +697,9 @@ def test_make_pdp_client_uses_pdp_client_id_flag(
 
 def test_make_pdp_client_flag_overrides_active_account_pointer(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_active_pdp(tmp_path)
-    captured = _capture_pdp_kwargs(monkeypatch)
+    captured = _capture_pdp_kwargs()
     ctx = _make_ctx(
         base_url=None,
         username=None,
@@ -786,10 +713,8 @@ def test_make_pdp_client_flag_overrides_active_account_pointer(
     assert captured["client_id"] == "override-id"
 
 
-def test_make_pdp_client_pdp_flavor_missing_client_id_raises(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+def test_make_pdp_client_pdp_flavor_missing_client_id_raises() -> None:
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     with pytest.raises(typer.BadParameter, match="pdp-client-id"):
         _client_factory.make_pdp_client(

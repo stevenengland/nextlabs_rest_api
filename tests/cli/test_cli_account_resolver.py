@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from mockito import when
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
-from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
-    EncryptedFileTokenCache,
-)
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import EncryptedFileTokenCache, FileTokenCache
 from nextlabs_sdk._cli import _account_resolver as account_resolver
 from nextlabs_sdk._cli._account_prefs_plaintext_ack_store import (
     AccountPrefsPlaintextAckStore,
@@ -253,9 +251,7 @@ def test_load_account_prefs_prefers_new_four_segment_entry(
     assert loaded.verify_ssl is True
 
 
-def test_build_token_cache_injects_plaintext_ack_adapter(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_build_token_cache_injects_plaintext_ack_adapter(tmp_path: Path) -> None:
     # given a resolver whose factory records the injected ack store
     seen: dict[str, object] = {}
 
@@ -268,7 +264,7 @@ def test_build_token_cache_injects_plaintext_ack_adapter(
         seen["ack_store"] = ack_store
         return FileTokenCache(path=tmp_path / "tokens.json")
 
-    monkeypatch.setattr(account_resolver, "_factory", _fake_factory)
+    when(account_resolver)._factory(...).thenAnswer(_fake_factory)
     # when the CLI builds a token cache
     account_resolver.build_token_cache(_ctx(cache_dir=str(tmp_path)))
     # then a preferences-backed acknowledgement adapter is wired in

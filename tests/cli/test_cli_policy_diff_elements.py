@@ -10,7 +10,7 @@ from strip_ansi import strip_ansi
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.cloudaz import Policy, PolicyRevision, Tag
 
-from tests._policy_diff_helpers import (
+from tests.cli.policy_diff_helpers import (
     GLOBAL_OPTS,
     component,
     entry,

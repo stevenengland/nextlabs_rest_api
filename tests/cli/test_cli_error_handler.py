@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
 import typer
+from mockito import when
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
 from nextlabs_sdk._auth._active_account._active_account_store import (
@@ -135,9 +138,7 @@ def test_handler_returns_value_on_success():
     assert succeeding() == "ok"
 
 
-def test_refresh_token_expired_retries_on_tty_after_password_prompt(
-    monkeypatch: pytest.MonkeyPatch,
-):
+def test_refresh_token_expired_retries_on_tty_after_password_prompt():
     cli_ctx = _make_cli_ctx(password=None)
     ctx = _make_typer_context(cli_ctx)
     prompts: list[tuple[str, bool]] = []
@@ -146,8 +147,8 @@ def test_refresh_token_expired_retries_on_tty_after_password_prompt(
         prompts.append((label, hide_input))
         return "typed-pw"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     calls: list[str | None] = []
 
@@ -168,7 +169,6 @@ def test_refresh_token_expired_retries_on_tty_after_password_prompt(
 
 def test_refresh_token_expired_prompt_names_active_account_when_username_unset(
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     ActiveAccountStore(path=tmp_path / "active_account.json").save(
         ActiveAccount(
@@ -189,8 +189,8 @@ def test_refresh_token_expired_prompt_names_active_account_when_username_unset(
         prompts.append(label)
         return "typed-pw"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     @cli_error_handler
     def command(_ctx: typer.Context) -> str:
@@ -209,7 +209,6 @@ def test_refresh_token_expired_prompt_names_active_account_when_username_unset(
 
 def test_refresh_token_expired_prompt_falls_back_to_generic_label(
     tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     cli_ctx = _make_cli_ctx(
         username=None,
@@ -223,8 +222,8 @@ def test_refresh_token_expired_prompt_falls_back_to_generic_label(
         prompts.append(label)
         return "typed-pw"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     @cli_error_handler
     def command(_ctx: typer.Context) -> str:
@@ -240,15 +239,14 @@ def test_refresh_token_expired_prompt_falls_back_to_generic_label(
 
 def test_refresh_token_expired_reraises_when_not_tty(
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
 ):
     ctx = _make_typer_context(_make_cli_ctx(password=None))
 
     def _explode_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called in non-TTY mode")
 
-    monkeypatch.setattr(typer, "prompt", _explode_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false)
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
 
     @cli_error_handler
     def command(_ctx: typer.Context) -> None:
@@ -263,15 +261,14 @@ def test_refresh_token_expired_reraises_when_not_tty(
 
 def test_refresh_token_expired_reraises_when_explicit_password(
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
 ):
     ctx = _make_typer_context(_make_cli_ctx(password="explicit"))
 
     def _explode_prompt(*_args: object, **_kwargs: object) -> str:
         raise AssertionError("typer.prompt must not be called with --password set")
 
-    monkeypatch.setattr(typer, "prompt", _explode_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     @cli_error_handler
     def command(_ctx: typer.Context) -> None:
@@ -285,7 +282,6 @@ def test_refresh_token_expired_reraises_when_explicit_password(
 
 
 def test_refresh_token_expired_only_retries_once(
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
     ctx = _make_typer_context(_make_cli_ctx(password=None))
@@ -295,8 +291,8 @@ def test_refresh_token_expired_only_retries_once(
     def _fake_prompt(*_args: object, **_kwargs: object) -> str:
         return "still-wrong"
 
-    monkeypatch.setattr(typer, "prompt", _fake_prompt)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_true)
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
 
     @cli_error_handler
     def command(_ctx: typer.Context) -> None:

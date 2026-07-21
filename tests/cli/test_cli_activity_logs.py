@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cloudaz._activity_logs_service import ReportActivityLogService
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk.cloudaz import (
     ActivityLogAttribute,
     ActivityLogQuery,
@@ -475,11 +475,10 @@ def test_activity_logs_search_inline_no_flags_succeeds(
 
 def test_activity_logs_search_inline_defaults_to_date_and_header(
     stub: tuple[Any, Any],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
 
-    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 9_999_000)
+    when(builder_mod).now_epoch_ms().thenReturn(9_999_000)
 
     _, service = stub
     captured: dict[str, Any] = {}
@@ -523,11 +522,10 @@ def test_activity_logs_search_inline_defaults_to_date_and_header(
 def test_activity_logs_export_inline_defaults_to_date_and_header(
     stub: tuple[Any, Any],
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
 
-    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 7_777_000)
+    when(builder_mod).now_epoch_ms().thenReturn(7_777_000)
 
     _, service = stub
     captured: dict[str, Any] = {}
@@ -564,11 +562,10 @@ def test_activity_logs_export_inline_defaults_to_date_and_header(
 def test_activity_logs_search_file_mode_does_not_inject_defaults(
     stub: tuple[Any, Any],
     query_file: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from nextlabs_sdk._cli import _activity_log_query_builder as builder_mod
 
-    monkeypatch.setattr(builder_mod, "now_epoch_ms", lambda: 9_999_000)
+    when(builder_mod).now_epoch_ms().thenReturn(9_999_000)
 
     _, service = stub
     captured: dict[str, Any] = {}

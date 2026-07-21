@@ -66,14 +66,14 @@ def _isolate_cache(tmp_path: object, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
 
 
-def _capture_factory(monkeypatch: pytest.MonkeyPatch) -> list[CliContext]:
+def _capture_factory() -> list[CliContext]:
     captured: list[CliContext] = []
 
     def _fake(ctx: CliContext) -> CloudAzClient:
         captured.append(ctx)
         return _mock_cloudaz_client()
 
-    monkeypatch.setattr(_client_factory, "make_cloudaz_client", _fake)
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake)
     return captured
 
 
@@ -83,12 +83,12 @@ def login_ctx(
     monkeypatch: pytest.MonkeyPatch,
 ) -> list[CliContext]:
     _isolate_cache(tmp_path, monkeypatch)
-    return _capture_factory(monkeypatch)
+    return _capture_factory()
 
 
 def _seed_cache(tmp_path: object, *keys: str):
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     tok = CachedToken(
@@ -149,7 +149,7 @@ def test_login_shows_menu_when_cache_has_entries_and_flags_missing(
 ):
     _isolate_cache(tmp_path, monkeypatch)
     _seed_cache(tmp_path, _ALPHA_KEY, _BETA_KEY)
-    captured = _capture_factory(monkeypatch)
+    captured = _capture_factory()
 
     result = runner.invoke(app, ["auth", "login"], input="2\ns3cret\n")
 
@@ -167,7 +167,7 @@ def test_login_menu_add_new_prompts_for_url_and_username(
 ):
     _isolate_cache(tmp_path, monkeypatch)
     _seed_cache(tmp_path, _ALPHA_KEY)
-    captured = _capture_factory(monkeypatch)
+    captured = _capture_factory()
 
     result = runner.invoke(
         app,
@@ -187,7 +187,7 @@ def test_login_skips_menu_when_base_and_username_supplied(
 ):
     _isolate_cache(tmp_path, monkeypatch)
     _seed_cache(tmp_path, _ALPHA_KEY)
-    captured = _capture_factory(monkeypatch)
+    captured = _capture_factory()
 
     result = runner.invoke(
         app,
@@ -214,7 +214,7 @@ def test_login_menu_selection_does_not_override_explicit_username(
 ):
     _isolate_cache(tmp_path, monkeypatch)
     _seed_cache(tmp_path, _ALPHA_KEY)
-    captured = _capture_factory(monkeypatch)
+    captured = _capture_factory()
 
     result = runner.invoke(
         app,
@@ -358,7 +358,6 @@ def _wrap_ssl_transport_error() -> "Exception":
 
 
 def _patch_ssl_prompter(
-    monkeypatch: pytest.MonkeyPatch,
     *,
     isatty: bool = True,
     confirm: bool = True,
@@ -378,12 +377,11 @@ def _patch_ssl_prompter(
             confirm=_confirm_fn,
         )
 
-    monkeypatch.setattr(_auth_cmd, "_SSL_RETRY_PROMPTER_FACTORY", _factory)
+    when(_auth_cmd)._SSL_RETRY_PROMPTER_FACTORY().thenAnswer(_factory)
     return confirms
 
 
 def _install_cloudaz_ssl_failing_factory(
-    monkeypatch: pytest.MonkeyPatch,
     *,
     succeed_on_retry: bool,
 ) -> list[bool | None]:
@@ -400,7 +398,7 @@ def _install_cloudaz_ssl_failing_factory(
             when(client).authenticate().thenRaise(_wrap_ssl_transport_error())
         return cast(CloudAzClient, client)
 
-    monkeypatch.setattr(_client_factory, "make_cloudaz_client", _fake_make)
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake_make)
     return call_verify
 
 
@@ -412,10 +410,9 @@ def test_cloudaz_login_ssl_failure_retries_with_no_verify_and_persists(
 
     _isolate_cache(tmp_path, monkeypatch)
     call_verify = _install_cloudaz_ssl_failing_factory(
-        monkeypatch,
         succeed_on_retry=True,
     )
-    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=True)
+    confirms = _patch_ssl_prompter(isatty=True, confirm=True)
 
     result = runner.invoke(
         app,
@@ -449,8 +446,8 @@ def test_cloudaz_login_ssl_failure_on_decline_exits_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    _install_cloudaz_ssl_failing_factory(monkeypatch, succeed_on_retry=False)
-    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=False)
+    _install_cloudaz_ssl_failing_factory(succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(isatty=True, confirm=False)
 
     result = runner.invoke(
         app,
@@ -477,8 +474,8 @@ def test_cloudaz_login_with_explicit_verify_true_skips_ssl_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    _install_cloudaz_ssl_failing_factory(monkeypatch, succeed_on_retry=False)
-    confirms = _patch_ssl_prompter(monkeypatch, isatty=True, confirm=True)
+    _install_cloudaz_ssl_failing_factory(succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(isatty=True, confirm=True)
 
     result = runner.invoke(
         app,
@@ -537,8 +534,8 @@ def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
     from nextlabs_sdk._auth._active_account._active_account_store import (
         ActiveAccountStore,
     )
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     cache.save(
@@ -616,8 +613,8 @@ def test_status_expired_exits_with_details(
     from nextlabs_sdk._auth._active_account._active_account_store import (
         ActiveAccountStore,
     )
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
@@ -682,8 +679,8 @@ def test_status_refreshable_is_no_when_refresh_known_expired(
     from nextlabs_sdk._auth._active_account._active_account_store import (
         ActiveAccountStore,
     )
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
 
     _isolate_cache(tmp_path, monkeypatch)
     FileTokenCache(path=f"{tmp_path}/tokens.json").save(
@@ -717,8 +714,8 @@ _PDP_KEY = f"{_PDP_HOST}||pdp-client|pdp"
 
 
 def _seed_pdp_cache(tmp_path: object) -> None:
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
 
     cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
     cache.save(
@@ -793,7 +790,7 @@ def test_logout_pdp_clears_all(
     result = runner.invoke(app, ["auth", "logout"])
 
     assert result.exit_code == 0, result.output
-    from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+    from nextlabs_sdk import FileTokenCache
 
     assert FileTokenCache(path=f"{tmp_path}/tokens.json").load(_PDP_KEY) is None
     assert ActiveAccountStore(path=f"{tmp_path}/active_account.json").load() is None

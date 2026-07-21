@@ -11,8 +11,8 @@ from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
 )
 from nextlabs_sdk._auth._token_cache._cache_factory import CacheStatus
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import FileTokenCache
 from nextlabs_sdk._cli import _auth_cmd
 from nextlabs_sdk._cli._account_preferences import GlobalCachePreferences
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore

@@ -7,7 +7,7 @@ from mockito import when
 
 from nextlabs_sdk._cli._app import app
 
-from tests._policy_diff_helpers import (
+from tests.cli.policy_diff_helpers import (
     GLOBAL_OPTS,
     entry,
     make_stub,

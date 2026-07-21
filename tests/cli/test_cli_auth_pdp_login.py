@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+import sys
 from typing import cast
 
 import httpx
@@ -13,7 +14,7 @@ from typer.testing import CliRunner
 from nextlabs_sdk._auth._active_account._active_account_store import (
     ActiveAccountStore,
 )
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import FileTokenCache
 from nextlabs_sdk._cli import _auth_cmd, _client_factory
 from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
 from nextlabs_sdk._cli._app import app
@@ -68,14 +69,14 @@ def _isolate_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
 
 
-def _capture_factory(monkeypatch: pytest.MonkeyPatch) -> list[CliContext]:
+def _capture_factory() -> list[CliContext]:
     captured: list[CliContext] = []
 
     def _fake(ctx: CliContext) -> CloudAzClient:
         captured.append(ctx)
         return _mock_cloudaz_client()
 
-    monkeypatch.setattr(_client_factory, "make_cloudaz_client", _fake)
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake)
     return captured
 
 
@@ -84,7 +85,7 @@ def test_login_type_cloudaz_keeps_existing_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    captured = _capture_factory(monkeypatch)
+    captured = _capture_factory()
 
     result = runner.invoke(
         app,
@@ -111,7 +112,7 @@ def test_login_without_type_in_non_tty_defaults_to_cloudaz(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    _capture_factory(monkeypatch)
+    _capture_factory()
 
     result = runner.invoke(
         app,
@@ -140,7 +141,7 @@ def test_login_type_pdp_reaches_branch(
     def _fake_pdp(cli_ctx: CliContext) -> None:
         called.append(True)
 
-    monkeypatch.setattr(_auth_cmd, "_login_pdp", _fake_pdp)
+    when(_auth_cmd)._login_pdp(...).thenAnswer(_fake_pdp)
 
     result = runner.invoke(app, ["auth", "login", "--type", "pdp"])
 
@@ -153,7 +154,7 @@ def test_login_type_invalid_raises_bad_parameter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    _capture_factory(monkeypatch)
+    _capture_factory()
 
     result = runner.invoke(
         app,
@@ -334,7 +335,7 @@ def test_login_pdp_uses_pdp_client_id_flag(
         captured_data.append(dict(data))
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
+    when(httpx).post(...).thenAnswer(_fake_post)
 
     result = runner.invoke(
         app,
@@ -379,7 +380,7 @@ def test_login_pdp_rejects_missing_client_id_non_tty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    monkeypatch.setattr("sys.stdin.isatty", _isatty_false_for_pdp_login)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false_for_pdp_login)
 
     result = runner.invoke(
         app,
@@ -418,7 +419,7 @@ def test_login_pdp_cloudaz_flavor_uses_client_id_fallback(
         captured_data.append(dict(data))
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
+    when(httpx).post(...).thenAnswer(_fake_post)
 
     result = runner.invoke(
         app,
@@ -675,7 +676,7 @@ def test_cloudaz_login_still_uses_four_segment_cache_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _isolate_cache(tmp_path, monkeypatch)
-    _capture_factory(monkeypatch)
+    _capture_factory()
 
     result = runner.invoke(
         app,
@@ -726,7 +727,7 @@ def test_switching_active_account_between_kinds(
         verify=ANY,
     ).thenReturn(_TokenResp({"access_token": "AT", "expires_in": 3600}))
 
-    from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+    from nextlabs_sdk import CachedToken
 
     cache = FileTokenCache(path=tmp_path / "tokens.json")
     cache.save(
@@ -767,7 +768,6 @@ def test_switching_active_account_between_kinds(
 
 
 def _install_pdp_ssl_retry_prompter(
-    monkeypatch: pytest.MonkeyPatch,
     *,
     isatty: bool,
     confirm: bool = True,
@@ -781,7 +781,7 @@ def _install_pdp_ssl_retry_prompter(
             confirm=lambda _text, *, default=False: confirm,
         )
 
-    monkeypatch.setattr(_pdp_login, "_SSL_RETRY_PROMPTER_FACTORY", _factory)
+    when(_pdp_login)._SSL_RETRY_PROMPTER_FACTORY().thenAnswer(_factory)
 
 
 def test_pdp_login_ssl_failure_retries_and_persists_verify_ssl_false(
@@ -806,8 +806,8 @@ def test_pdp_login_ssl_failure_retries_and_persists_verify_ssl_false(
             raise wrapped
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
-    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=True, confirm=True)
+    when(httpx).post(...).thenAnswer(_fake_post)
+    _install_pdp_ssl_retry_prompter(isatty=True, confirm=True)
 
     result = runner.invoke(
         app,
@@ -853,8 +853,8 @@ def test_pdp_login_non_tty_does_not_prompt_on_ssl_failure(
         wrapped.__cause__ = cause
         raise wrapped
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
-    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=False, confirm=True)
+    when(httpx).post(...).thenAnswer(_fake_post)
+    _install_pdp_ssl_retry_prompter(isatty=False, confirm=True)
 
     result = runner.invoke(
         app,
@@ -913,15 +913,9 @@ def test_pdp_login_ssl_retry_does_not_reprompt_for_missing_inputs(
             return "S3cret"
         return original_client_secret(ctx, flavor)
 
-    monkeypatch.setattr(
-        _pdp_login_module,
-        "_resolve_pdp_url",
-        _counting_pdp_url,
-    )
-    monkeypatch.setattr(
-        _pdp_login_module,
-        "_resolve_client_secret",
-        _counting_client_secret,
+    when(_pdp_login_module)._resolve_pdp_url(...).thenAnswer(_counting_pdp_url)
+    when(_pdp_login_module)._resolve_client_secret(...).thenAnswer(
+        _counting_client_secret
     )
 
     calls_verify: list[object] = []
@@ -938,8 +932,8 @@ def test_pdp_login_ssl_retry_does_not_reprompt_for_missing_inputs(
             raise wrapped
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
-    _install_pdp_ssl_retry_prompter(monkeypatch, isatty=True, confirm=True)
+    when(httpx).post(...).thenAnswer(_fake_post)
+    _install_pdp_ssl_retry_prompter(isatty=True, confirm=True)
 
     result = runner.invoke(
         app,
@@ -983,17 +977,11 @@ def test_pdp_login_ssl_retry_target_url_reflects_resolved_pdp_url(
             return "https://pdp.example"
         return original_pdp_url(ctx, flavor)
 
-    monkeypatch.setattr(
-        _pdp_login_module,
-        "_resolve_pdp_url",
-        _fake_pdp_url,
-    )
+    when(_pdp_login_module)._resolve_pdp_url(...).thenAnswer(_fake_pdp_url)
 
     observed_target: list[str] = []
 
-    monkeypatch.setattr(
-        _pdp_login_module,
-        "_SSL_RETRY_PROMPTER_FACTORY",
+    when(_pdp_login_module)._SSL_RETRY_PROMPTER_FACTORY().thenAnswer(
         lambda: _RecordingPrompter(
             observed_target,
             isatty=lambda: True,
@@ -1008,7 +996,7 @@ def test_pdp_login_ssl_retry_target_url_reflects_resolved_pdp_url(
     def _fake_post(*_args: object, **_kwargs: object) -> object:
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
+    when(httpx).post(...).thenAnswer(_fake_post)
 
     result = runner.invoke(
         app,
@@ -1072,7 +1060,7 @@ def test_pdp_login_without_flag_preserves_persisted_verify_ssl_false(
         calls_verify.append(kwargs.get("verify"))
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
+    when(httpx).post(...).thenAnswer(_fake_post)
 
     result = runner.invoke(
         app,
@@ -1115,7 +1103,7 @@ def test_pdp_login_with_explicit_verify_flag_overrides_persisted_false(
         calls_verify.append(kwargs.get("verify"))
         return resp
 
-    monkeypatch.setattr(httpx, "post", _fake_post)
+    when(httpx).post(...).thenAnswer(_fake_post)
 
     result = runner.invoke(
         app,

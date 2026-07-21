@@ -21,7 +21,7 @@ from nextlabs_sdk.cloudaz import (
 )
 from nextlabs_sdk._cloudaz._component_models import DeploymentResult
 from nextlabs_sdk._cloudaz._policy_models import ImportResult
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 
 runner = CliRunner()

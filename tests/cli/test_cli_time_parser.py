@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import time
+
 import pytest
+from mockito import when
 
 from nextlabs_sdk._cli._time_parser import parse_time
 
@@ -44,11 +47,8 @@ def test_iso_datetime_with_offset_respects_offset() -> None:
     assert parse_time("2024-01-15T10:30:00+02:00", now_ms=_NOW_MS) == 1705307400000
 
 
-def test_now_defaults_to_wall_clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "nextlabs_sdk._cli._time_parser.time.time",
-        lambda: _NOW_MS / 1000,
-    )
+def test_now_defaults_to_wall_clock() -> None:
+    when(time).time().thenReturn(_NOW_MS / 1000)
 
     assert parse_time("5m") == _NOW_MS - 5 * 60 * 1000
 

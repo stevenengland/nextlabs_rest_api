@@ -18,7 +18,7 @@ from nextlabs_sdk._cloudaz._component_type_search import (
     ComponentTypeSearchService,
 )
 from nextlabs_sdk._cloudaz._component_types import ComponentTypeService
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk.exceptions import NotFoundError
 
 runner = CliRunner()
