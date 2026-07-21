@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import stat
 import sys
 from pathlib import Path
 
 import pytest
+from mockito import verify, when
 
 from nextlabs_sdk._cli._account_preferences import (
     AccountPreferences,
@@ -79,10 +81,12 @@ def test_save_creates_file_with_0600_and_dir_with_0700(tmp_path: Path) -> None:
 
 def test_save_is_atomic_no_stale_tmp_files(tmp_path: Path) -> None:
     store = AccountPreferencesStore(path=tmp_path / "account_prefs.json")
+    when(os).replace(...).thenCallOriginalImplementation()
     store.save("k", _prefs())
 
     leftovers = [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
     assert leftovers == []
+    verify(os, times=1).replace(...)
 
 
 @pytest.mark.parametrize(

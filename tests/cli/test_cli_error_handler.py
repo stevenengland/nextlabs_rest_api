@@ -297,6 +297,8 @@ def test_refresh_token_expired_only_retries_once(
     @cli_error_handler
     def command(_ctx: typer.Context) -> None:
         calls.append(_ctx.obj.password)
+        if len(calls) == 1:
+            raise RefreshTokenExpiredError("refresh rejected")
         raise AuthenticationError("invalid credentials")
 
     with pytest.raises(typer.Exit):
@@ -304,5 +306,5 @@ def test_refresh_token_expired_only_retries_once(
 
     captured = capsys.readouterr()
     assert "Authentication failed" in captured.out
-    # Retry is not attempted unless the FIRST error is RefreshTokenExpiredError.
-    assert calls == [None]
+    # Retried exactly once, using the freshly prompted password.
+    assert calls == [None, "still-wrong"]

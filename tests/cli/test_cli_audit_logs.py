@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any
 
 import pytest
@@ -237,15 +236,6 @@ def test_audit_logs_list_users(stubbed_audit: Any) -> None:
 
     assert result.exit_code == 0, result.output
     assert "ada" in result.output
-
-
-_FROZEN_NOW_MS = 1_800_000_000_000
-
-
-@pytest.fixture
-def frozen_clock() -> int:
-    when(time).time().thenReturn(_FROZEN_NOW_MS / 1000)
-    return _FROZEN_NOW_MS
 
 
 def test_search_accepts_relative_start_date(

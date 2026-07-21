@@ -5,17 +5,20 @@ from typing import Iterator
 
 import pytest
 
+from nextlabs_sdk import _logging
 from nextlabs_sdk._cli._logging_setup import configure_cli_logging
 
 
 @pytest.fixture(autouse=True)
-def _clear_handlers() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+def clear_handlers() -> Iterator[None]:
     logger = logging.getLogger("nextlabs_sdk")
     original_handlers = list(logger.handlers)
     original_level = logger.level
+    original_body_limit = _logging.get_effective_body_limit()
     yield
     logger.handlers = original_handlers
     logger.setLevel(original_level)
+    _logging.set_effective_body_limit(original_body_limit)
 
 
 def _our_handlers() -> list[logging.Handler]:
@@ -53,8 +56,6 @@ def test_idempotent_second_call_does_not_duplicate_handler() -> None:
 
 
 def test_level_2_sets_default_body_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    from nextlabs_sdk import _logging
-
     monkeypatch.delenv("NEXTLABS_LOG_BODY_LIMIT", raising=False)
     _logging.set_effective_body_limit(999)
     configure_cli_logging(2)
@@ -63,50 +64,30 @@ def test_level_2_sets_default_body_limit(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_level_3_sets_unlimited_body_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    from nextlabs_sdk import _logging
-
     monkeypatch.delenv("NEXTLABS_LOG_BODY_LIMIT", raising=False)
     _logging.set_effective_body_limit(2000)
-    try:
-        configure_cli_logging(3)
-        assert _logging.get_effective_body_limit() is None
-    finally:
-        _logging.set_effective_body_limit(2000)
+    configure_cli_logging(3)
+    assert _logging.get_effective_body_limit() is None
 
 
 def test_env_overrides_verbose(monkeypatch: pytest.MonkeyPatch) -> None:
-    from nextlabs_sdk import _logging
-
     monkeypatch.setenv("NEXTLABS_LOG_BODY_LIMIT", "123")
     _logging.set_effective_body_limit(2000)
-    try:
-        configure_cli_logging(3)
-        assert _logging.get_effective_body_limit() == 123
-    finally:
-        _logging.set_effective_body_limit(2000)
+    configure_cli_logging(3)
+    assert _logging.get_effective_body_limit() == 123
 
 
 def test_env_zero_means_unlimited_at_vv(monkeypatch: pytest.MonkeyPatch) -> None:
-    from nextlabs_sdk import _logging
-
     monkeypatch.setenv("NEXTLABS_LOG_BODY_LIMIT", "0")
     _logging.set_effective_body_limit(2000)
-    try:
-        configure_cli_logging(2)
-        assert _logging.get_effective_body_limit() is None
-    finally:
-        _logging.set_effective_body_limit(2000)
+    configure_cli_logging(2)
+    assert _logging.get_effective_body_limit() is None
 
 
 def test_level_below_2_leaves_limit_untouched(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nextlabs_sdk import _logging
-
     monkeypatch.setenv("NEXTLABS_LOG_BODY_LIMIT", "42")
     _logging.set_effective_body_limit(2000)
-    try:
-        configure_cli_logging(1)
-        assert _logging.get_effective_body_limit() == 2000
-    finally:
-        _logging.set_effective_body_limit(2000)
+    configure_cli_logging(1)
+    assert _logging.get_effective_body_limit() == 2000

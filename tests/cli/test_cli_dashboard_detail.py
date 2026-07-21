@@ -9,12 +9,9 @@ from nextlabs_sdk._cli._detail_renderers import render_detail
 from nextlabs_sdk.cloudaz import PolicyActivity, PolicyDayBucket
 
 
-def _console() -> tuple[Console, io.StringIO]:
-    buf = io.StringIO()
-    return Console(file=buf, force_terminal=False, width=120, color_system=None), buf
-
-
-def test_policy_activity_detail_renderer_registered_and_renders_fields() -> None:
+def test_policy_activity_detail_renderer_registered_and_renders_fields(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _dashboard_cmd.dashboard_app is not None
     policy = PolicyActivity(
         policy_name="Access Control Policy",
@@ -23,7 +20,7 @@ def test_policy_activity_detail_renderer_registered_and_renders_fields() -> None
             PolicyDayBucket(day_nb=2, allow_count=45, deny_count=7),
         ],
     )
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(policy, console=console)
     output = buf.getvalue()
     assert "Policy" in output
@@ -38,10 +35,12 @@ def test_policy_activity_detail_renderer_registered_and_renders_fields() -> None
     assert "day=2" in output
 
 
-def test_policy_activity_detail_renderer_with_empty_decisions() -> None:
+def test_policy_activity_detail_renderer_with_empty_decisions(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _dashboard_cmd.dashboard_app is not None
     policy = PolicyActivity(policy_name="Empty Policy", policy_decisions=[])
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(policy, console=console)
     output = buf.getvalue()
     assert "Empty Policy" in output

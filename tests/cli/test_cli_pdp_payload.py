@@ -6,17 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from mockito import ANY, mock, verify, when
+from mockito import ANY, verify, when
 from typer.testing import CliRunner
 
-from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.pdp import (
     ContentType,
     Decision,
     EvalResponse,
     EvalResult,
-    PdpClient,
     PermissionsResponse,
     Status,
 )
@@ -68,12 +66,6 @@ def _raw_xacml() -> dict[str, Any]:
     }
 
 
-def _stub_client() -> Any:
-    mock_client = mock(PdpClient)
-    when(_client_factory).make_pdp_client(...).thenReturn(mock_client)
-    return mock_client
-
-
 def _permit_eval() -> EvalResponse:
     return EvalResponse(
         eval_results=[
@@ -97,8 +89,8 @@ def _write(tmp_path: Path, name: str, content: str) -> Path:
     return path
 
 
-def test_eval_payload_structured_json(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_eval_payload_structured_json(stub_pdp_client: Any, tmp_path: Path) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_permit_eval())
     path = _write(tmp_path, "p.json", json.dumps(_structured_eval()))
 
@@ -109,8 +101,8 @@ def test_eval_payload_structured_json(tmp_path: Path) -> None:
     verify(mock_client).evaluate(ANY, content_type=ANY)
 
 
-def test_eval_payload_structured_yaml(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_eval_payload_structured_yaml(stub_pdp_client: Any, tmp_path: Path) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_permit_eval())
     yaml_text = (
         "subject:\n  id: user@example.com\n"
@@ -125,8 +117,10 @@ def test_eval_payload_structured_yaml(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
-def test_eval_payload_raw_xacml_dispatches_evaluate_raw(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_eval_payload_raw_xacml_dispatches_evaluate_raw(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate_raw(...).thenReturn(_permit_eval())
     path = _write(tmp_path, "x.json", json.dumps(_raw_xacml()))
 
@@ -136,8 +130,9 @@ def test_eval_payload_raw_xacml_dispatches_evaluate_raw(tmp_path: Path) -> None:
     verify(mock_client).evaluate_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
-def test_eval_payload_conflicts_with_flags(tmp_path: Path) -> None:
-    _stub_client()
+def test_eval_payload_conflicts_with_flags(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
     path = _write(tmp_path, "p.json", json.dumps(_structured_eval()))
 
     result = runner.invoke(
@@ -158,8 +153,7 @@ def test_eval_payload_conflicts_with_flags(tmp_path: Path) -> None:
     assert "--subject" in result.output
 
 
-def test_eval_payload_missing_file(tmp_path: Path) -> None:
-    _stub_client()
+def test_eval_payload_missing_file(stub_pdp_client: Any, tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
@@ -174,8 +168,10 @@ def test_eval_payload_missing_file(tmp_path: Path) -> None:
     assert "Payload file not found" in result.output
 
 
-def test_eval_payload_format_override_xacml(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_eval_payload_format_override_xacml(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate_raw(...).thenReturn(_permit_eval())
     path = _write(tmp_path, "x.json", json.dumps(_raw_xacml()))
 
@@ -196,8 +192,9 @@ def test_eval_payload_format_override_xacml(tmp_path: Path) -> None:
     verify(mock_client).evaluate_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
-def test_eval_payload_format_xacml_rejects_structured(tmp_path: Path) -> None:
-    _stub_client()
+def test_eval_payload_format_xacml_rejects_structured(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
     path = _write(tmp_path, "p.json", json.dumps(_structured_eval()))
 
     result = runner.invoke(
@@ -217,8 +214,8 @@ def test_eval_payload_format_xacml_rejects_structured(tmp_path: Path) -> None:
     assert "Raw XACML" in result.output
 
 
-def test_eval_still_works_with_flags_and_no_payload() -> None:
-    mock_client = _stub_client()
+def test_eval_still_works_with_flags_and_no_payload(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_permit_eval())
 
     result = runner.invoke(
@@ -241,14 +238,15 @@ def test_eval_still_works_with_flags_and_no_payload() -> None:
     assert result.exit_code == 0, result.output
 
 
-def test_eval_missing_required_flag_without_payload() -> None:
-    _stub_client()
+def test_eval_missing_required_flag_without_payload(stub_pdp_client: Any) -> None:
     result = runner.invoke(app, [*_GLOBAL_OPTS, "pdp", "eval", "--subject", "u1"])
     assert result.exit_code != 0
 
 
-def test_permissions_payload_structured_json(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_permissions_payload_structured_json(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(_permit_perm())
     path = _write(tmp_path, "p.json", json.dumps(_structured_perm()))
 
@@ -261,8 +259,8 @@ def test_permissions_payload_structured_json(tmp_path: Path) -> None:
     verify(mock_client).permissions(ANY, content_type=ANY)
 
 
-def test_permissions_payload_raw_xacml(tmp_path: Path) -> None:
-    mock_client = _stub_client()
+def test_permissions_payload_raw_xacml(stub_pdp_client: Any, tmp_path: Path) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions_raw(...).thenReturn(_permit_perm())
     path = _write(tmp_path, "x.json", json.dumps(_raw_xacml()))
 
@@ -275,8 +273,9 @@ def test_permissions_payload_raw_xacml(tmp_path: Path) -> None:
     verify(mock_client).permissions_raw(_raw_xacml(), content_type=ContentType.JSON)
 
 
-def test_permissions_payload_conflicts_with_flags(tmp_path: Path) -> None:
-    _stub_client()
+def test_permissions_payload_conflicts_with_flags(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
     path = _write(tmp_path, "p.json", json.dumps(_structured_perm()))
 
     result = runner.invoke(
@@ -296,11 +295,13 @@ def test_permissions_payload_conflicts_with_flags(tmp_path: Path) -> None:
     assert "--payload cannot be combined" in result.output
 
 
-def test_eval_raw_payload_forwards_xml_content_type(tmp_path: Path) -> None:
+def test_eval_raw_payload_forwards_xml_content_type(
+    stub_pdp_client: Any, tmp_path: Path
+) -> None:
     """When --content-type xml + raw payload, content_type must reach the client."""
     from nextlabs_sdk.exceptions import NextLabsError
 
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     when(mock_client).evaluate_raw(...).thenRaise(
         NextLabsError("evaluate_raw() only supports ContentType.JSON"),
     )

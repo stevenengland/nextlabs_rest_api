@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import stat
 import sys
 from pathlib import Path
 
 import pytest
+from mockito import verify, when
 
 from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
 from nextlabs_sdk._auth._active_account._active_account_store import (
@@ -91,10 +93,12 @@ def test_save_overwrites_previous(tmp_path: Path) -> None:
 
 def test_save_is_atomic_no_stale_tmp_files(tmp_path: Path) -> None:
     store = ActiveAccountStore(path=tmp_path / "active_account.json")
+    when(os).replace(...).thenCallOriginalImplementation()
     store.save(_account())
 
     leftovers = [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")]
     assert leftovers == []
+    verify(os, times=1).replace(...)
 
 
 def test_kind_defaults_to_cloudaz_on_legacy_payload(tmp_path: Path) -> None:

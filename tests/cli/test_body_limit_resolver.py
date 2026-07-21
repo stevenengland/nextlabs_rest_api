@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+from typing import Iterator
+
 import pytest
 
+from nextlabs_sdk import _logging
 from nextlabs_sdk._cli._body_limit import resolve_body_limit
+
+
+@pytest.fixture(autouse=True)
+def restore_body_limit() -> Iterator[None]:
+    original = _logging.get_effective_body_limit()
+    yield
+    _logging.set_effective_body_limit(original)
 
 
 @pytest.mark.parametrize(
@@ -27,27 +37,15 @@ def test_resolve_body_limit(verbose, env_value, expected):
 
 
 def test_logging_body_limit_holder_defaults_to_2000():
-    from nextlabs_sdk import _logging
-
     _logging.set_effective_body_limit(2000)
     assert _logging.get_effective_body_limit() == 2000
 
 
 def test_logging_body_limit_holder_can_be_unlimited():
-    from nextlabs_sdk import _logging
-
-    try:
-        _logging.set_effective_body_limit(None)
-        assert _logging.get_effective_body_limit() is None
-    finally:
-        _logging.set_effective_body_limit(2000)
+    _logging.set_effective_body_limit(None)
+    assert _logging.get_effective_body_limit() is None
 
 
 def test_logging_body_limit_holder_accepts_custom_int():
-    from nextlabs_sdk import _logging
-
-    try:
-        _logging.set_effective_body_limit(500)
-        assert _logging.get_effective_body_limit() == 500
-    finally:
-        _logging.set_effective_body_limit(2000)
+    _logging.set_effective_body_limit(500)
+    assert _logging.get_effective_body_limit() == 500

@@ -19,12 +19,9 @@ from nextlabs_sdk.pdp import (
 )
 
 
-def _console() -> tuple[Console, io.StringIO]:
-    buf = io.StringIO()
-    return Console(file=buf, force_terminal=False, width=120, color_system=None), buf
-
-
-def test_pdp_eval_detail_renderer_registered() -> None:
+def test_pdp_eval_detail_renderer_registered(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _pdp_cmd.pdp_app is not None
     response = EvalResponse(
         eval_results=[
@@ -43,7 +40,7 @@ def test_pdp_eval_detail_renderer_registered() -> None:
             ),
         ],
     )
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(response, console=console)
     output = buf.getvalue()
     assert "Decision:" in output
@@ -56,14 +53,16 @@ def test_pdp_eval_detail_renderer_registered() -> None:
     assert "AllowAll" in output
 
 
-def test_pdp_permissions_detail_renderer_registered() -> None:
+def test_pdp_permissions_detail_renderer_registered(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _pdp_cmd.pdp_app is not None
     response = PermissionsResponse(
         allowed=[ActionPermission(name="VIEW")],
         denied=[ActionPermission(name="DELETE")],
         dont_care=[],
     )
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(response, console=console)
     output = buf.getvalue()
     assert "Allowed" in output

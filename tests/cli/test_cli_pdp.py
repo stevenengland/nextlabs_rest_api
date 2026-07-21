@@ -4,10 +4,9 @@ import json
 from typing import Any
 
 import pytest
-from mockito import mock, when
+from mockito import when
 from typer.testing import CliRunner
 
-from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk.pdp import (
     ActionPermission,
@@ -16,7 +15,6 @@ from nextlabs_sdk.pdp import (
     EvalResult,
     Obligation,
     ObligationAttribute,
-    PdpClient,
     PermissionsResponse,
     PolicyRef,
     Status,
@@ -56,12 +54,6 @@ _PERMS_ARGS = (
     "--resource-type",
     "file",
 )
-
-
-def _stub_client() -> Any:
-    mock_client = mock(PdpClient)
-    when(_client_factory).make_pdp_client(...).thenReturn(mock_client)
-    return mock_client
 
 
 def _eval_response(
@@ -104,19 +96,20 @@ def _perm_response(
     ],
 )
 def test_pdp_eval_decision(
+    stub_pdp_client: Any,
     decision: Decision,
     extra_flags: tuple[str, ...],
     expected_text: str,
 ) -> None:
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_eval_response(decision))
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS, *extra_flags])
     assert result.exit_code == 0
     assert expected_text in result.output
 
 
-def test_pdp_eval_json() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_json(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
     result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_EVAL_ARGS])
     assert result.exit_code == 0
@@ -124,8 +117,8 @@ def test_pdp_eval_json() -> None:
     assert parsed["eval_results"][0]["decision"] == "Permit"
 
 
-def test_pdp_eval_with_obligations() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_with_obligations(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     obligations = [
         Obligation(
             id="log-obligation",
@@ -139,8 +132,8 @@ def test_pdp_eval_with_obligations() -> None:
     assert "log-level" in result.output
 
 
-def test_pdp_eval_with_policy_refs() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_with_policy_refs(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     refs = [PolicyRef(id="AllowITAccess", version="1.0")]
     when(mock_client).evaluate(...).thenReturn(_eval_response(policy_refs=refs))
     result = runner.invoke(
@@ -164,8 +157,8 @@ def _eval_response_with_status(
     )
 
 
-def test_pdp_eval_renders_status_detail_when_present() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_renders_status_detail_when_present(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     response = _eval_response_with_status(
         decision=Decision.INDETERMINATE,
         code="urn:oasis:names:tc:xacml:1.0:status:missing-attribute",
@@ -182,8 +175,8 @@ def test_pdp_eval_renders_status_detail_when_present() -> None:
     assert "Service, Version" in result.output
 
 
-def test_pdp_eval_omits_detail_line_when_empty() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_omits_detail_line_when_empty(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
 
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS])
@@ -192,8 +185,10 @@ def test_pdp_eval_omits_detail_line_when_empty() -> None:
     assert "Detail:" not in result.output
 
 
-def test_pdp_eval_renders_status_with_bracket_chars_literally() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_renders_status_with_bracket_chars_literally(
+    stub_pdp_client: Any,
+) -> None:
+    mock_client = stub_pdp_client
     response = _eval_response_with_status(
         decision=Decision.INDETERMINATE,
         code="missing-attribute",
@@ -224,16 +219,17 @@ def test_pdp_eval_renders_status_with_bracket_chars_literally() -> None:
         pytest.param(("--content-type", "xml"), id="xml-content-type"),
     ],
 )
-def test_pdp_eval_extra_flags(extra_args: tuple[str, ...]) -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_extra_flags(
+    stub_pdp_client: Any, extra_args: tuple[str, ...]
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_eval_response())
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_EVAL_ARGS, *extra_args])
     assert result.exit_code == 0
     assert "Permit" in result.output
 
 
-def test_pdp_eval_invalid_resource_dimension() -> None:
-    _stub_client()
+def test_pdp_eval_invalid_resource_dimension(stub_pdp_client: Any) -> None:
     result = runner.invoke(
         app,
         [*_GLOBAL_OPTS, *_EVAL_ARGS, "--resource-dimension", "invalid"],
@@ -269,8 +265,8 @@ def test_pdp_eval_missing_credentials() -> None:
 # --- permissions output variants ---
 
 
-def test_pdp_permissions_allowed() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_allowed(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[ActionPermission(name="VIEW"), ActionPermission(name="EDIT")],
@@ -283,8 +279,8 @@ def test_pdp_permissions_allowed() -> None:
     assert "Allowed" in result.output
 
 
-def test_pdp_permissions_denied() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_denied(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             denied=[ActionPermission(name="DELETE")],
@@ -296,8 +292,8 @@ def test_pdp_permissions_denied() -> None:
     assert "Denied" in result.output
 
 
-def test_pdp_permissions_json() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_json(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[ActionPermission(name="VIEW")],
@@ -309,8 +305,8 @@ def test_pdp_permissions_json() -> None:
     assert parsed["allowed"][0]["name"] == "VIEW"
 
 
-def test_pdp_permissions_with_matching_policies() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_with_matching_policies(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[
@@ -329,8 +325,8 @@ def test_pdp_permissions_with_matching_policies() -> None:
     assert "VIEW" in result.output
 
 
-def test_pdp_permissions_empty() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_empty(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(_perm_response())
     result = runner.invoke(app, [*_GLOBAL_OPTS, *_PERMS_ARGS])
     assert result.exit_code == 0
@@ -343,8 +339,10 @@ def test_pdp_permissions_empty() -> None:
     "fmt",
     ["table", "wide", "detail"],
 )
-def test_pdp_eval_non_json_formats_show_sections(fmt: str) -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_non_json_formats_show_sections(
+    stub_pdp_client: Any, fmt: str
+) -> None:
+    mock_client = stub_pdp_client
     obligations = [
         Obligation(
             id="log-obligation",
@@ -366,8 +364,8 @@ def test_pdp_eval_non_json_formats_show_sections(fmt: str) -> None:
     assert "Matched Policies" in result.output
 
 
-def test_pdp_eval_json_format_returns_parseable_json() -> None:
-    mock_client = _stub_client()
+def test_pdp_eval_json_format_returns_parseable_json(stub_pdp_client: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).evaluate(...).thenReturn(_eval_response(Decision.PERMIT))
     result = runner.invoke(app, [*_GLOBAL_OPTS, "--output", "json", *_EVAL_ARGS])
     assert result.exit_code == 0
@@ -379,8 +377,10 @@ def test_pdp_eval_json_format_returns_parseable_json() -> None:
     "fmt",
     ["table", "wide", "detail"],
 )
-def test_pdp_permissions_non_json_formats_show_sections(fmt: str) -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_non_json_formats_show_sections(
+    stub_pdp_client: Any, fmt: str
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[ActionPermission(name="VIEW")],
@@ -398,8 +398,10 @@ def test_pdp_permissions_non_json_formats_show_sections(fmt: str) -> None:
     assert "DELETE" in result.output
 
 
-def test_pdp_permissions_json_format_returns_parseable_json() -> None:
-    mock_client = _stub_client()
+def test_pdp_permissions_json_format_returns_parseable_json(
+    stub_pdp_client: Any,
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(allowed=[ActionPermission(name="VIEW")]),
     )
@@ -426,8 +428,10 @@ def _explain_args(payload_path: Any) -> tuple[str, ...]:
     return ("pdp", "explain", "--payload", str(payload_path))
 
 
-def test_pdp_explain_renders_allowed_with_policies(tmp_path: Any) -> None:
-    mock_client = _stub_client()
+def test_pdp_explain_renders_allowed_with_policies(
+    stub_pdp_client: Any, tmp_path: Any
+) -> None:
+    mock_client = stub_pdp_client
     response = _perm_response(
         allowed=[
             ActionPermission(
@@ -456,9 +460,10 @@ def test_pdp_explain_renders_allowed_with_policies(tmp_path: Any) -> None:
 
 
 def test_pdp_explain_sets_record_matching_policies_and_drops_action(
+    stub_pdp_client: Any,
     tmp_path: Any,
 ) -> None:
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     captured: dict[str, Any] = {}
 
     def _capture(request: Any, *, content_type: Any) -> PermissionsResponse:
@@ -477,8 +482,10 @@ def test_pdp_explain_sets_record_matching_policies_and_drops_action(
     assert not hasattr(request, "action")
 
 
-def test_pdp_explain_action_filter_prints_matching_bucket(tmp_path: Any) -> None:
-    mock_client = _stub_client()
+def test_pdp_explain_action_filter_prints_matching_bucket(
+    stub_pdp_client: Any, tmp_path: Any
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[ActionPermission(name="VIEW")],
@@ -499,9 +506,10 @@ def test_pdp_explain_action_filter_prints_matching_bucket(tmp_path: Any) -> None
 
 
 def test_pdp_explain_action_filter_missing_action_still_succeeds(
+    stub_pdp_client: Any,
     tmp_path: Any,
 ) -> None:
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(allowed=[ActionPermission(name="VIEW")]),
     )
@@ -517,8 +525,10 @@ def test_pdp_explain_action_filter_missing_action_still_succeeds(
     assert "not found" in result.output
 
 
-def test_pdp_explain_empty_hint_when_no_matching_policies(tmp_path: Any) -> None:
-    mock_client = _stub_client()
+def test_pdp_explain_empty_hint_when_no_matching_policies(
+    stub_pdp_client: Any, tmp_path: Any
+) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(allowed=[ActionPermission(name="VIEW")]),
     )
@@ -530,8 +540,8 @@ def test_pdp_explain_empty_hint_when_no_matching_policies(tmp_path: Any) -> None
     assert "record_matching_policies" in result.output
 
 
-def test_pdp_explain_json_output(tmp_path: Any) -> None:
-    mock_client = _stub_client()
+def test_pdp_explain_json_output(stub_pdp_client: Any, tmp_path: Any) -> None:
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenReturn(
         _perm_response(
             allowed=[
@@ -555,10 +565,12 @@ def test_pdp_explain_json_output(tmp_path: Any) -> None:
     assert parsed["allowed"][0]["policy_refs"][0]["id"] == "P1"
 
 
-def test_pdp_explain_surfaces_pdp_status_error(tmp_path: Any) -> None:
+def test_pdp_explain_surfaces_pdp_status_error(
+    stub_pdp_client: Any, tmp_path: Any
+) -> None:
     from nextlabs_sdk.exceptions import PdpStatusError
 
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenRaise(
         PdpStatusError(
             "Invalid Request :: One or more mandatory attributes are missing",
@@ -580,13 +592,15 @@ def test_pdp_explain_surfaces_pdp_status_error(tmp_path: Any) -> None:
     assert "mandatory attributes" in result.output
 
 
-def test_pdp_explain_verbose_pdp_status_error_shows_xacml_code(tmp_path: Any) -> None:
+def test_pdp_explain_verbose_pdp_status_error_shows_xacml_code(
+    stub_pdp_client: Any, tmp_path: Any
+) -> None:
     from strip_ansi import strip_ansi
 
     from nextlabs_sdk.exceptions import PdpStatusError
 
     urn = "urn:oasis:names:tc:xacml:1.0:status:missing-attribute"
-    mock_client = _stub_client()
+    mock_client = stub_pdp_client
     when(mock_client).permissions(...).thenRaise(
         PdpStatusError(
             "missing attrs",

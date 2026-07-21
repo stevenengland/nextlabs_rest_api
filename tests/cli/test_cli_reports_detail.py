@@ -9,12 +9,9 @@ from nextlabs_sdk._cli._detail_renderers import render_detail
 from nextlabs_sdk.cloudaz import PolicyActivityReportDetail, WidgetData
 
 
-def _console() -> tuple[Console, io.StringIO]:
-    buf = io.StringIO()
-    return Console(file=buf, force_terminal=False, width=120, color_system=None), buf
-
-
-def test_report_detail_renderer_registered_and_renders_fields() -> None:
+def test_report_detail_renderer_registered_and_renders_fields(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _reports_cmd.reports_app is not None
     detail = PolicyActivityReportDetail.model_validate(
         {
@@ -39,7 +36,7 @@ def test_report_detail_renderer_registered_and_renders_fields() -> None:
             ],
         },
     )
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(detail, console=console)
     output = buf.getvalue()
     assert "Report" in output
@@ -49,7 +46,9 @@ def test_report_detail_renderer_registered_and_renders_fields() -> None:
     assert "top_users" in output
 
 
-def test_widget_data_detail_renderer_registered_and_renders_fields() -> None:
+def test_widget_data_detail_renderer_registered_and_renders_fields(
+    rich_console: tuple[Console, io.StringIO],
+) -> None:
     assert _reports_cmd.reports_app is not None
     widget_data = WidgetData.model_validate(
         {
@@ -59,7 +58,7 @@ def test_widget_data_detail_renderer_registered_and_renders_fields() -> None:
             ],
         },
     )
-    console, buf = _console()
+    console, buf = rich_console
     render_detail(widget_data, console=console)
     output = buf.getvalue()
     assert "WidgetData" in output or "Widget" in output

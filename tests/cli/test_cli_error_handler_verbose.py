@@ -53,6 +53,9 @@ def test_verbose_zero_prints_only_base_message(capsys: pytest.CaptureFixture[str
     captured = capsys.readouterr()
     assert "Authentication failed" in captured.out
     assert "srv/cas/oidc/accessToken" not in (captured.out + captured.err)
+    assert "request:" not in captured.err
+    assert "status:" not in captured.err
+    assert "server went boom" not in captured.err
 
 
 def test_verbose_one_prints_request_context_on_stderr(

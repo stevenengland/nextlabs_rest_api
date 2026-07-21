@@ -29,6 +29,17 @@ def test_is_acknowledged_false_when_absent() -> None:
     assert adapter.is_acknowledged() is False
 
 
+def test_is_acknowledged_false_when_flag_is_not_set() -> None:
+    # given a store holding a persisted, unacknowledged global cache preference
+    store = mock(AccountPreferencesStore)
+    when(store).load_global_cache().thenReturn(
+        GlobalCachePreferences(plaintext_acknowledged=False)
+    )
+    adapter = AccountPrefsPlaintextAckStore(store)
+    # when the acknowledgement is queried, then it reports false
+    assert adapter.is_acknowledged() is False
+
+
 def test_remember_persists_acknowledged_preference() -> None:
     # given an adapter over a preferences store
     store = mock(AccountPreferencesStore)

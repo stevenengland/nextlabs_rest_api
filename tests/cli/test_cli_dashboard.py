@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import Any
 
 import pytest
@@ -271,15 +270,6 @@ def test_dashboard_alerts_by_monitor_tags_filter() -> None:
     assert result.exit_code == 0, result.output
     assert "red" in result.output
     assert "blue" not in result.output
-
-
-_FROZEN_NOW_MS = 1_800_000_000_000
-
-
-@pytest.fixture
-def frozen_clock() -> int:
-    when(time).time().thenReturn(_FROZEN_NOW_MS / 1000)
-    return _FROZEN_NOW_MS
 
 
 def test_alerts_accepts_relative_from_date_and_defaults_to_now(
