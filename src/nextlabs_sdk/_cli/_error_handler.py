@@ -10,6 +10,7 @@ from typing import ParamSpec, TypeVar
 import typer
 from rich.console import Console
 
+from nextlabs_sdk._cli._account_resolver import resolve_account
 from nextlabs_sdk._cli._context import CliContext
 from nextlabs_sdk._cli._output import print_error
 from nextlabs_sdk.exceptions import (
@@ -91,10 +92,17 @@ def _extract_cli_context(
 
 
 def _reauth_prompt_label(cli_ctx: CliContext) -> str:
-    target = cli_ctx.username or "<unknown user>"
-    if cli_ctx.base_url:
-        target = f"{target}@{cli_ctx.base_url}"
-    return f"Password for {target} (re-auth required)"
+    if cli_ctx.username:
+        target = cli_ctx.username
+        if cli_ctx.base_url:
+            target = f"{target}@{cli_ctx.base_url}"
+        return f"Password for {target} (re-auth required)"
+
+    account = resolve_account(cli_ctx)
+    if account is not None and account.username:
+        return f"Password for {account.username}@{account.base_url} (re-auth required)"
+
+    return "Password for <unknown user> (re-auth required)"
 
 
 def _prepare_reauth(
