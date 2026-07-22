@@ -112,6 +112,21 @@ class TestPassphraseResolver:
         )
         assert resolver.resolve({}) == (None, "none")
 
+    def test_resolver_prefers_env_over_a_viable_keyring(self):
+        # given a keyring backend that could genuinely supply a stored key
+        _stub_probe_success()
+        stored = b"\x22" * kps._KEK_LEN
+        when(keyring).get_password(kps._SERVICE, kps._KEK_ACCOUNT).thenReturn(
+            base64.b64encode(stored).decode("ascii")
+        )
+        resolver = PassphraseResolver()
+        # when the resolver runs with the env secret also present
+        material, label = resolver.resolve({"NEXTLABS_MASTER_PASSWORD": "pw"})
+        # then env wins over the viable keyring and its KEK is never consulted
+        assert material == PassphraseKek(passphrase=b"pw")
+        assert label == "env"
+        verify(keyring, times=0).get_password(kps._SERVICE, kps._KEK_ACCOUNT)
+
     def test_resolver_returns_keyring_label_for_keyring_source(self):
         # given no env secret and an available keyring holding a stored key
         _stub_probe_success()
