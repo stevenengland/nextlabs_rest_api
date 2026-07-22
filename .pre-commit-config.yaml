@@ -33,3 +33,21 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+  - repo: https://github.com/stevenengland/sten-precommit-hooks
+    rev: v0.3.0
+    hooks:
+      - id: check-mockito
+      - id: check-no-basic-config
+      - id: check-no-private-import
+        args:
+          - "--allow=nextlabs_sdk"
+          # tests/cli — CLI is the thinnest possible wrapper around _cli
+          # internals, so its command tests legitimately drive those directly.
+          - "--allow-in-tests=tests/cli/**:nextlabs_sdk._cli"
+          # tests/cli — active-account, cache-status and console-io internals
+          # have no public re-export; CLI account/auth tests exercise them directly.
+          - "--allow-in-tests=tests/cli/**:nextlabs_sdk._auth"
+          # tests/cli — CLI command tests stub several CloudAz service/model
+          # internals directly; not all have a public re-export yet.
+          - "--allow-in-tests=tests/cli/**:nextlabs_sdk._cloudaz"

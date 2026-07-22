@@ -1,0 +1,811 @@
+from __future__ import annotations
+
+from typing import cast
+
+import pytest
+from mockito import mock, when
+from typer.testing import CliRunner
+
+from nextlabs_sdk._cli import _client_factory
+from nextlabs_sdk._cli._app import app
+from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cloudaz._operators import OperatorService
+from nextlabs_sdk.cloudaz import CloudAzClient
+from nextlabs_sdk.exceptions import AuthenticationError
+
+runner = CliRunner()
+
+_GLOBAL_OPTS = (
+    "--base-url",
+    "https://example.com",
+    "--username",
+    "admin",
+    "--password",
+    "secret",
+)
+
+
+def _mock_cloudaz_client() -> CloudAzClient:
+    mock_client = mock(CloudAzClient)
+    mock_ops = mock(OperatorService)
+    mock_client.operators = mock_ops
+    when(mock_ops).list_types().thenReturn(["STRING", "NUMBER"])
+    when(mock_client).authenticate().thenReturn(None)
+    return cast(CloudAzClient, mock_client)
+
+
+def test_auth_test_success():
+    when(_client_factory).make_cloudaz_client(...).thenReturn(_mock_cloudaz_client())
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "auth", "test"])
+
+    assert result.exit_code == 0
+    assert "successful" in result.output.lower()
+
+
+def test_auth_test_failure():
+    when(_client_factory).make_cloudaz_client(...).thenRaise(
+        AuthenticationError(message="bad creds"),
+    )
+
+    result = runner.invoke(app, [*_GLOBAL_OPTS, "auth", "test"])
+
+    assert result.exit_code == 1
+    assert "Authentication failed" in result.output
+
+
+def test_auth_test_missing_credentials():
+    result = runner.invoke(app, ["--base-url", "https://x.com", "auth", "test"])
+
+    assert result.exit_code == 1
+    assert "username" in result.output.lower()
+
+
+def _isolate_cache(tmp_path: object, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("NEXTLABS_CACHE_DIR", str(tmp_path))
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+
+
+def _capture_factory() -> list[CliContext]:
+    captured: list[CliContext] = []
+
+    def _fake(ctx: CliContext) -> CloudAzClient:
+        captured.append(ctx)
+        return _mock_cloudaz_client()
+
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake)
+    return captured
+
+
+@pytest.fixture
+def login_ctx(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[CliContext]:
+    _isolate_cache(tmp_path, monkeypatch)
+    return _capture_factory()
+
+
+def _seed_cache(tmp_path: object, *keys: str):
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
+
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    tok = CachedToken(
+        access_token="id",
+        refresh_token="rt",
+        expires_at=1000.0,
+        token_type="bearer",
+        scope=None,
+    )
+    for key in keys:
+        cache.save(key, tok)
+
+
+_ALPHA_KEY = "https://alpha.example.com/cas/oidc/accessToken|alice|ControlCenterOIDCClient|cloudaz"
+_BETA_KEY = (
+    "https://beta.example.com/cas/oidc/accessToken|bob|ControlCenterOIDCClient|cloudaz"
+)
+
+
+def test_login_prompts_for_password_when_missing(login_ctx):
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "auth",
+            "login",
+        ],
+        input="s3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Login successful" in result.output
+    assert "s3cret" not in result.output
+    assert login_ctx and login_ctx[0].password == "s3cret"
+    assert login_ctx[0].base_url == "https://example.com"
+    assert login_ctx[0].username == "admin"
+
+
+def test_login_prompts_for_everything_when_no_cache_and_no_flags(login_ctx):
+    result = runner.invoke(
+        app,
+        ["auth", "login"],
+        input="https://example.com\nadmin\ns3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert login_ctx[0].base_url == "https://example.com"
+    assert login_ctx[0].username == "admin"
+    assert login_ctx[0].password == "s3cret"
+
+
+def test_login_shows_menu_when_cache_has_entries_and_flags_missing(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY, _BETA_KEY)
+    captured = _capture_factory()
+
+    result = runner.invoke(app, ["auth", "login"], input="2\ns3cret\n")
+
+    assert result.exit_code == 0, result.output
+    assert "alice" in result.output
+    assert "bob" in result.output
+    assert captured[0].base_url == "https://beta.example.com"
+    assert captured[0].username == "bob"
+    assert captured[0].password == "s3cret"
+
+
+def test_login_menu_add_new_prompts_for_url_and_username(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY)
+    captured = _capture_factory()
+
+    result = runner.invoke(
+        app,
+        ["auth", "login"],
+        input="2\nhttps://new.example.com\ncarol\np4ss\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured[0].base_url == "https://new.example.com"
+    assert captured[0].username == "carol"
+    assert captured[0].password == "p4ss"
+
+
+def test_login_skips_menu_when_base_and_username_supplied(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY)
+    captured = _capture_factory()
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://beta.example.com",
+            "--username",
+            "bob",
+            "auth",
+            "login",
+        ],
+        input="s3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "alice" not in result.output
+    assert captured[0].base_url == "https://beta.example.com"
+    assert captured[0].username == "bob"
+
+
+def test_login_menu_selection_does_not_override_explicit_username(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY)
+    captured = _capture_factory()
+
+    result = runner.invoke(
+        app,
+        ["--username", "carol", "auth", "login"],
+        input="1\ns3cret\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured[0].base_url == "https://alpha.example.com"
+    assert captured[0].username == "carol"
+
+
+def test_login_persists_verify_preference_default_true(login_ctx):
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
+    assert entry is not None
+    assert entry.verify_ssl is True
+
+
+def test_login_persists_verify_false_when_no_verify_passed(login_ctx):
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    result = runner.invoke(
+        app,
+        [
+            "--no-verify",
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    store = AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json")
+    entry = store.load("https://example.com|admin|ControlCenterOIDCClient|cloudaz")
+    assert entry is not None
+    assert entry.verify_ssl is False
+
+
+_CLOUDAZ_PREFS_KEY = "https://example.com|admin|ControlCenterOIDCClient|cloudaz"
+
+_LOGIN_BASE_OPTS = (
+    "--base-url",
+    "https://example.com",
+    "--username",
+    "admin",
+    "--password",
+    "secret",
+    "auth",
+    "login",
+)
+
+
+def _load_cloudaz_prefs(cache_dir: str):
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    return AccountPreferencesStore(path=f"{cache_dir}/account_prefs.json").load(
+        _CLOUDAZ_PREFS_KEY,
+    )
+
+
+def test_login_without_flag_preserves_persisted_verify_ssl_false(login_ctx):
+    """Silent re-login must not overwrite a persisted ``verify_ssl=False``.
+
+    Regresses a bug where ``_save_prefs`` derived ``verify_ssl`` only
+    from the CLI flag, so a re-login on a self-signed host (whose
+    prior ``--no-verify`` had been remembered) silently flipped the
+    preference back to ``True`` — breaking the next CLI call.
+    """
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    seed = runner.invoke(app, ["--no-verify", *_LOGIN_BASE_OPTS])
+    assert seed.exit_code == 0, seed.output
+
+    result = runner.invoke(app, list(_LOGIN_BASE_OPTS))
+
+    assert result.exit_code == 0, result.output
+    entry = _load_cloudaz_prefs(cache_dir)
+    assert entry is not None
+    assert entry.verify_ssl is False
+
+
+def test_login_with_explicit_verify_flag_overrides_persisted_false(login_ctx):
+    """An explicit ``--verify`` still wins over a persisted ``False``."""
+    import os
+
+    cache_dir = os.environ["NEXTLABS_CACHE_DIR"]
+
+    seed = runner.invoke(app, ["--no-verify", *_LOGIN_BASE_OPTS])
+    assert seed.exit_code == 0, seed.output
+
+    result = runner.invoke(app, ["--verify", *_LOGIN_BASE_OPTS])
+
+    assert result.exit_code == 0, result.output
+    entry = _load_cloudaz_prefs(cache_dir)
+    assert entry is not None
+    assert entry.verify_ssl is True
+
+
+def _wrap_ssl_transport_error() -> "Exception":
+    import ssl
+
+    from nextlabs_sdk.exceptions import TransportError
+
+    cause = ssl.SSLCertVerificationError("certificate verify failed")
+    wrapped = TransportError("Connection error")
+    wrapped.__cause__ = cause
+    return wrapped
+
+
+def _patch_ssl_prompter(
+    *,
+    isatty: bool = True,
+    confirm: bool = True,
+) -> list[tuple[str, bool]]:
+    from nextlabs_sdk._cli import _auth_cmd
+    from nextlabs_sdk._cli._ssl_retry import SslRetryPrompter
+
+    confirms: list[tuple[str, bool]] = []
+
+    def _factory() -> SslRetryPrompter:
+        def _confirm_fn(text: str, *, default: bool = False) -> bool:
+            confirms.append((text, default))
+            return confirm
+
+        return SslRetryPrompter(
+            isatty=lambda: isatty,
+            confirm=_confirm_fn,
+        )
+
+    when(_auth_cmd)._SSL_RETRY_PROMPTER_FACTORY().thenAnswer(_factory)
+    return confirms
+
+
+def _install_cloudaz_ssl_failing_factory(
+    *,
+    succeed_on_retry: bool,
+) -> list[bool | None]:
+    call_verify: list[bool | None] = []
+
+    def _fake_make(ctx: CliContext) -> CloudAzClient:
+        call_verify.append(ctx.verify)
+        client = mock(CloudAzClient)
+        if len(call_verify) == 1:
+            when(client).authenticate().thenRaise(_wrap_ssl_transport_error())
+        elif succeed_on_retry:
+            when(client).authenticate().thenReturn(None)
+        else:
+            when(client).authenticate().thenRaise(_wrap_ssl_transport_error())
+        return cast(CloudAzClient, client)
+
+    when(_client_factory).make_cloudaz_client(...).thenAnswer(_fake_make)
+    return call_verify
+
+
+def test_cloudaz_login_ssl_failure_retries_with_no_verify_and_persists(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    _isolate_cache(tmp_path, monkeypatch)
+    call_verify = _install_cloudaz_ssl_failing_factory(
+        succeed_on_retry=True,
+    )
+    confirms = _patch_ssl_prompter(isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert call_verify == [None, False]
+    assert len(confirms) == 1
+    store = AccountPreferencesStore(path=f"{tmp_path}/account_prefs.json")
+    prefs = store.load(
+        "https://example.com|admin|ControlCenterOIDCClient|cloudaz",
+    )
+    assert prefs is not None
+    assert prefs.verify_ssl is False
+
+
+def test_cloudaz_login_ssl_failure_on_decline_exits_one(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _install_cloudaz_ssl_failing_factory(succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(isatty=True, confirm=False)
+
+    result = runner.invoke(
+        app,
+        [
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert len(confirms) == 1
+
+
+def test_cloudaz_login_with_explicit_verify_true_skips_ssl_prompt(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _install_cloudaz_ssl_failing_factory(succeed_on_retry=False)
+    confirms = _patch_ssl_prompter(isatty=True, confirm=True)
+
+    result = runner.invoke(
+        app,
+        [
+            "--verify",
+            "--base-url",
+            "https://example.com",
+            "--username",
+            "admin",
+            "--password",
+            "secret",
+            "auth",
+            "login",
+            "--type",
+            "cloudaz",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert confirms == []
+
+
+def test_logout_deletes_persisted_preference(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk._cli._account_preferences import AccountPreferences
+    from nextlabs_sdk._cli._account_preferences_store import AccountPreferencesStore
+
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_cache(tmp_path, _ALPHA_KEY)
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://alpha.example.com",
+            username="alice",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+    prefs_path = f"{tmp_path}/account_prefs.json"
+    prefs_store = AccountPreferencesStore(path=prefs_path)
+    prefs_key = "https://alpha.example.com|alice|ControlCenterOIDCClient|cloudaz"
+    prefs_store.save(prefs_key, AccountPreferences(verify_ssl=False))
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    assert prefs_store.load(prefs_key) is None
+
+
+def _seed_status_cache(tmp_path: object, *, refresh_expires_at: float | None):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
+
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=refresh_expires_at,
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+
+def test_status_shows_refresh_expires_when_known(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    # Refresh expires epoch 8_888_888_888 -> 2251-09-05 UTC
+    assert "2251-09-05" in result.output
+
+
+def test_status_omits_refresh_expires_when_unknown(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "2251-09-05" not in result.output
+    # Expires epoch 9_999_999_999 -> 2286-11-20 UTC
+    assert "2286-11-20" in result.output
+    assert "Refresh expires" in result.output
+    assert "\u2014" in result.output  # em-dash placeholder
+
+
+def test_status_shows_account_details(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "admin" in result.output
+    assert "https://example.com" in result.output
+    assert "ControlCenterOIDCClient" in result.output
+    assert "valid" in result.output
+
+
+def test_status_expired_exits_with_details(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
+
+    _isolate_cache(tmp_path, monkeypatch)
+    FileTokenCache(path=f"{tmp_path}/tokens.json").save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=1_000.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=None,
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 1
+    assert "expired" in result.output
+    assert "admin" in result.output
+
+
+def test_status_all_humanizes_expiry(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=None)
+
+    result = runner.invoke(app, ["auth", "status", "--all"])
+
+    assert result.exit_code == 0, result.output
+    assert "expires_at=" not in result.output
+    # Accept wrapping within the Rich table column
+    assert "2286" in result.output
+
+
+def test_status_shows_refreshable_row(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+
+
+def test_status_refreshable_is_no_when_refresh_known_expired(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
+
+    _isolate_cache(tmp_path, monkeypatch)
+    FileTokenCache(path=f"{tmp_path}/tokens.json").save(
+        "https://example.com/cas/oidc/accessToken|admin|ControlCenterOIDCClient|cloudaz",
+        CachedToken(
+            access_token="t",
+            refresh_token="rt",
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            refresh_expires_at=1_000.0,  # known-expired
+        ),
+    )
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url="https://example.com",
+            username="admin",
+            client_id="ControlCenterOIDCClient",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+    assert "expired" in result.output
+
+
+_PDP_HOST = "https://pdp.example"
+_PDP_KEY = f"{_PDP_HOST}||pdp-client|pdp"
+
+
+def _seed_pdp_cache(tmp_path: object) -> None:
+    from nextlabs_sdk import CachedToken
+    from nextlabs_sdk import FileTokenCache
+
+    cache = FileTokenCache(path=f"{tmp_path}/tokens.json")
+    cache.save(
+        _PDP_KEY,
+        CachedToken(
+            access_token="pdp-token",
+            refresh_token=None,
+            expires_at=9_999_999_999.0,
+            token_type="bearer",
+            scope=None,
+            client_secret="S",
+        ),
+    )
+
+
+def test_accounts_lists_pdp_row(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "accounts"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Kind" in result.output
+    assert "pdp" in result.output.lower()
+    assert "pdp.example" in result.output
+
+
+def test_use_selector_accepts_pdp_host_syntax(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    result = runner.invoke(app, ["auth", "use", f"[pdp]@{_PDP_HOST}"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    active = ActiveAccountStore(path=f"{tmp_path}/active_account.json").load()
+    assert active is not None
+    assert active.kind == "pdp"
+    assert active.base_url == _PDP_HOST
+
+
+def test_logout_pdp_clears_all(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_pdp_cache(tmp_path)
+
+    from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+    from nextlabs_sdk._auth._active_account._active_account_store import (
+        ActiveAccountStore,
+    )
+
+    ActiveAccountStore(path=f"{tmp_path}/active_account.json").save(
+        ActiveAccount(
+            base_url=_PDP_HOST,
+            username="",
+            client_id="pdp-client",
+            kind="pdp",
+        ),
+    )
+
+    result = runner.invoke(app, ["auth", "logout"])
+
+    assert result.exit_code == 0, result.output
+    from nextlabs_sdk import FileTokenCache
+
+    assert FileTokenCache(path=f"{tmp_path}/tokens.json").load(_PDP_KEY) is None
+    assert ActiveAccountStore(path=f"{tmp_path}/active_account.json").load() is None
+
+
+def test_status_all_has_refreshable_column(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _isolate_cache(tmp_path, monkeypatch)
+    _seed_status_cache(tmp_path, refresh_expires_at=8_888_888_888.0)
+
+    result = runner.invoke(app, ["auth", "status", "--all"], env={"COLUMNS": "200"})
+
+    assert result.exit_code == 0, result.output
+    assert "Refreshable" in result.output
+    assert "yes" in result.output
+    assert "; refreshable:" not in result.output

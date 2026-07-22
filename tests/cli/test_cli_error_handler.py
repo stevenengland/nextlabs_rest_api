@@ -1,0 +1,310 @@
+from __future__ import annotations
+
+import sys
+
+import pytest
+import typer
+from mockito import when
+
+from nextlabs_sdk._auth._active_account._active_account import ActiveAccount
+from nextlabs_sdk._auth._active_account._active_account_store import (
+    ActiveAccountStore,
+)
+from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk._cli._output_format import OutputFormat
+from nextlabs_sdk.exceptions import (
+    AuthenticationError,
+    NotFoundError,
+    RefreshTokenExpiredError,
+    RequestTimeoutError,
+    ServerError,
+    TransportError,
+)
+
+
+def _isatty_true() -> bool:
+    return True
+
+
+def _isatty_false() -> bool:
+    return False
+
+
+def _make_cli_ctx(
+    *,
+    password: str | None = None,
+    base_url: str | None = "https://example.com",
+    username: str | None = "user",
+    cache_dir: str | None = None,
+) -> CliContext:
+    return CliContext(
+        base_url=base_url,
+        username=username,
+        password=password,
+        client_id="client",
+        client_secret=None,
+        pdp_url=None,
+        output_format=OutputFormat.TABLE,
+        verify=None,
+        timeout=30.0,
+        cache_dir=cache_dir,
+    )
+
+
+def _make_typer_context(cli_ctx: CliContext) -> typer.Context:
+    command = typer.core.TyperCommand(name="test", callback=lambda: None)
+    ctx = typer.Context(command)
+    ctx.obj = cli_ctx
+    return ctx
+
+
+@pytest.mark.parametrize(
+    "exc,expected_substrings",
+    [
+        pytest.param(
+            AuthenticationError(message="bad creds"),
+            ["Authentication failed"],
+            id="authentication-error",
+        ),
+        pytest.param(
+            RefreshTokenExpiredError(message="refresh rejected"),
+            ["Re-login required", "refresh rejected"],
+            id="refresh-token-expired",
+        ),
+        pytest.param(
+            NotFoundError(message="HTTP 404"),
+            ["Not found"],
+            id="not-found-error",
+        ),
+        pytest.param(
+            ServerError(message="HTTP 500"),
+            ["API error"],
+            id="generic-nextlabs-error",
+        ),
+        pytest.param(
+            TransportError(message="SSL certificate verification failed: ..."),
+            ["Connection error", "SSL certificate verification failed"],
+            id="transport-error",
+        ),
+        pytest.param(
+            RequestTimeoutError(message="Request timed out: read timed out"),
+            ["Request timed out"],
+            id="request-timeout-error",
+        ),
+        pytest.param(
+            RuntimeError("unrelated"),
+            ["Unexpected error", "unrelated"],
+            id="unexpected-exception",
+        ),
+    ],
+)
+def test_handler_catches_exception(
+    capsys: pytest.CaptureFixture[str],
+    exc: Exception,
+    expected_substrings: list[str],
+):
+    @cli_error_handler
+    def failing():
+        raise exc
+
+    with pytest.raises(typer.Exit) as exc_info:
+        failing()
+
+    assert exc_info.value.exit_code == 1
+    captured = capsys.readouterr()
+    for substring in expected_substrings:
+        assert substring in captured.out
+
+
+def test_handler_lets_typer_exit_propagate():
+    @cli_error_handler
+    def failing():
+        import typer
+
+        raise typer.Exit(code=2)
+
+    with pytest.raises(typer.Exit) as exc_info:
+        failing()
+
+    assert exc_info.value.exit_code == 2
+
+
+def test_handler_returns_value_on_success():
+    @cli_error_handler
+    def succeeding() -> str:
+        return "ok"
+
+    assert succeeding() == "ok"
+
+
+def test_refresh_token_expired_retries_on_tty_after_password_prompt():
+    cli_ctx = _make_cli_ctx(password=None)
+    ctx = _make_typer_context(cli_ctx)
+    prompts: list[tuple[str, bool]] = []
+
+    def _fake_prompt(label: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append((label, hide_input))
+        return "typed-pw"
+
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+
+    calls: list[str | None] = []
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> str:
+        calls.append(_ctx.obj.password)
+        if len(calls) == 1:
+            raise RefreshTokenExpiredError("refresh rejected")
+        return "ok"
+
+    result = command(ctx)
+
+    assert result == "ok"
+    assert calls == [None, "typed-pw"]
+    assert prompts and prompts[0][1] is True
+    assert "user@https://example.com" in prompts[0][0]
+
+
+def test_refresh_token_expired_prompt_names_active_account_when_username_unset(
+    tmp_path,
+):
+    ActiveAccountStore(path=tmp_path / "active_account.json").save(
+        ActiveAccount(
+            base_url="https://active.example.com",
+            username="active-user",
+            client_id="client",
+        )
+    )
+    cli_ctx = _make_cli_ctx(
+        username=None,
+        base_url=None,
+        cache_dir=str(tmp_path),
+    )
+    ctx = _make_typer_context(cli_ctx)
+    prompts: list[str] = []
+
+    def _fake_prompt(label: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append(label)
+        return "typed-pw"
+
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> str:
+        if not prompts:
+            raise RefreshTokenExpiredError("refresh rejected")
+        return "ok"
+
+    result = command(ctx)
+
+    assert result == "ok"
+    assert prompts == [
+        "Password for active-user@https://active.example.com (re-auth required)"
+    ]
+    assert "<unknown user>" not in prompts[0]
+
+
+def test_refresh_token_expired_prompt_falls_back_to_generic_label(
+    tmp_path,
+):
+    cli_ctx = _make_cli_ctx(
+        username=None,
+        base_url=None,
+        cache_dir=str(tmp_path),
+    )
+    ctx = _make_typer_context(cli_ctx)
+    prompts: list[str] = []
+
+    def _fake_prompt(label: str, *, hide_input: bool = False, **_: object) -> str:
+        prompts.append(label)
+        return "typed-pw"
+
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> str:
+        if not prompts:
+            raise RefreshTokenExpiredError("refresh rejected")
+        return "ok"
+
+    result = command(ctx)
+
+    assert result == "ok"
+    assert prompts == ["Password for <unknown user> (re-auth required)"]
+
+
+def test_refresh_token_expired_reraises_when_not_tty(
+    capsys: pytest.CaptureFixture[str],
+):
+    ctx = _make_typer_context(_make_cli_ctx(password=None))
+
+    def _explode_prompt(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called in non-TTY mode")
+
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_false)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> None:
+        raise RefreshTokenExpiredError("refresh rejected")
+
+    with pytest.raises(typer.Exit):
+        command(ctx)
+
+    captured = capsys.readouterr()
+    assert "Re-login required" in captured.out
+
+
+def test_refresh_token_expired_reraises_when_explicit_password(
+    capsys: pytest.CaptureFixture[str],
+):
+    ctx = _make_typer_context(_make_cli_ctx(password="explicit"))
+
+    def _explode_prompt(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("typer.prompt must not be called with --password set")
+
+    when(typer).prompt(...).thenAnswer(_explode_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> None:
+        raise RefreshTokenExpiredError("refresh rejected")
+
+    with pytest.raises(typer.Exit):
+        command(ctx)
+
+    captured = capsys.readouterr()
+    assert "Re-login required" in captured.out
+
+
+def test_refresh_token_expired_only_retries_once(
+    capsys: pytest.CaptureFixture[str],
+):
+    ctx = _make_typer_context(_make_cli_ctx(password=None))
+
+    calls: list[str | None] = []
+
+    def _fake_prompt(*_args: object, **_kwargs: object) -> str:
+        return "still-wrong"
+
+    when(typer).prompt(...).thenAnswer(_fake_prompt)
+    when(sys.stdin).isatty().thenAnswer(_isatty_true)
+
+    @cli_error_handler
+    def command(_ctx: typer.Context) -> None:
+        calls.append(_ctx.obj.password)
+        if len(calls) == 1:
+            raise RefreshTokenExpiredError("refresh rejected")
+        raise AuthenticationError("invalid credentials")
+
+    with pytest.raises(typer.Exit):
+        command(ctx)
+
+    captured = capsys.readouterr()
+    assert "Authentication failed" in captured.out
+    # Retried exactly once, using the freshly prompted password.
+    assert calls == [None, "still-wrong"]

@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import pytest
+import typer
+from strip_ansi import strip_ansi
+
+from nextlabs_sdk._cli._context import CliContext
+from nextlabs_sdk._cli._output_format import OutputFormat
+from nextlabs_sdk._cli._error_handler import cli_error_handler
+from nextlabs_sdk.exceptions import ApiError, AuthenticationError, ValidationError
+
+
+def _ctx(verbose: int) -> typer.Context:
+    cli_ctx = CliContext(
+        base_url=None,
+        username=None,
+        password=None,
+        client_id="cid",
+        client_secret=None,
+        pdp_url=None,
+        output_format=OutputFormat.TABLE,
+        verify=None,
+        timeout=30.0,
+        verbose=verbose,
+    )
+    ctx = typer.Context(typer.core.TyperCommand(name="x", callback=lambda: None))
+    ctx.obj = cli_ctx
+    return ctx
+
+
+def _full_auth_error() -> AuthenticationError:
+    return AuthenticationError(
+        message="Token acquisition failed: HTTP 500",
+        status_code=500,
+        response_body="server went boom",
+        request_method="POST",
+        request_url="https://srv/cas/oidc/accessToken",
+    )
+
+
+def _run_failing(exc: Exception, verbose: int):
+    @cli_error_handler
+    def failing(ctx: typer.Context):
+        raise exc
+
+    with pytest.raises(typer.Exit):
+        failing(_ctx(verbose=verbose))
+
+
+def test_verbose_zero_prints_only_base_message(capsys: pytest.CaptureFixture[str]):
+    _run_failing(_full_auth_error(), verbose=0)
+
+    captured = capsys.readouterr()
+    assert "Authentication failed" in captured.out
+    assert "srv/cas/oidc/accessToken" not in (captured.out + captured.err)
+    assert "request:" not in captured.err
+    assert "status:" not in captured.err
+    assert "server went boom" not in captured.err
+
+
+def test_verbose_one_prints_request_context_on_stderr(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(_full_auth_error(), verbose=1)
+
+    captured = capsys.readouterr()
+    assert "Authentication failed" in captured.out
+    assert "POST" in captured.err
+    assert "https://srv/cas/oidc/accessToken" in captured.err
+    assert "500" in captured.err
+    assert "server went boom" in captured.err
+
+
+def test_verbose_one_non_nextlabs_error_unchanged(capsys: pytest.CaptureFixture[str]):
+    _run_failing(typer.BadParameter("missing X"), verbose=1)
+
+    captured = capsys.readouterr()
+    assert "missing X" in captured.out
+    assert "request:" not in captured.err
+
+
+def test_verbose_one_with_partial_exception_fields(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(AuthenticationError(message="no response yet"), verbose=1)
+
+    captured = capsys.readouterr()
+    assert "None" not in captured.err
+
+
+def test_verbose_one_prints_envelope_status_code(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ApiError(
+            message="No data found",
+            status_code=200,
+            response_body='{"statusCode":"5000","message":"No data found"}',
+            request_method="GET",
+            request_url="https://srv/console/api/v1/policy/mgmt/100",
+            envelope_status_code="5000",
+            envelope_message="No data found",
+        ),
+        verbose=1,
+    )
+
+    captured = capsys.readouterr()
+    stdout = strip_ansi(captured.out)
+    stderr = strip_ansi(captured.err)
+    assert "API error: No data found" in stdout
+    assert "envelope:" in stderr
+    assert "statusCode=5000" in stderr
+
+
+def test_verbose_zero_hides_envelope_status_code(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ApiError(
+            message="No data found",
+            status_code=200,
+            envelope_status_code="5000",
+            envelope_message="No data found",
+        ),
+        verbose=0,
+    )
+
+    captured = capsys.readouterr()
+    assert "envelope:" not in captured.err
+
+
+def test_http_400_with_envelope_surfaces_server_message(
+    capsys: pytest.CaptureFixture[str],
+):
+    _run_failing(
+        ValidationError(
+            message="An internal server error occurred.",
+            status_code=400,
+            response_body=(
+                '{"statusCode":"6000","message":"An internal server error occurred."}'
+            ),
+            request_method="GET",
+            request_url="https://srv/console/api/v1/policy/mgmt/1",
+            envelope_status_code="6000",
+            envelope_message="An internal server error occurred.",
+        ),
+        verbose=1,
+    )
+
+    captured = capsys.readouterr()
+    stdout = strip_ansi(captured.out)
+    stderr = strip_ansi(captured.err)
+    assert "API error: An internal server error occurred." in stdout
+    assert "HTTP 400" not in stdout
+    assert "statusCode=6000" in stderr
+    assert "400" in stderr
