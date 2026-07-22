@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._null_token_cache import NullTokenCache
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import NullTokenCache
 
 
 def _sample() -> CachedToken:

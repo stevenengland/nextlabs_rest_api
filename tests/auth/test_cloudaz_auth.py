@@ -10,11 +10,11 @@ import httpx
 import pytest
 from mockito import when
 
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import CloudAzAuth
+from nextlabs_sdk import FileTokenCache
+from nextlabs_sdk import TokenCache
 from nextlabs_sdk import exceptions
-from nextlabs_sdk._auth._cloudaz_auth import CloudAzAuth
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
-from nextlabs_sdk._auth._token_cache._token_cache import TokenCache
 
 TOKEN_URL = "https://cloudaz.example.com/cas/oidc/accessToken"
 API_URL = "https://cloudaz.example.com/api"

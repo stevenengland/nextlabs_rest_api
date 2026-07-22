@@ -7,7 +7,7 @@ import httpx
 import pytest
 from mockito import when
 
-from nextlabs_sdk._auth._pdp_auth import PdpAuth
+from nextlabs_sdk import PdpAuth
 from nextlabs_sdk import exceptions
 
 TOKEN_URL = "https://cloudaz.example.com/cas/token"

@@ -12,8 +12,8 @@ _SKIP_ON_WINDOWS = pytest.mark.skipif(
     reason="POSIX permission bits and HOME fallback are not applicable on Windows",
 )
 
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import FileTokenCache
 
 _NEXTLABS_CACHE_DIR = "NEXTLABS_CACHE_DIR"
 _XDG_CACHE_HOME = "XDG_CACHE_HOME"

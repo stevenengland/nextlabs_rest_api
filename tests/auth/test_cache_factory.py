@@ -10,11 +10,9 @@ from mockito import ANY, mock, spy2, verify, when
 from nextlabs_sdk._auth._token_cache import _cache_factory as cache_factory
 from nextlabs_sdk._auth._token_cache import _keyring_passphrase_source as kps
 from nextlabs_sdk._auth._token_cache import _secret_box as sb
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
-    EncryptedFileTokenCache,
-)
-from nextlabs_sdk._auth._token_cache._file_token_cache import FileTokenCache
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import EncryptedFileTokenCache
+from nextlabs_sdk import FileTokenCache
 from nextlabs_sdk.exceptions import TokenCacheError
 
 
@@ -22,6 +20,15 @@ def _keyring_unavailable() -> None:
     when(keyring).set_password(
         kps._SERVICE, kps._PROBE_ACCOUNT, kps._PROBE_VALUE
     ).thenRaise(NoKeyringError())
+
+
+@pytest.fixture(autouse=True)
+def reset_warn_once_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The plaintext-cache warning fires at most once per process via a module
+    # global; reset it before each test so warn-once assertions stay isolated.
+    monkeypatch.setattr(  # mockito-allow: resets a module-level flag value, not a stubbable call
+        cache_factory, "_WARNED", False
+    )
 
 
 def _tok(access_token: str = "id", expires_at: float = 1000.0) -> CachedToken:
@@ -42,10 +49,7 @@ class TestBuildTokenCache:
         )
         assert isinstance(cache, EncryptedFileTokenCache)
 
-    def test_no_source_non_tty_plaintext_warns_once(
-        self, tmp_path, capsys, monkeypatch
-    ):
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
+    def test_no_source_non_tty_plaintext_warns_once(self, tmp_path, capsys):
         console = mock()
         when(console).isatty().thenReturn(False)
         cache = cache_factory.build_token_cache(
@@ -58,8 +62,7 @@ class TestBuildTokenCache:
         assert isinstance(cache2, FileTokenCache)
         assert capsys.readouterr().err.count("UNENCRYPTED") == 1
 
-    def test_disable_env_silences_warning(self, tmp_path, capsys, monkeypatch):
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
+    def test_disable_env_silences_warning(self, tmp_path, capsys):
         console = mock()
         when(console).isatty().thenReturn(False)
         cache_factory.build_token_cache(
@@ -143,11 +146,8 @@ class TestInspectTokenCache:
 
 
 class TestInteractiveTokenCache:
-    def test_tty_passphrase_unlocks_and_roundtrips_with_tty_label(
-        self, tmp_path, monkeypatch
-    ):
+    def test_tty_passphrase_unlocks_and_roundtrips_with_tty_label(self, tmp_path):
         # given no env secret, an unavailable keyring, and a TTY passphrase
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -162,10 +162,9 @@ class TestInteractiveTokenCache:
         assert loaded == _tok()
 
     def test_no_source_tty_confirm_yes_returns_plaintext_with_guidance(
-        self, tmp_path, monkeypatch, capsys
+        self, tmp_path, capsys
     ):
         # given no source, a TTY, an empty passphrase, and a yes confirmation
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -182,11 +181,8 @@ class TestInteractiveTokenCache:
         assert "NEXTLABS_MASTER_PASSWORD" in cache_factory._HINT_FRESH
         assert capsys.readouterr().err == ""
 
-    def test_no_source_tty_confirm_no_aborts_without_writing(
-        self, tmp_path, monkeypatch
-    ):
+    def test_no_source_tty_confirm_no_aborts_without_writing(self, tmp_path):
         # given no source, a TTY, an empty passphrase, and a declined confirmation
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -198,9 +194,8 @@ class TestInteractiveTokenCache:
             cache_factory.build_token_cache(path=path, env={}, console=console)
         assert not path.exists()
 
-    def test_confirmation_is_read_via_console_confirm(self, tmp_path, monkeypatch):
+    def test_confirmation_is_read_via_console_confirm(self, tmp_path):
         # given a piped stdin must not bypass the gate
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -214,11 +209,10 @@ class TestInteractiveTokenCache:
         verify(console, times=1).confirm(ANY)
 
     def test_unusable_tty_degrades_to_plaintext_and_loads_legacy(
-        self, tmp_path, monkeypatch, capsys
+        self, tmp_path, capsys
     ):
         # given no source, an unavailable keyring, an isatty-true terminal whose
         # I/O raises io.UnsupportedOperation, and a legacy plaintext tokens.json
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -238,10 +232,9 @@ class TestInteractiveTokenCache:
         assert "UNENCRYPTED" in capsys.readouterr().err
 
     def test_unusable_tty_then_non_tty_warns_about_plaintext_only_once(
-        self, tmp_path, monkeypatch, capsys
+        self, tmp_path, capsys
     ):
         # given a process whose first build hits an unusable controlling terminal
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         unusable = mock()
         when(unusable).isatty().thenReturn(True)
@@ -272,10 +265,9 @@ class TestRememberPlaintextChoice:
         return console
 
     def test_confirm_then_accept_remember_persists_and_prints_saved_notice(
-        self, tmp_path, monkeypatch
+        self, tmp_path
     ):
         # given no source, a TTY, plaintext confirmed, and the remember prompt accepted
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = self._no_source_tty_console()
         when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
@@ -294,9 +286,8 @@ class TestRememberPlaintextChoice:
         verify(ack, times=1).remember()
         verify(console, times=1).message(cache_factory._SAVED_NOTICE)
 
-    def test_acknowledged_returns_plaintext_silently(self, tmp_path, monkeypatch):
+    def test_acknowledged_returns_plaintext_silently(self, tmp_path):
         # given a prior remembered plaintext choice and no source on a TTY
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = self._no_source_tty_console()
         ack = mock()
@@ -311,12 +302,9 @@ class TestRememberPlaintextChoice:
         verify(console, times=0).confirm(...)
         verify(console, times=0).prompt_secret(ANY)
 
-    def test_unremembered_choice_still_prompts_and_encrypts(
-        self, tmp_path, monkeypatch
-    ):
+    def test_unremembered_choice_still_prompts_and_encrypts(self, tmp_path):
         # given an ack store that has not remembered plaintext, no source, a TTY,
         # and a non-empty passphrase entered at the prompt
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = mock()
         when(console).isatty().thenReturn(True)
@@ -335,11 +323,10 @@ class TestRememberPlaintextChoice:
         verify(console, times=1).prompt_secret(ANY)
 
     def test_plaintext_confirm_shows_hint_without_duplicate_stderr_warning(
-        self, tmp_path, monkeypatch, capsys
+        self, tmp_path, capsys
     ):
         # given an existing plaintext cache, no source, a TTY, an empty
         # passphrase, and a yes confirmation
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         path = tmp_path / "tokens.json"
         FileTokenCache(path=path).save("a", _tok())
@@ -355,9 +342,8 @@ class TestRememberPlaintextChoice:
         )
         assert capsys.readouterr().err == ""
 
-    def test_declining_remember_does_not_persist(self, tmp_path, monkeypatch):
+    def test_declining_remember_does_not_persist(self, tmp_path):
         # given no source, a TTY, plaintext confirmed, but the remember prompt declined
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = self._no_source_tty_console()
         when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
@@ -375,11 +361,8 @@ class TestRememberPlaintextChoice:
         verify(ack, times=0).remember()
         verify(console, times=0).message(cache_factory._SAVED_NOTICE)
 
-    def test_remember_write_failure_degrades_silently_without_notice(
-        self, tmp_path, monkeypatch
-    ):
+    def test_remember_write_failure_degrades_silently_without_notice(self, tmp_path):
         # given plaintext confirmed and accepted, but persisting the choice fails
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = self._no_source_tty_console()
         when(console).confirm(cache_factory._CONFIRM_PROMPT).thenReturn(True)
@@ -397,11 +380,8 @@ class TestRememberPlaintextChoice:
         assert isinstance(cache, FileTokenCache)
         verify(console, times=0).message(cache_factory._SAVED_NOTICE)
 
-    def test_source_present_ignores_acknowledgement_and_encrypts(
-        self, tmp_path, monkeypatch
-    ):
+    def test_source_present_ignores_acknowledgement_and_encrypts(self, tmp_path):
         # given a remembered plaintext choice but a resolvable passphrase source
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         ack = mock()
         when(ack).is_acknowledged().thenReturn(True)
         # when the cache is built with an env passphrase present
@@ -423,9 +403,8 @@ class TestStateAwareHints:
         when(console).message(ANY).thenReturn(None)
         return console
 
-    def test_fresh_prints_first_time_hint_then_confirms(self, tmp_path, monkeypatch):
+    def test_fresh_prints_first_time_hint_then_confirms(self, tmp_path):
         # given no source, a TTY, and no cache on disk yet
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         console = self._no_source_tty_console()
         when(console).confirm(ANY).thenReturn(True)
@@ -437,9 +416,8 @@ class TestStateAwareHints:
         verify(console, times=1).message(cache_factory._HINT_FRESH.format(path=path))
         verify(console, times=1).confirm(ANY)
 
-    def test_legacy_plaintext_prints_hint_then_confirms(self, tmp_path, monkeypatch):
+    def test_legacy_plaintext_prints_hint_then_confirms(self, tmp_path):
         # given no source, a TTY, and an existing unencrypted cache
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         path = tmp_path / "tokens.json"
         FileTokenCache(path=path).save("a", _tok())
@@ -454,11 +432,8 @@ class TestStateAwareHints:
         )
         verify(console, times=1).confirm(ANY)
 
-    def test_lockout_prints_hint_and_aborts_without_touching_file(
-        self, tmp_path, monkeypatch
-    ):
+    def test_lockout_prints_hint_and_aborts_without_touching_file(self, tmp_path):
         # given an encrypted cache that no available source can unlock
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         path = tmp_path / "tokens.json"
         cache_factory.build_token_cache(
@@ -478,11 +453,8 @@ class TestStateAwareHints:
         verify(console, times=0).confirm(ANY)
         assert path.read_bytes() == before
 
-    def test_lockout_aborts_without_touching_file_non_interactive(
-        self, tmp_path, monkeypatch
-    ):
+    def test_lockout_aborts_without_touching_file_non_interactive(self, tmp_path):
         # given an encrypted cache that no available source can unlock, no TTY
-        monkeypatch.setattr(cache_factory, "_WARNED", False)
         _keyring_unavailable()
         path = tmp_path / "tokens.json"
         cache_factory.build_token_cache(
