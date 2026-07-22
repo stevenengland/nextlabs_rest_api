@@ -9,10 +9,8 @@ import pytest
 from mockito import spy2, verify, when
 
 from nextlabs_sdk._auth._token_cache import _secret_box as sb
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
-from nextlabs_sdk._auth._token_cache._encrypted_file_token_cache import (
-    EncryptedFileTokenCache,
-)
+from nextlabs_sdk import CachedToken
+from nextlabs_sdk import EncryptedFileTokenCache
 from nextlabs_sdk._auth._token_cache._secret_box import PassphraseKek
 
 

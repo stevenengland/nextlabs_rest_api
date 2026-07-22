@@ -63,9 +63,17 @@ def real_store(monkeypatch: pytest.MonkeyPatch) -> Iterator[_RealStore]:
     # them to a real persistent store so the source's actual dependency surface
     # is exercised for real rather than mocked.
     store = _RealStore()
-    monkeypatch.setattr("keyring.get_password", store.fetch)
-    monkeypatch.setattr("keyring.set_password", store.store)
-    monkeypatch.setattr("keyring.delete_password", store.remove)
+    # Rebinds keyring's entire function surface to a real persistent store
+    # (integration fixture), not stubbing individual calls.
+    monkeypatch.setattr(  # mockito-allow: real-store rebind
+        "keyring.get_password", store.fetch
+    )
+    monkeypatch.setattr(  # mockito-allow: real-store rebind
+        "keyring.set_password", store.store
+    )
+    monkeypatch.setattr(  # mockito-allow: real-store rebind
+        "keyring.delete_password", store.remove
+    )
     yield store
 
 

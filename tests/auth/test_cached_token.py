@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from nextlabs_sdk._auth._token_cache._cached_token import CachedToken
+from nextlabs_sdk import CachedToken
 
 
 def _base_dict() -> dict[str, Any]:

@@ -51,3 +51,7 @@ repos:
           # tests/cli — CLI command tests stub several CloudAz service/model
           # internals directly; not all have a public re-export yet.
           - "--allow-in-tests=tests/cli/**:nextlabs_sdk._cloudaz"
+          # tests/auth — crypto, passphrase, cache-factory, active-account and
+          # console-io internals are genuinely white-box; the auth/token-cache
+          # tests drive them directly (no public re-export for those).
+          - "--allow-in-tests=tests/auth/**:nextlabs_sdk._auth"
