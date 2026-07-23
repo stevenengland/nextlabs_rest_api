@@ -55,3 +55,15 @@ repos:
           # console-io internals are genuinely white-box; the auth/token-cache
           # tests drive them directly (no public re-export for those).
           - "--allow-in-tests=tests/auth/**:nextlabs_sdk._auth"
+          # tests/cloudaz — CloudAz console client/model/engine/request/response
+          # internals have no public re-export for every symbol; the cloudaz
+          # tests drive them directly.
+          - "--allow-in-tests=tests/cloudaz/**:nextlabs_sdk._cloudaz"
+          # tests/cloudaz — the envelope wrapper has no public re-export;
+          # test_envelope drives it directly.
+          - "--allow-in-tests=tests/cloudaz/**:nextlabs_sdk._envelope"
+          # tests/cloudaz — the activity-log-query-builder and policy-diff
+          # helpers live under _cli for historical reasons but are cloudaz
+          # domain logic with no public re-export; their tests drive them
+          # directly.
+          - "--allow-in-tests=tests/cloudaz/**:nextlabs_sdk._cli"
