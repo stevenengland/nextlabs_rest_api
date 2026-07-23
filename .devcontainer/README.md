@@ -29,8 +29,9 @@ Caveat: during container setup `vscode` keeps passwordless sudo (post-create
 needs it), so this cannot be cryptographically "human-only" — it is "first to
 lock it wins." Run it yourself, early, right after setup.
 
-To undo: a human with the password can restore `NOPASSWD:ALL` in
-`/etc/sudoers.d/vscode`, or re-lock the account with `sudo passwd -l vscode`.
+To undo, run `sudo visudo -f /etc/sudoers.d/vscode`, authenticate with the
+current password, change the rule to `vscode ALL=(root) NOPASSWD:ALL`, and
+save. After `NOPASSWD` is restored, optionally run `sudo passwd -l vscode`.
 
 ## Docker Compose Override
 
