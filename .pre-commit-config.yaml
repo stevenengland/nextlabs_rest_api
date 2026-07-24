@@ -67,3 +67,7 @@ repos:
           # domain logic with no public re-export; their tests drive them
           # directly.
           - "--allow-in-tests=tests/cloudaz/**:nextlabs_sdk._cli"
+          # tests/pdp — the JSON/XML XACML serializers, URN constants and
+          # token-url resolver have no public re-export; the pdp tests drive
+          # them directly.
+          - "--allow-in-tests=tests/pdp/**:nextlabs_sdk._pdp"
