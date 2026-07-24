@@ -274,32 +274,28 @@ def test_async_permissions_tolerates_missing_actions_and_obligations():
     _run_async(run())
 
 
-def test_async_pdp_client_defaults_token_url_to_dpc_oauth(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_async_pdp_client_defaults_token_url_to_dpc_oauth() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return mock(httpx.AsyncClient)
 
-    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+    when(transport_mod).create_async_http_client(...).thenAnswer(_capture)
 
     AsyncPdpClient(base_url=BASE_URL, client_id="c", client_secret="s")
 
     assert captured["auth"]._token_url == f"{BASE_URL}/dpc/oauth"
 
 
-def test_async_pdp_client_uses_auth_base_url_for_cas_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_async_pdp_client_uses_auth_base_url_for_cas_token() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return mock(httpx.AsyncClient)
 
-    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+    when(transport_mod).create_async_http_client(...).thenAnswer(_capture)
 
     AsyncPdpClient(
         base_url=BASE_URL,
@@ -311,16 +307,14 @@ def test_async_pdp_client_uses_auth_base_url_for_cas_token(
     assert captured["auth"]._token_url == "https://cloudaz.example.com/cas/token"
 
 
-def test_async_pdp_client_explicit_token_url_overrides_auth_base_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_async_pdp_client_explicit_token_url_overrides_auth_base_url() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> Any:
         captured.update(kwargs)
         return mock(httpx.AsyncClient)
 
-    monkeypatch.setattr(transport_mod, "create_async_http_client", _capture)
+    when(transport_mod).create_async_http_client(...).thenAnswer(_capture)
 
     AsyncPdpClient(
         base_url=BASE_URL,

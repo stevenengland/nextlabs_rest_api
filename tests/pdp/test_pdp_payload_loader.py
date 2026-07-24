@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from mockito import when
 
 from nextlabs_sdk.exceptions import PdpPayloadError
 from nextlabs_sdk.pdp import (
@@ -161,9 +162,7 @@ def test_load_raw_xacml_force_accepts_xacml(tmp_path: Path) -> None:
     assert loaded.kind == "raw_xacml"
 
 
-def test_load_yaml_missing_pyyaml(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_load_yaml_missing_pyyaml(tmp_path: Path) -> None:
     path = _write(tmp_path, "x.yaml", "a: 1\n")
     real_import = builtins.__import__
 
@@ -172,7 +171,7 @@ def test_load_yaml_missing_pyyaml(
             raise ImportError("No module named 'yaml'")
         return real_import(name, *args, **kwargs)
 
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    when(builtins).__import__(...).thenAnswer(fake_import)
     with pytest.raises(PdpPayloadError, match="YAML support requires PyYAML"):
         load_eval_payload(path, payload_format=PayloadFormat.YAML)
 

@@ -7,8 +7,8 @@ import httpx
 import pytest
 from mockito import any as any_value, mock, verify, when
 
+from nextlabs_sdk import HttpConfig, RetryConfig
 from nextlabs_sdk import _http_transport as transport_mod
-from nextlabs_sdk._config import HttpConfig, RetryConfig
 from nextlabs_sdk.pdp import (
     Action,
     Application,
@@ -310,48 +310,42 @@ def test_permissions_raises_api_error_on_non_json_response():
         _make_pdp().permissions(_make_permissions_request())
 
 
-def test_pdp_client_defaults_token_url_to_dpc_oauth(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_pdp_client_defaults_token_url_to_dpc_oauth() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> httpx.Client:
         captured.update(kwargs)
         return cast(httpx.Client, mock(httpx.Client))
 
-    monkeypatch.setattr(transport_mod, "create_http_client", _capture)
+    when(transport_mod).create_http_client(...).thenAnswer(_capture)
 
     _make_pdp()
 
     assert captured["auth"]._token_url == f"{BASE_URL}/dpc/oauth"
 
 
-def test_pdp_client_uses_auth_base_url_for_cas_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_pdp_client_uses_auth_base_url_for_cas_token() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> httpx.Client:
         captured.update(kwargs)
         return cast(httpx.Client, mock(httpx.Client))
 
-    monkeypatch.setattr(transport_mod, "create_http_client", _capture)
+    when(transport_mod).create_http_client(...).thenAnswer(_capture)
 
     _make_pdp(auth_base_url="https://cloudaz.example.com")
 
     assert captured["auth"]._token_url == "https://cloudaz.example.com/cas/token"
 
 
-def test_pdp_client_explicit_token_url_overrides_auth_base_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_pdp_client_explicit_token_url_overrides_auth_base_url() -> None:
     captured: dict[str, Any] = {}
 
     def _capture(**kwargs: Any) -> httpx.Client:
         captured.update(kwargs)
         return cast(httpx.Client, mock(httpx.Client))
 
-    monkeypatch.setattr(transport_mod, "create_http_client", _capture)
+    when(transport_mod).create_http_client(...).thenAnswer(_capture)
 
     _make_pdp(
         auth_base_url="https://cloudaz.example.com",
