@@ -3,7 +3,7 @@
 For each example body the spec provides, this test:
 
 1. Looks up the Pydantic model the SDK uses for that ``(path, method,
-   status)`` triple (see :mod:`tests._openapi.model_registry`).
+   status)`` triple (see :mod:`tests.openapi._openapi.model_registry`).
 2. Extracts the inner resource payload (CloudAz envelope: ``body["data"]``;
    PDP or raw: the whole body).
 3. Validates each resource with ``model_validate``, then re-serializes
@@ -25,10 +25,10 @@ from typing import Any
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from tests._openapi.allowlist import KNOWN_UNPARSEABLE
-from tests._openapi.examples import ExampleCase, collect_example_cases
-from tests._openapi.model_registry import RegistryMiss, lookup_model
-from tests._openapi.placeholders import substitute
+from tests.openapi._openapi.allowlist import KNOWN_UNPARSEABLE
+from tests.openapi._openapi.examples import ExampleCase, collect_example_cases
+from tests.openapi._openapi.model_registry import RegistryMiss, lookup_model
+from tests.openapi._openapi.placeholders import substitute
 
 
 class MissingModel(AssertionError):

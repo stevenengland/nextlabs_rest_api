@@ -1,4 +1,4 @@
-"""Unit tests for the pure diff helpers in tests._openapi.model_parity."""
+"""Unit tests for the pure diff helpers in tests.openapi._openapi.model_parity."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from enum import Enum
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from tests._openapi.model_parity import (
+from tests.openapi._openapi.model_parity import (
     Diff,
     EnumDiff,
     SchemaResolutionError,

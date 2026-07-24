@@ -7,8 +7,8 @@ from typing import Any
 
 import httpx
 
-from tests._openapi.examples import ExampleCase, collect_example_cases
-from tests._openapi.placeholders import substitute
+from tests.openapi._openapi.examples import ExampleCase, collect_example_cases
+from tests.openapi._openapi.placeholders import substitute
 
 _PATH_PARAM_RE = re.compile(r"\{[^/]+\}")
 

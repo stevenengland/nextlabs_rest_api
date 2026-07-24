@@ -93,3 +93,22 @@ repos:
           # tests/transport — decode_json/require_key have no public
           # re-export; the json-response tests drive them directly.
           - "--allow-in-tests=tests/transport/**:nextlabs_sdk._json_response"
+          # tests/openapi — the vendor-spec loader, example-case collector and
+          # model-parity helpers are private test tooling, not an SDK
+          # internal; the openapi area's white-box tests drive them directly.
+          - "--allow-in-tests=tests/openapi/**:tests.openapi._openapi"
+          # tests/openapi — Dependency, DeploymentResult and ComponentType
+          # have no public re-export; the model-registry lookup drives them
+          # directly.
+          - "--allow-in-tests=tests/openapi/**:nextlabs_sdk._cloudaz"
+          # tests/e2e — the WireMock stub-mapping builder is private e2e test
+          # tooling with no public surface; the e2e tests drive it directly.
+          - "--allow-in-tests=tests/e2e/**:tests.e2e._stubs"
+          # tests/e2e — the stub bearer-auth and PDP-token-stub helpers are
+          # private e2e test tooling with no public surface; the e2e tests
+          # drive them directly.
+          - "--allow-in-tests=tests/e2e/**:tests.e2e._support"
+          # tests/e2e — stub-mapping construction reuses the openapi area's
+          # example-case helpers so WireMock stubs stay derived from the same
+          # vendor-spec fixtures.
+          - "--allow-in-tests=tests/e2e/**:tests.openapi._openapi"

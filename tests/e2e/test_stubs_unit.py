@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tests._openapi.examples import ExampleCase
+from tests.openapi._openapi.examples import ExampleCase
 from tests.e2e._stubs import build_mapping
 
 

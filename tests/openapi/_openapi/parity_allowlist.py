@@ -1,7 +1,7 @@
 """Known drift between the SDK and the vendor OpenAPI spec.
 
 Each entry is an explicit opt-out for the parity checks in
-:mod:`tests._openapi.model_parity`. Removing an entry is the signal
+:mod:`tests.openapi._openapi.model_parity`. Removing an entry is the signal
 that the drift has been fixed (upstream or in the SDK) and the test
 layer should once again enforce the parity.
 

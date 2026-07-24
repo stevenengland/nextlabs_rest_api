@@ -14,7 +14,7 @@ Categories
 * ``MISSING_MODEL`` — the SDK does not (yet) expose a dedicated Pydantic
   response model for this endpoint. The round-trip suite cannot assert
   a contract on it. Removing the entry is the signal that a model has
-  been added; wire it up in :mod:`tests._openapi.model_registry` at the
+  been added; wire it up in :mod:`tests.openapi._openapi.model_registry` at the
   same time.
 """
 

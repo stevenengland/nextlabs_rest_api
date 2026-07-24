@@ -1,8 +1,8 @@
-"""Tests for tests._openapi.spec."""
+"""Tests for tests.openapi._openapi.spec."""
 
 from __future__ import annotations
 
-from tests._openapi.spec import load_spec
+from tests.openapi._openapi.spec import load_spec
 
 
 def test_load_spec_returns_openapi_3_1() -> None:
