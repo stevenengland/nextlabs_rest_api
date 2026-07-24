@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._cloudaz._search import SearchFieldType
-from nextlabs_sdk._cloudaz._search.where import transpile_where
+from nextlabs_sdk.cloudaz import SearchFieldType, transpile_where
 from nextlabs_sdk.exceptions import SearchExpressionError
 
 

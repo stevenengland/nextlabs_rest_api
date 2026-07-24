@@ -7,6 +7,7 @@ import importlib
 import sys
 
 import pytest
+from mockito import when
 
 from nextlabs_sdk.exceptions import SearchExpressionError
 
@@ -25,7 +26,7 @@ def _block_scim2(monkeypatch: pytest.MonkeyPatch) -> None:
     for cached in list(sys.modules):
         if cached == "scim2_filter_parser" or cached.startswith("scim2_filter_parser."):
             monkeypatch.delitem(sys.modules, cached, raising=False)
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    when(builtins).__import__(...).thenAnswer(fake_import)
 
 
 def test_where_module_imports_without_scim2(monkeypatch):
