@@ -9,8 +9,7 @@ import pytest
 
 from mockito import mock, when
 
-from nextlabs_sdk import _http_transport
-from nextlabs_sdk._config import HttpConfig
+from nextlabs_sdk import HttpConfig, _http_transport
 from nextlabs_sdk.exceptions import RequestTimeoutError, TransportError
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._config import HttpConfig, RetryConfig
+from nextlabs_sdk import HttpConfig, RetryConfig
 
 
 @pytest.mark.parametrize(

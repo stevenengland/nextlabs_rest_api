@@ -78,3 +78,18 @@ repos:
           # tests/search — SavedSearchType, SortField and SortOrder have no
           # public re-export; the search-model tests drive them directly.
           - "--allow-in-tests=tests/search/**:nextlabs_sdk._cloudaz._search"
+          # tests/transport — RetryTransport/AsyncRetryTransport have no
+          # public re-export; the transport tests drive them directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._http_transport"
+          # tests/transport — LoggingTransport has no public re-export; the
+          # transport-logging tests drive it directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._http_transport_logging"
+          # tests/transport — AsyncLoggingTransport has no public re-export;
+          # the transport-logging tests drive it directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._http_transport_logging_async"
+          # tests/transport — RetryPolicy has no public re-export; the
+          # retry-policy tests drive it directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._retry_policy"
+          # tests/transport — decode_json/require_key have no public
+          # re-export; the json-response tests drive them directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._json_response"
