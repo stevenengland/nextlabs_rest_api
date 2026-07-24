@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nextlabs_sdk._cloudaz._search.dates import date_value
+from nextlabs_sdk.cloudaz import date_value
 from nextlabs_sdk.exceptions import SearchExpressionError
 
 

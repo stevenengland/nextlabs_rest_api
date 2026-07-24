@@ -3,14 +3,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from nextlabs_sdk.cloudaz import SavedSearch, SearchCriteria
-from nextlabs_sdk._cloudaz._search import (
-    SavedSearchType,
+from nextlabs_sdk.cloudaz import (
+    SavedSearch,
+    SearchCriteria,
     SearchField,
     SearchFieldType,
-    SortField,
-    SortOrder,
 )
+from nextlabs_sdk._cloudaz._search import SavedSearchType, SortField, SortOrder
 
 
 @pytest.mark.parametrize(

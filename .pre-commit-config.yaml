@@ -75,3 +75,6 @@ repos:
           # assembly, dialects) and the component-name-entry model have no
           # public re-export; the pagination/engine tests drive them directly.
           - "--allow-in-tests=tests/pagination/**:nextlabs_sdk._cloudaz"
+          # tests/search — SavedSearchType, SortField and SortOrder have no
+          # public re-export; the search-model tests drive them directly.
+          - "--allow-in-tests=tests/search/**:nextlabs_sdk._cloudaz._search"
