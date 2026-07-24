@@ -5,7 +5,7 @@ from typing import Sequence
 
 import pytest
 
-from nextlabs_sdk._pagination import AsyncPaginator, PageResult, SyncPaginator
+from nextlabs_sdk import AsyncPaginator, PageResult, SyncPaginator
 
 
 def _make_page(

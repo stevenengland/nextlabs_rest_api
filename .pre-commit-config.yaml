@@ -71,3 +71,7 @@ repos:
           # token-url resolver have no public re-export; the pdp tests drive
           # them directly.
           - "--allow-in-tests=tests/pdp/**:nextlabs_sdk._pdp"
+          # tests/pagination — the paginated-endpoint engine (specs, runners,
+          # assembly, dialects) and the component-name-entry model have no
+          # public re-export; the pagination/engine tests drive them directly.
+          - "--allow-in-tests=tests/pagination/**:nextlabs_sdk._cloudaz"
