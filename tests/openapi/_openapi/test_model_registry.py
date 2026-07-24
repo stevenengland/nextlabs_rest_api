@@ -1,10 +1,10 @@
-"""Tests for tests._openapi.model_registry."""
+"""Tests for tests.openapi._openapi.model_registry."""
 
 from __future__ import annotations
 
 import pytest
 
-from tests._openapi.model_registry import RegistryMiss, lookup_model
+from tests.openapi._openapi.model_registry import RegistryMiss, lookup_model
 
 
 def test_lookup_known_component_get() -> None:

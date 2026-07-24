@@ -54,7 +54,7 @@ Keep searches tight. Saves tokens, avoids context poisoning.
 - Use `ripgrep` (`rg`) / `grep` tool — honors `.gitignore`.
 - Shortened tool output: `head`, `tail`, `git log --oneline -20`,
   `git diff -- <path>`, `pytest --short`. Full dumps on failure only.
-- Never view `tests/_openapi/fixtures/nextlabs-openapi.json` (~640 KB,
+- Never view `tests/openapi/_openapi/fixtures/nextlabs-openapi.json` (~640 KB,
   ~150K tokens). Grep or line-range read only.
 - Skip: caches (gitignored), `tmp/`, `plans/`, `htmlcov/`, `coverage.xml`.
 

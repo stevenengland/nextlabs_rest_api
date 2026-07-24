@@ -102,7 +102,7 @@ def _entries() -> list[_Entry]:
 def iter_entries() -> Iterator[_Entry]:
     """Yield all registered `(pattern, method, status, model)` entries.
 
-    Exposed so the parity test suite (``tests/_openapi/test_model_parity.py``)
+    Exposed so the parity test suite (``tests/openapi/_openapi/test_model_parity.py``)
     can iterate the registry without re-declaring it.
     """
     yield from _entries()

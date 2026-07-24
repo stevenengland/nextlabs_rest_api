@@ -93,7 +93,7 @@ python ./tools/tests.py --short --e2e
 ```
 
 Requires Docker. Spins up a WireMock container that serves stubs derived from
-the committed OpenAPI spec at `tests/_openapi/fixtures/nextlabs-openapi.json`.
+the committed OpenAPI spec at `tests/openapi/_openapi/fixtures/nextlabs-openapi.json`.
 The full E2E suite runs in about 25 seconds on top of the ~18 second unit run.
 
 ### Troubleshooting
@@ -125,7 +125,7 @@ python tools/fetch_openapi_spec.py
 ```
 
 This writes the latest spec to
-`tests/_openapi/fixtures/nextlabs-openapi.json`. Review the diff, run the test
+`tests/openapi/_openapi/fixtures/nextlabs-openapi.json`. Review the diff, run the test
 suite (including `--e2e`), fix any new round-trip or model-registry failures,
 then commit. The helper refuses to run in CI.
 

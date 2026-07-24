@@ -1,4 +1,4 @@
-"""Tests for tests._openapi.examples and placeholders."""
+"""Tests for tests.openapi._openapi.examples and placeholders."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from tests._openapi.examples import ExampleCase, collect_example_cases
-from tests._openapi.placeholders import substitute
+from tests.openapi._openapi.examples import ExampleCase, collect_example_cases
+from tests.openapi._openapi.placeholders import substitute
 
 
 def test_substitute_replaces_id_with_integer_literal() -> None:

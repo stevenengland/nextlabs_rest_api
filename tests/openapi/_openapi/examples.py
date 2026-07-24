@@ -7,7 +7,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from tests._openapi.spec import load_spec
+from tests.openapi._openapi.spec import load_spec
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,7 @@
 """Parity tests — catches ``required``-set, property, and enum drift on DTOs.
 
-See :mod:`tests._openapi.model_parity` for the pure diff functions and
-:mod:`tests._openapi.parity_allowlist` for the opt-outs. New drift must
+See :mod:`tests.openapi._openapi.model_parity` for the pure diff functions and
+:mod:`tests.openapi._openapi.parity_allowlist` for the opt-outs. New drift must
 either be fixed or explicitly added to the allowlist with a reason.
 """
 
@@ -13,15 +13,15 @@ from dataclasses import dataclass
 import pytest
 from pydantic import BaseModel
 
-from tests._openapi import parity_allowlist
-from tests._openapi.model_parity import (
+from tests.openapi._openapi import parity_allowlist
+from tests.openapi._openapi.model_parity import (
     enum_diffs,
     inner_data_schema,
     property_diff,
     required_diff,
 )
-from tests._openapi.model_registry import iter_entries
-from tests._openapi.spec import load_spec
+from tests.openapi._openapi.model_registry import iter_entries
+from tests.openapi._openapi.spec import load_spec
 
 
 @dataclass(frozen=True)

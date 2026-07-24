@@ -32,6 +32,6 @@ def substitute(body: str) -> str:
     if leftover is not None:
         raise ValueError(
             f"unknown placeholder {leftover.group()!r} — "
-            "add it to _SUBSTITUTIONS in tests/_openapi/placeholders.py",
+            "add it to _SUBSTITUTIONS in tests/openapi/_openapi/placeholders.py",
         )
     return body

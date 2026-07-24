@@ -15,6 +15,7 @@ SPEC_URL = "https://developer.nextlabs.com/assets/external/cloudaz/api-docs.json
 TARGET = (
     Path(__file__).resolve().parents[1]
     / "tests"
+    / "openapi"
     / "_openapi"
     / "fixtures"
     / "nextlabs-openapi.json"
