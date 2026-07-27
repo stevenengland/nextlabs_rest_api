@@ -112,3 +112,20 @@ repos:
           # example-case helpers so WireMock stubs stay derived from the same
           # vendor-spec fixtures.
           - "--allow-in-tests=tests/e2e/**:tests.openapi._openapi"
+          # tests/architecture — the invariant tests assert closure over the
+          # real internal CLI modules (contexts, resolvers, cache-key
+          # helpers), so they legitimately drive _cli directly.
+          - "--allow-in-tests=tests/architecture/**:nextlabs_sdk._cli"
+          # tests/architecture — the invariant tests introspect CloudAz
+          # engine/search/model internals, and some assert identity against
+          # their public re-export, so they legitimately drive _cloudaz
+          # directly.
+          - "--allow-in-tests=tests/architecture/**:nextlabs_sdk._cloudaz"
+          # tests/architecture — ActiveAccount and the account/cache-key
+          # contracts it pins have no public re-export; the invariant tests
+          # legitimately drive _auth directly.
+          - "--allow-in-tests=tests/architecture/**:nextlabs_sdk._auth"
+          # tests/architecture — kept for the pagination primitives'
+          # white-box coverage; current invariant tests resolve
+          # AsyncPaginator/SyncPaginator from the public nextlabs_sdk facade.
+          - "--allow-in-tests=tests/architecture/**:nextlabs_sdk._pagination"

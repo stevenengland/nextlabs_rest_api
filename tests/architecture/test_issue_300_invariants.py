@@ -20,6 +20,7 @@ from typing import Any, cast
 import httpx
 import pytest
 
+from nextlabs_sdk import AsyncPaginator, SyncPaginator
 from nextlabs_sdk._cloudaz._component_type_search import (
     AsyncComponentTypeSearchService,
     ComponentTypeSearchService,
@@ -29,14 +30,14 @@ from nextlabs_sdk._cloudaz._engine._constructors import (
     _build_search_plan,
 )
 from nextlabs_sdk._cloudaz._engine._spec import PaginatedSpec
-from nextlabs_sdk._cloudaz._models import TagType
-from nextlabs_sdk._cloudaz._policy_search import (
+from nextlabs_sdk.cloudaz import (
     AsyncPolicySearchService,
+    AsyncTagService,
     PolicySearchService,
+    SearchCriteria,
+    TagService,
+    TagType,
 )
-from nextlabs_sdk._cloudaz._search import SearchCriteria
-from nextlabs_sdk._cloudaz._tags import AsyncTagService, TagService
-from nextlabs_sdk._pagination import AsyncPaginator, SyncPaginator
 
 _SANCTIONED_BUILDERS = (_build_query_plan, _build_search_plan)
 

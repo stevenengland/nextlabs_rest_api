@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from nextlabs_sdk._cloudaz._component_search import (
+from nextlabs_sdk.cloudaz import (
     AsyncComponentSearchService,
     ComponentSearchService,
 )
