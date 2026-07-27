@@ -93,6 +93,10 @@ repos:
           # tests/transport — decode_json/require_key have no public
           # re-export; the json-response tests drive them directly.
           - "--allow-in-tests=tests/transport/**:nextlabs_sdk._json_response"
+          # tests/transport — redact_headers/redact_body/format_request_line/
+          # format_response_line have no public re-export; the logging-
+          # redaction tests drive them directly.
+          - "--allow-in-tests=tests/transport/**:nextlabs_sdk._logging"
           # tests/openapi — the vendor-spec loader, example-case collector and
           # model-parity helpers are private test tooling, not an SDK
           # internal; the openapi area's white-box tests drive them directly.

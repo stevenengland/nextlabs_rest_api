@@ -8,10 +8,10 @@ import pytest
 from mockito import ANY, mock, when
 from typer.testing import CliRunner
 
+from nextlabs_sdk import PageResult, SyncPaginator
 from nextlabs_sdk._cli import _client_factory
 from nextlabs_sdk._cli._app import app
 from nextlabs_sdk._cloudaz._search import SearchCriteria
-from nextlabs_sdk._pagination import PageResult, SyncPaginator
 from nextlabs_sdk.cloudaz import (
     CloudAzClient,
     PolicyLite,
