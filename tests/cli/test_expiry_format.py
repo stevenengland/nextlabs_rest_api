@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import time
+
 import pytest
+from mockito import when
 
 from nextlabs_sdk._cli._expiry_format import format_expiry
 
@@ -56,13 +59,8 @@ def test_format_expiry_handles_out_of_range_epoch() -> None:
     assert rendered.endswith(")")
 
 
-def test_format_expiry_defaults_now_to_wall_clock(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "nextlabs_sdk._cli._expiry_format.time.time",
-        lambda: _NOW,
-    )
+def test_format_expiry_defaults_now_to_wall_clock() -> None:
+    when(time).time().thenReturn(_NOW)
 
     rendered = format_expiry(_NOW + 120)
 

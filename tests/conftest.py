@@ -2,9 +2,11 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
+import keyring
 import pytest
 from keyring.errors import NoKeyringError
 from mockito import unstub as mockito_unstub
+from mockito import when
 
 # ── E2E collection guard ──
 # When E2E_COLLECT is not set, ignore the e2e/ directory so pytest
@@ -33,9 +35,7 @@ def _isolate_nextlabs_cache(  # pyright: ignore[reportUnusedFunction]
 
 
 @pytest.fixture(autouse=True)
-def _disable_real_keyring(  # pyright: ignore[reportUnusedFunction]
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _disable_real_keyring() -> None:  # pyright: ignore[reportUnusedFunction]
     """Force the keyring to behave as if no backend is installed.
 
     Otherwise the keyring passphrase source would auto-generate and persist a
@@ -44,13 +44,9 @@ def _disable_real_keyring(  # pyright: ignore[reportUnusedFunction]
     on the host. Tests that exercise the keyring path stub these ``keyring``
     module functions directly, overriding this default.
     """
-
-    def _no_backend(*_args: object, **_kwargs: object) -> None:
-        raise NoKeyringError()
-
-    monkeypatch.setattr("keyring.get_password", _no_backend)
-    monkeypatch.setattr("keyring.set_password", _no_backend)
-    monkeypatch.setattr("keyring.delete_password", _no_backend)
+    when(keyring).get_password(...).thenRaise(NoKeyringError())
+    when(keyring).set_password(...).thenRaise(NoKeyringError())
+    when(keyring).delete_password(...).thenRaise(NoKeyringError())
 
 
 @pytest.fixture(autouse=True)
