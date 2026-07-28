@@ -10,6 +10,7 @@ services:
       - ..:/workspaces/nextlabs_rest_api:cached
       - claude-config:/home/vscode/.claude
       - copilot-config:/home/vscode/.copilot
+      - codex-config:/home/vscode/.codex
       - vscode-server:/home/vscode/.vscode-server
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -20,5 +21,7 @@ volumes:
     name: claude-config
   copilot-config:
     name: copilot-config
+  codex-config:
+    name: codex-config
   vscode-server:
     name: vscode-server
