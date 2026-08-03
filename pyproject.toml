@@ -36,7 +36,7 @@ Repository = "https://github.com/stevenengland/nextlabs_rest_api"
 [project.optional-dependencies]
 cli = [
     "typer>=0.12,<1.0",
-    "rich>=13.0,<14.0",
+    "rich>=13.9.4,<14.0",
     "scim2-filter-parser>=0.5,<1.0",
     "keyring>=24.3.1,<26",
 ]
