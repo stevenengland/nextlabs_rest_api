@@ -39,8 +39,9 @@ click==8.4.2
     #   pip-tools
 coverage==7.15.0
     # via pytest-cov
-cryptography==49.0.0
+cryptography==50.0.0
     # via
+    #   -r requirements/overrides.in
     #   nextlabs-sdk (pyproject.toml)
     #   secretstorage
 defusedxml==0.7.1
