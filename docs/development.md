@@ -118,8 +118,13 @@ python tools/lock.py --check    # verify it matches the source inputs
 
 `--check` is what CI runs. If the compiler cannot resolve the inputs it exits
 non-zero with the compiler's own diagnostic plus a one-line repair
-instruction — no traceback. That means two source requirements contradict each
-other; relax or correct the offending pin and regenerate. `tools/lock.py`
+instruction — no traceback. Read that diagnostic to tell the two causes
+apart: a package or version that does not exist (`No matching distribution
+found`) means the requirement itself is wrong, while a reported conflict
+(`ResolutionImpossible`) means two source requirements contradict each other.
+Either way, relax or correct the offending pin and regenerate. A non-zero
+exit whose diagnostic says neither is a crash inside the compiler; its
+traceback is passed through untouched. `tools/lock.py`
 refuses to run under a Python minor version other than the devcontainer
 image's, since the resolved closure is version-specific.
 

@@ -1,31 +1,26 @@
 from __future__ import annotations
 
-from importlib import util as importlib_util
-from pathlib import Path
 from subprocess import CompletedProcess
-from types import ModuleType
 
 from mockito import when
 import pytest
 
+from tool_modules import load_tool_module
 
-def _load_lock() -> ModuleType:
-    repo_root = Path(__file__).resolve().parent.parent
-    module_path = repo_root / "tools" / "lock.py"
-    spec = importlib_util.spec_from_file_location("_tools_lock", module_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib_util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-lock = _load_lock()
+lock = load_tool_module("lock")
 
 COMPILER_TRACEBACK = (
     "Traceback (most recent call last):\n"
     '  File "/usr/lib/piptools/resolver.py", line 677, in _do_resolve\n'
     "    resolver.resolve(\n"
     "pip._internal.exceptions.DistributionNotFound: ResolutionImpossible\n"
+)
+
+COMPILER_CRASH = (
+    "Traceback (most recent call last):\n"
+    '  File "/usr/lib/piptools/repositories/pypi.py", line 42, in find_best_match\n'
+    "    return candidate.name\n"
+    "AttributeError: 'NoneType' object has no attribute 'name'\n"
 )
 
 
@@ -58,6 +53,24 @@ def test_compiler_failure_reports_repair_instead_of_traceback(
     assert "python tools/lock.py" in stderr
     assert "Traceback" not in stderr
     assert 'File "' not in stderr
+
+
+def test_compiler_crash_keeps_its_traceback(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _allow_any_python_minor()
+    when(lock.subprocess).run(...).thenReturn(
+        CompletedProcess(args=[], returncode=1, stderr=COMPILER_CRASH)
+    )
+
+    exit_code = lock.main(["--check"])
+
+    assert exit_code != 0
+    stderr = capsys.readouterr().err
+    assert "Traceback" in stderr
+    assert "piptools/repositories/pypi.py" in stderr
+    assert "AttributeError" in stderr
+    assert lock.COMPILER_FAILURE_HINT not in stderr
 
 
 def test_compiler_output_survives_a_successful_run(

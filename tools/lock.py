@@ -13,10 +13,12 @@ The script refuses to run under a Python minor version other than the
 devcontainer image's, since the resolved closure is Python-version
 specific.
 
-A non-zero exit from the compiler is an expected, actionable outcome —
-the source inputs contradict each other — so it is reported as a short
-repair instruction next to the compiler's own diagnostic rather than a
-traceback. Defects in this script keep raising normally.
+A non-zero exit from the compiler whose diagnostic names a resolution dead
+end is an expected, actionable outcome — the source inputs contradict each
+other — so it is reported as a short repair instruction next to the
+compiler's own diagnostic rather than a traceback. Any other non-zero exit
+is a crash inside the compiler and its diagnostic is re-emitted verbatim,
+traceback included. Defects in this script keep raising normally.
 """
 
 from __future__ import annotations
@@ -43,6 +45,15 @@ COMPILER_FAILURE_HINT = (
     "with `python tools/lock.py`"
 )
 
+RESOLUTION_FAILURE_MARKERS = (
+    "ResolutionImpossible",
+    "DistributionNotFound",
+    "No matching distribution found",
+    "Could not find a version",
+    "VersionConflict",
+    "NoCandidateFound",
+)
+
 
 def _devcontainer_python_minor() -> str:
     """Read the Python minor version pinned by the devcontainer image."""
@@ -63,17 +74,23 @@ def _guard_python_minor() -> None:
 
 
 class CompilerFailedError(Exception):
-    """The lock compiler rejected the source inputs it was given.
+    """The lock compiler exited non-zero.
 
-    Signals an expected, actionable compiled-lock problem — a
-    contradiction between the source inputs — as opposed to a defect in
-    this script, which must keep surfacing its own traceback.
+    Carries the compiler's own diagnostic so the caller can tell an
+    expected, actionable outcome — the source inputs contradict each
+    other — from a crash inside the compiler, which must keep surfacing
+    its traceback like any other defect.
     """
 
     def __init__(self, returncode: int, diagnostic: str) -> None:
         super().__init__(f"pip-compile exited with {returncode}")
         self.returncode = returncode
         self.diagnostic = diagnostic
+
+    @property
+    def is_unresolvable_input(self) -> bool:
+        """Whether the diagnostic names a dependency-resolution dead end."""
+        return any(marker in self.diagnostic for marker in RESOLUTION_FAILURE_MARKERS)
 
 
 def _without_traceback_frames(output: str) -> str:
@@ -160,6 +177,15 @@ def _run(*, check_only: bool) -> int:
     return 0
 
 
+def _report(failure: CompilerFailedError) -> None:
+    """Print an expected failure as a repair instruction, a crash as-is."""
+    if not failure.is_unresolvable_input:
+        print(failure.diagnostic, end="", file=sys.stderr)
+        return
+    print(_without_traceback_frames(failure.diagnostic), file=sys.stderr)
+    print(COMPILER_FAILURE_HINT, file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -171,8 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _run(check_only=args.check)
     except CompilerFailedError as failure:
-        print(_without_traceback_frames(failure.diagnostic), file=sys.stderr)
-        print(COMPILER_FAILURE_HINT, file=sys.stderr)
+        _report(failure)
         return failure.returncode
 
 
