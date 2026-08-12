@@ -55,6 +55,10 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
+        with:
+          # The extraction reads the working tree only; no later step needs
+          # the checkout token in Git configuration.
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
