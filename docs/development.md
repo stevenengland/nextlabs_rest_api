@@ -86,6 +86,90 @@ and `argon2-cffi` are now core runtime dependencies (declared under
 `[project.dependencies]` in `pyproject.toml`). `keyring` stays in the optional
 `[cli]` extra — it is only used by the CLI.
 
+### Who owns what
+
+Renovate's native `pip-compile` manager is the sole owner of the **compiled
+lock** `requirements/constraints.txt`. It never edits the lock in isolation: it
+reads the **source inputs** from the lock's generated header, updates a source
+input, and regenerates the lock in the same pull request. The standalone
+`pep621` and `pip_requirements` managers are deliberately disabled so a source
+update can never land without its lock.
+
+| Source input | Holds | Update metadata |
+| --- | --- | --- |
+| `pyproject.toml` | Runtime dependencies as ranges | `fix(deps)`, `rangeStrategy: bump`, patch/minor automerged |
+| `requirements/dev-compile.in` | Bare development tool names plus the **compiler pin** | `chore(deps-dev)`, automerged except `pip-tools` |
+| `requirements/overrides.in` | Deliberate transitive pins, each with a reason and issue reference | manual review, never automerged |
+
+Because policies are keyed by source file, every update is attributable: a
+runtime bump is a `pyproject.toml` change with `fix(deps)` metadata, and
+development tooling and pinned transitives are maintained together through the
+regenerated lock rather than as separate loose requirement files.
+
+### Updating dependencies
+
+Never hand-edit the compiled lock. Change the relevant source input, then
+regenerate:
+
+```bash
+python tools/lock.py            # regenerate requirements/constraints.txt
+python tools/lock.py --check    # verify it matches the source inputs
+```
+
+`--check` is what CI runs. If the compiler cannot resolve the inputs it exits
+non-zero with the compiler's own diagnostic plus a one-line repair
+instruction — no traceback. That means two source requirements contradict each
+other; relax or correct the offending pin and regenerate. `tools/lock.py`
+refuses to run under a Python minor version other than the devcontainer
+image's, since the resolved closure is version-specific.
+
+### Upgrading the lock compiler
+
+The compiler pin is exact on both sides, so `pip-tools` updates are never
+automerged. Completing one means all three of:
+
+1. bump `constraints.pipTools` in `.github/renovate.json5`,
+2. bump `pip-tools==<version>` in `requirements/dev-compile.in`,
+3. regenerate the lock with `python tools/lock.py`.
+
+`constraints.pipTools` is deprecated upstream but load-bearing until a
+Renovate migration supplies a replacement — re-check it whenever
+`RENOVATE_CORE_VERSION` in `.github/workflows/renovate.yml` moves.
+
+### Dependency dashboard
+
+Renovate's **dependency dashboard** issue is the queue of pending and blocked
+updates. Use it to see what is waiting on manual review (majors, `pip-tools`,
+override-input changes), to retry a failed branch, and to confirm that an
+update Renovate should have proposed actually appears.
+
+### Validating the extraction
+
+Changing a dependency-integration file (`.github/renovate.json5`, the source
+inputs, the compiled lock, `tools/lock.py`, `tools/renovate_guard.py`, or the
+Renovate workflow) triggers the `Renovate extraction smoke test` job. It runs a
+local Renovate extraction and hands the **extraction report** to
+`tools/renovate_guard.py`, which asserts that `pip-compile` still associates
+every source input with the compiled lock. It is intentionally scoped to those
+paths and is not a repository-wide required check.
+
+The guard tolerates the warnings a tokenless local extraction always emits
+(missing GitHub token, a comments-only override input, `requires-python`, and
+build-system requirements) and fails on anything else.
+
+### CI enforcement and its boundary
+
+`Check and Coverage Test` is the single required status. It installs the pinned
+compiler first and runs `python tools/lock.py --check` **before** the full
+development install, so a source/lock contradiction is reported plainly instead
+of being obscured by pip's resolver. A valid lock then continues into the
+constrained install, quality checks, the unit/E2E suite, and the package build.
+
+The repository ruleset that requires this status permits administrator bypass.
+That bypass is an operational escape hatch for emergencies, not part of the
+guarantee: a merge that uses it has not been proven against the compiled lock,
+so regenerate and verify the lock in a follow-up pull request.
+
 ## E2E Tests
 
 ```bash
