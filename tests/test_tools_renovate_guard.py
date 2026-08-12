@@ -191,6 +191,44 @@ def test_rejects_a_missing_source_extraction_outside_the_override_input() -> Non
     assert len(guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)) == 1
 
 
+def test_rejects_a_documented_message_raised_at_error_level() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = [
+        {
+            "level": 50,
+            "githubDeps": ["actions/checkout"],
+            "msg": "GitHub token is required for some dependencies",
+        },
+    ]
+
+    assert len(guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)) == 1
+
+
+def test_rejects_a_lock_gap_reported_for_another_lock_file() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = [
+        {
+            "level": 40,
+            "depName": "setuptools",
+            "lockFile": "requirements/other.txt",
+            "msg": "pip-compile: dependency not found in lock file",
+        },
+    ]
+
+    findings = guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)
+
+    assert len(findings) == 1
+    assert "requirements/other.txt" in findings[0]
+
+
 def test_reports_a_malformed_problems_section() -> None:
     report = _report(
         _owned(

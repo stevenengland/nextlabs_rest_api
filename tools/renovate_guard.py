@@ -32,6 +32,7 @@ MISSING_TOKEN = "GitHub token is required for some dependencies"
 UNEXTRACTED_SOURCE = "pip-compile: failed to find dependencies in source file"
 MISSING_LOCK_ENTRY = "pip-compile: dependency not found in lock file"
 TOOLCHAIN_DEPS = frozenset(("python", "setuptools"))
+WARN_LEVEL = 40
 
 
 def _malformed(detail: str) -> str:
@@ -48,16 +49,25 @@ def _require_mapping(
     return candidate
 
 
+def _is_toolchain_lock_gap(problem: dict[str, object]) -> bool:
+    """Tell whether a lock gap is the compiled lock's own toolchain dependency."""
+    if problem.get("lockFile") != COMPILED_LOCK:
+        return False
+    dep_name = problem.get("depName")
+    return dep_name is None or dep_name in TOOLCHAIN_DEPS
+
+
 def _is_documented(problem: dict[str, object]) -> bool:
     """Tell whether a report problem is a warning a local extraction always emits."""
+    if problem.get("level") != WARN_LEVEL:
+        return False
     message = problem.get("msg")
     if message == MISSING_TOKEN:
         return True
     if message == UNEXTRACTED_SOURCE:
         return problem.get("packageFile") == HEADER_PROVABLE_SOURCE
     if message == MISSING_LOCK_ENTRY:
-        dep_name = problem.get("depName")
-        return dep_name is None or dep_name in TOOLCHAIN_DEPS
+        return _is_toolchain_lock_gap(problem)
     return False
 
 
