@@ -70,9 +70,29 @@ class CompilerFailedError(Exception):
     this script, which must keep surfacing its own traceback.
     """
 
-    def __init__(self, returncode: int) -> None:
+    def __init__(self, returncode: int, diagnostic: str) -> None:
         super().__init__(f"pip-compile exited with {returncode}")
         self.returncode = returncode
+        self.diagnostic = diagnostic
+
+
+def _without_traceback_frames(output: str) -> str:
+    """Strip Python traceback frames, keeping the messages around them.
+
+    An expected compiler failure surfaces as a ``pip`` traceback whose
+    frames say nothing about the contradicting requirement. The final
+    exception line and the compiler's own messages do, so only the
+    indented frame block is dropped.
+    """
+    kept: list[str] = []
+    in_frames = False
+    for line in output.splitlines():
+        if line.startswith("Traceback (most recent call last):"):
+            in_frames = True
+        elif not (in_frames and line.startswith((" ", "\t"))):
+            in_frames = False
+            kept.append(line)
+    return "\n".join(kept)
 
 
 def _compile(output_file: Path) -> None:
@@ -92,9 +112,13 @@ def _compile(output_file: Path) -> None:
         ],
         cwd=ROOT,
         check=False,
+        text=True,
+        stderr=subprocess.PIPE,
     )
+    diagnostic = completed.stderr or ""
     if completed.returncode != 0:
-        raise CompilerFailedError(completed.returncode)
+        raise CompilerFailedError(completed.returncode, diagnostic)
+    print(diagnostic, end="", file=sys.stderr)
 
 
 def regenerate() -> None:
@@ -147,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _run(check_only=args.check)
     except CompilerFailedError as failure:
+        print(_without_traceback_frames(failure.diagnostic), file=sys.stderr)
         print(COMPILER_FAILURE_HINT, file=sys.stderr)
         return failure.returncode
 

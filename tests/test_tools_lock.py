@@ -21,6 +21,13 @@ def _load_lock() -> ModuleType:
 
 lock = _load_lock()
 
+COMPILER_TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "/usr/lib/piptools/resolver.py", line 677, in _do_resolve\n'
+    "    resolver.resolve(\n"
+    "pip._internal.exceptions.DistributionNotFound: ResolutionImpossible\n"
+)
+
 
 def _allow_any_python_minor() -> None:
     when(lock)._guard_python_minor().thenReturn(None)
@@ -38,15 +45,31 @@ def test_compiler_failure_reports_repair_instead_of_traceback(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _allow_any_python_minor()
-    when(lock.subprocess).run(...).thenReturn(CompletedProcess(args=[], returncode=2))
+    when(lock.subprocess).run(...).thenReturn(
+        CompletedProcess(args=[], returncode=2, stderr=COMPILER_TRACEBACK)
+    )
 
     exit_code = lock.main(argv)
 
     assert exit_code != 0
     stderr = capsys.readouterr().err
+    assert "ResolutionImpossible" in stderr
     assert "requirements/constraints.txt" in stderr
     assert "python tools/lock.py" in stderr
     assert "Traceback" not in stderr
+    assert 'File "' not in stderr
+
+
+def test_compiler_output_survives_a_successful_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _allow_any_python_minor()
+    when(lock.subprocess).run(...).thenReturn(
+        CompletedProcess(args=[], returncode=0, stderr="dropping extra 'cli'\n")
+    )
+
+    assert lock.main(["--check"]) == 0
+    assert "dropping extra 'cli'" in capsys.readouterr().err
 
 
 def test_unexpected_compiler_error_stays_visible() -> None:
