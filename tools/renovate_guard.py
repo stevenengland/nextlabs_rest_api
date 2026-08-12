@@ -28,6 +28,11 @@ PIP_COMPILE = "pip-compile"
 EXTRACTED_SOURCES = ("pyproject.toml", "requirements/dev-compile.in")
 HEADER_PROVABLE_SOURCE = "requirements/overrides.in"
 
+MISSING_TOKEN = "GitHub token is required for some dependencies"
+UNEXTRACTED_SOURCE = "pip-compile: failed to find dependencies in source file"
+MISSING_LOCK_ENTRY = "pip-compile: dependency not found in lock file"
+TOOLCHAIN_DEPS = frozenset(("python", "setuptools"))
+
 
 def _malformed(detail: str) -> str:
     return f"malformed extraction report: {detail}"
@@ -43,13 +48,52 @@ def _require_mapping(
     return candidate
 
 
-def _repository_entries(
-    name: str, repository: object, findings: list[str]
+def _is_documented(problem: dict[str, object]) -> bool:
+    """Tell whether a report problem is a warning a local extraction always emits."""
+    message = problem.get("msg")
+    if message == MISSING_TOKEN:
+        return True
+    if message == UNEXTRACTED_SOURCE:
+        return problem.get("packageFile") == HEADER_PROVABLE_SOURCE
+    if message == MISSING_LOCK_ENTRY:
+        dep_name = problem.get("depName")
+        return dep_name is None or dep_name in TOOLCHAIN_DEPS
+    return False
+
+
+def _record_problems(
+    section: dict[str, object], label: str, findings: list[str]
+) -> None:
+    """Record one finding per report problem outside the documented warnings."""
+    problems = section.get("problems", [])
+    if not isinstance(problems, list):
+        findings.append(_malformed(f"'problems' of {label} is not a list"))
+        return
+    for problem in problems:
+        entry = _require_mapping(problem, f"a problem of {label}", findings)
+        if entry is not None and not _is_documented(entry):
+            findings.append(
+                f"unexpected extraction problem in {label}: {_problem_text(entry)}",
+            )
+
+
+def _problem_text(problem: dict[str, object]) -> str:
+    """Render a problem as its message plus whatever context names it."""
+    context = [
+        f"{key}={problem[key]!r}"
+        for key in ("depName", "packageFile", "lockFile")
+        if key in problem
+    ]
+    message = repr(problem.get("msg"))
+    if not context:
+        return message
+    return "{0} ({1})".format(message, ", ".join(context))
+
+
+def _manager_entries(
+    section: dict[str, object], name: str, findings: list[str]
 ) -> list[object]:
     """Return the ``pip-compile`` entries reported for one repository."""
-    section = _require_mapping(repository, f"repository {name!r}", findings)
-    if section is None:
-        return []
     package_files = _require_mapping(
         section.get("packageFiles"), f"'packageFiles' of {name!r}", findings
     )
@@ -62,20 +106,35 @@ def _repository_entries(
     return entries
 
 
-def _pip_compile_entries(report: object, findings: list[str]) -> list[object]:
-    """Return every ``pip-compile`` entry across the reported repositories."""
+def _audit_repository(name: str, repository: object, findings: list[str]) -> set[str]:
+    """Record one repository's problems and return its lock-owning sources."""
+    label = f"repository {name!r}"
+    section = _require_mapping(repository, label, findings)
+    if section is None:
+        return set()
+    _record_problems(section, label, findings)
+    owned = (
+        _lock_owning_source(entry, findings)
+        for entry in _manager_entries(section, name, findings)
+    )
+    return {source for source in owned if source is not None}
+
+
+def _audit_report(report: object, findings: list[str]) -> set[str]:
+    """Record every report problem and return the sources owning the compiled lock."""
     root = _require_mapping(report, "the root", findings)
     if root is None:
-        return []
+        return set()
+    _record_problems(root, "the root", findings)
     repositories = _require_mapping(
         root.get("repositories"), "'repositories'", findings
     )
     if repositories is None:
-        return []
-    entries: list[object] = []
+        return set()
+    owned: set[str] = set()
     for name, repository in repositories.items():
-        entries.extend(_repository_entries(name, repository, findings))
-    return entries
+        owned |= _audit_repository(name, repository, findings)
+    return owned
 
 
 def _lock_owning_source(entry: object, findings: list[str]) -> str | None:
@@ -94,13 +153,6 @@ def _lock_owning_source(entry: object, findings: list[str]) -> str | None:
         findings.append(_malformed(f"'lockFiles' of {source} is not a list"))
         return None
     return source if COMPILED_LOCK in lock_files else None
-
-
-def _owned_sources(report: object, findings: list[str]) -> set[str]:
-    """Return the source inputs the report associates with the compiled lock."""
-    entries = _pip_compile_entries(report, findings)
-    owned = (_lock_owning_source(entry, findings) for entry in entries)
-    return {source for source in owned if source is not None}
 
 
 def generated_header(lock_text: str) -> str:
@@ -137,7 +189,7 @@ def check_ownership(report: object, lock_header: str) -> list[str]:
         empty list means the ownership contract holds.
     """
     findings: list[str] = []
-    owned = _owned_sources(report, findings)
+    owned = _audit_report(report, findings)
 
     for source in EXTRACTED_SOURCES:
         if source not in owned:

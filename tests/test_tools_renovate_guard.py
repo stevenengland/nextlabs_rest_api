@@ -32,10 +32,27 @@ HEADER_WITHOUT_OVERRIDES = HEADER_WITH_ALL_INPUTS.replace(
 )
 
 EXPECTED_WARNINGS = (
-    {"level": 40, "msg": "GitHub token is required for some dependencies"},
-    {"level": 40, "msg": "Package file requirements/overrides.in has no deps"},
-    {"level": 30, "msg": "Failed to find a version for requires-python"},
-    {"level": 30, "msg": "Cannot find build-system requirement"},
+    {
+        "level": 40,
+        "githubDeps": ["actions/checkout"],
+        "msg": "GitHub token is required for some dependencies",
+    },
+    {
+        "level": 40,
+        "packageFile": "requirements/overrides.in",
+        "msg": "pip-compile: failed to find dependencies in source file",
+    },
+    {
+        "level": 40,
+        "lockFile": COMPILED_LOCK,
+        "msg": "pip-compile: dependency not found in lock file",
+    },
+    {
+        "level": 40,
+        "lockFile": COMPILED_LOCK,
+        "depName": "setuptools",
+        "msg": "pip-compile: dependency not found in lock file",
+    },
 )
 
 
@@ -105,6 +122,86 @@ def test_tolerates_the_documented_local_extraction_warnings() -> None:
     report["repositories"]["local"]["problems"] = list(EXPECTED_WARNINGS)
 
     assert guard.check_ownership(report, HEADER_WITH_ALL_INPUTS) == []
+
+
+def test_rejects_an_unexpected_root_problem() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["problems"] = [{"level": 50, "msg": "Failed to parse config file"}]
+
+    findings = guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)
+
+    assert len(findings) == 1
+    assert "Failed to parse config file" in findings[0]
+
+
+def test_rejects_an_unexpected_repository_problem() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = [
+        {"level": 50, "msg": "pip-compile: unable to detect the compile command"},
+    ]
+
+    findings = guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)
+
+    assert len(findings) == 1
+    assert "unable to detect the compile command" in findings[0]
+
+
+def test_rejects_a_lock_gap_for_a_dependency_outside_the_toolchain() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = [
+        {
+            "level": 40,
+            "depName": "httpx",
+            "msg": "pip-compile: dependency not found in lock file",
+        },
+    ]
+
+    findings = guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)
+
+    assert len(findings) == 1
+    assert "httpx" in findings[0]
+
+
+def test_rejects_a_missing_source_extraction_outside_the_override_input() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = [
+        {
+            "level": 40,
+            "packageFile": "requirements/dev-compile.in",
+            "msg": "pip-compile: failed to find dependencies in source file",
+        },
+    ]
+
+    assert len(guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)) == 1
+
+
+def test_reports_a_malformed_problems_section() -> None:
+    report = _report(
+        _owned(
+            "pyproject.toml", "requirements/dev-compile.in", "requirements/overrides.in"
+        )
+    )
+    report["repositories"]["local"]["problems"] = "none"
+
+    findings = guard.check_ownership(report, HEADER_WITH_ALL_INPUTS)
+
+    assert any("malformed" in finding for finding in findings)
 
 
 def test_reports_every_missing_association_together() -> None:
