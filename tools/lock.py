@@ -12,6 +12,11 @@ full transitive closure is pinned with ``==``, extras stripped, no hashes.
 The script refuses to run under a Python minor version other than the
 devcontainer image's, since the resolved closure is Python-version
 specific.
+
+A non-zero exit from the compiler is an expected, actionable outcome —
+the source inputs contradict each other — so it is reported as a short
+repair instruction next to the compiler's own diagnostic rather than a
+traceback. Defects in this script keep raising normally.
 """
 
 from __future__ import annotations
@@ -29,6 +34,14 @@ REQUIREMENTS_DIR = ROOT / "requirements"
 CONSTRAINTS = REQUIREMENTS_DIR / "constraints.txt"
 DEV_COMPILE_INPUT = REQUIREMENTS_DIR / "dev-compile.in"
 OVERRIDES = REQUIREMENTS_DIR / "overrides.in"
+
+COMPILER_FAILURE_HINT = (
+    "the compiler could not resolve requirements/constraints.txt from its "
+    "source inputs (pyproject.toml, requirements/dev-compile.in, "
+    "requirements/overrides.in); see the compiler output above, relax or "
+    "correct the contradicting source requirement, then regenerate the lock "
+    "with `python tools/lock.py`"
+)
 
 
 def _devcontainer_python_minor() -> str:
@@ -49,8 +62,21 @@ def _guard_python_minor() -> None:
         )
 
 
+class CompilerFailedError(Exception):
+    """The lock compiler rejected the source inputs it was given.
+
+    Signals an expected, actionable compiled-lock problem — a
+    contradiction between the source inputs — as opposed to a defect in
+    this script, which must keep surfacing its own traceback.
+    """
+
+    def __init__(self, returncode: int) -> None:
+        super().__init__(f"pip-compile exited with {returncode}")
+        self.returncode = returncode
+
+
 def _compile(output_file: Path) -> None:
-    subprocess.run(
+    completed = subprocess.run(
         [
             sys.executable,
             "-m",
@@ -65,8 +91,10 @@ def _compile(output_file: Path) -> None:
             str(OVERRIDES.relative_to(ROOT)),
         ],
         cwd=ROOT,
-        check=True,
+        check=False,
     )
+    if completed.returncode != 0:
+        raise CompilerFailedError(completed.returncode)
 
 
 def regenerate() -> None:
@@ -101,18 +129,26 @@ def check() -> int:
     return 1
 
 
-def main() -> int:
+def _run(*, check_only: bool) -> int:
+    if check_only:
+        return check()
+    regenerate()
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
         action="store_true",
         help="verify the lock is up to date without writing",
     )
-    args = parser.parse_args()
-    if args.check:
-        return check()
-    regenerate()
-    return 0
+    args = parser.parse_args(argv)
+    try:
+        return _run(check_only=args.check)
+    except CompilerFailedError as failure:
+        print(COMPILER_FAILURE_HINT, file=sys.stderr)
+        return failure.returncode
 
 
 if __name__ == "__main__":
