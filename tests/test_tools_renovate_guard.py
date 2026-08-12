@@ -162,6 +162,28 @@ def test_reports_malformed_required_fields_alongside_missing_associations() -> N
     assert "requirements/overrides.in" in joined
 
 
+def test_the_generated_header_stops_at_the_first_pinned_requirement() -> None:
+    lock_text = (
+        HEADER_WITHOUT_OVERRIDES
+        + "pip-tools==7.6.1\n    # via -r requirements/overrides.in\n"
+    )
+
+    assert "requirements/overrides.in" not in guard.generated_header(lock_text)
+
+
+def test_rejects_an_override_named_only_by_a_via_annotation() -> None:
+    report = _report(_owned("pyproject.toml", "requirements/dev-compile.in"))
+    lock_text = (
+        HEADER_WITHOUT_OVERRIDES
+        + "pip-tools==7.6.1\n    # via -r requirements/overrides.in\n"
+    )
+
+    findings = guard.check_ownership(report, guard.generated_header(lock_text))
+
+    assert len(findings) == 1
+    assert "requirements/overrides.in" in findings[0]
+
+
 def test_reports_a_malformed_report_root() -> None:
     findings = guard.check_ownership([], HEADER_WITH_ALL_INPUTS)
 

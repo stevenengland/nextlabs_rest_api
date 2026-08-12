@@ -29,10 +29,6 @@ EXTRACTED_SOURCES = ("pyproject.toml", "requirements/dev-compile.in")
 HEADER_PROVABLE_SOURCE = "requirements/overrides.in"
 
 
-def _mapping(candidate: object) -> dict[str, object] | None:
-    return candidate if isinstance(candidate, dict) else None
-
-
 def _malformed(detail: str) -> str:
     return f"malformed extraction report: {detail}"
 
@@ -41,10 +37,10 @@ def _require_mapping(
     candidate: object, label: str, findings: list[str]
 ) -> dict[str, object] | None:
     """Narrow ``candidate`` to a mapping, recording a finding when it is not one."""
-    mapping = _mapping(candidate)
-    if mapping is None:
+    if not isinstance(candidate, dict):
         findings.append(_malformed(f"{label} is not an object"))
-    return mapping
+        return None
+    return candidate
 
 
 def _repository_entries(
@@ -107,13 +103,34 @@ def _owned_sources(report: object, findings: list[str]) -> set[str]:
     return {source for source in owned if source is not None}
 
 
+def generated_header(lock_text: str) -> str:
+    """Return the compiled lock's leading comment block.
+
+    The generated header names the compile command and its source inputs.
+    Isolating it keeps a source referenced only by a ``# via`` annotation
+    further down the lock from passing as a declared input.
+
+    Args:
+        lock_text: Full text of the compiled lock.
+
+    Returns:
+        The leading comment lines, joined by newlines.
+    """
+    header: list[str] = []
+    for line in lock_text.splitlines():
+        if not line.startswith("#"):
+            break
+        header.append(line)
+    return "\n".join(header)
+
+
 def check_ownership(report: object, lock_header: str) -> list[str]:
     """Return one finding per unproven source-to-lock association.
 
     Args:
         report: The parsed Renovate extraction report.
-        lock_header: Text of the compiled lock, whose generated header
-            names the compile command's source inputs.
+        lock_header: The compiled lock's generated header, which names
+            the compile command's source inputs.
 
     Returns:
         Every finding, aggregated so one run reports the whole gap. An
@@ -138,10 +155,6 @@ def check_ownership(report: object, lock_header: str) -> list[str]:
     return findings
 
 
-def _load_report(path: Path) -> object:
-    return json.loads(path.read_text())
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check Renovate's extraction report for compiled-lock ownership."
@@ -158,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        report = _load_report(args.report)
+        report = json.loads(args.report.read_text())
     except (OSError, ValueError) as error:
         print(
             f"could not read the extraction report {args.report}: {error}",
@@ -166,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     try:
-        lock_header = args.lock.read_text()
+        lock_header = generated_header(args.lock.read_text())
     except OSError as error:
         print(f"could not read the compiled lock {args.lock}: {error}", file=sys.stderr)
         return 1
