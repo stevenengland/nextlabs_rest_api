@@ -19,7 +19,7 @@ FIRST_PARTY_OWNERS = frozenset(("actions",))
 PINNING_EXCEPTIONS = frozenset(("pypa/gh-action-pypi-publish@release/v1",))
 
 COMMIT_SHA = re.compile("^[0-9a-f]{40}$")
-NON_REGISTRY_PREFIXES = ("./", "../", "docker://")
+NON_REGISTRY_PREFIXES = ("./", "docker://")
 
 SOME_SHA = "0123456789abcdef0123456789abcdef01234567"
 
@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: some-vendor/some-action@{SOME_SHA}  # v1
       - uses: ./.github/actions/local-thing
+      - uses: docker://alpine:3.22
 """
 
 REUSABLE_CALL_WORKFLOW = """
