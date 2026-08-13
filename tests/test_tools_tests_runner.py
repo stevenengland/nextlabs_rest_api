@@ -1,25 +1,13 @@
 from __future__ import annotations
 
-from importlib import util as importlib_util
 import os
-from pathlib import Path
-from types import ModuleType
 from typing import Iterator
 
 import pytest
 
+from tool_modules import load_tool_module
 
-def _load_tests_runner() -> ModuleType:
-    repo_root = Path(__file__).resolve().parent.parent
-    module_path = repo_root / "tools" / "tests.py"
-    spec = importlib_util.spec_from_file_location("_tools_tests_runner", module_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib_util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-tests_runner = _load_tests_runner()
+tests_runner = load_tool_module("tests")
 
 
 @pytest.fixture(autouse=True)

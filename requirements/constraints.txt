@@ -39,8 +39,9 @@ click==8.4.2
     #   pip-tools
 coverage==7.15.0
     # via pytest-cov
-cryptography==49.0.0
+cryptography==50.0.0
     # via
+    #   -r requirements/overrides.in
     #   nextlabs-sdk (pyproject.toml)
     #   secretstorage
 defusedxml==0.7.1
@@ -122,7 +123,7 @@ pathspec==1.1.1
     # via
     #   black
     #   mypy
-pip-tools==7.5.3
+pip-tools==7.6.1
     # via -r requirements/dev-compile.in
 platformdirs==4.10.0
     # via
