@@ -3,63 +3,101 @@
 #
 # The repository labels will be automatically configured using this file and
 # the GitHub Action https://github.com/marketplace/actions/github-labeler.
+#
+# The workflow runs with `skip-delete: false`, so this file is the complete
+# and authoritative set: any label missing here is deleted from the
+# repository on the next run, together with every issue assignment it holds.
+#
+# Colours are grouped into families, and within a family they form a
+# lightness ramp. The family tells you what kind of label it is at a glance;
+# the position in the ramp tells you where in that family it sits. Every
+# colour is quoted, because an unquoted all-digit value such as 016175 is
+# read as a YAML 1.1 octal integer rather than a hex colour.
+
+# Runtime-affecting change — red through amber to green, darkest = highest
+# risk. These are the labels that decide the release notes and the version
+# bump.
 - name: breaking
   description: Breaking Changes
-  color: bfd4f2
+  color: "b60205"
 - name: bug
   description: Something isn't working
-  color: d73a4a
-- name: build
-  description: Build System and Dependencies
-  color: bfdadc
-- name: ci
-  description: Continuous Integration
-  color: 4a97d6
-- name: dependencies
-  description: Pull requests that update a dependency file
-  color: 0366d6
-- name: documentation
-  description: Improvements or additions to documentation
-  color: 0075ca
-- name: duplicate
-  description: This issue or pull request already exists
-  color: cfd3d7
-- name: enhancement
-  description: New feature or request
-  color: a2eeef
-- name: good first issue
-  description: Good for newcomers
-  color: 7057ff
-- name: help wanted
-  description: Extra attention is needed
-  color: 008672
-- name: invalid
-  description: This doesn't seem right
-  color: e4e669
-- name: performance
-  description: Performance
-  color: "016175"
-- name: question
-  description: Further information is requested
-  color: d876e3
-- name: refactoring
-  description: Refactoring
-  color: ef67c4
-- name: removal
-  description: Removals and Deprecations
-  color: 9ae7ea
-- name: style
-  description: Style
-  color: c120e5
+  color: "d73a4a"
 - name: security
   description: Handles a security issue
-  color: be4d25
+  color: "e36209"
+- name: removal
+  description: Removals and Deprecations
+  color: "d4a72c"
+- name: enhancement
+  description: New feature or request
+  color: "0e8a16"
+
+# Behaviour-preserving work inside the shipped code — teal, darkest where
+# the change cuts deepest.
+- name: performance
+  description: Performance
+  color: "006b75"
+- name: refactoring
+  description: Refactoring
+  color: "0f9b8e"
 - name: testing
   description: Testing
-  color: b1fc6f
+  color: "35c9b5"
+- name: style
+  description: Style
+  color: "9fe5db"
+
+# Outside the shipped code — blue. Automation, packaging and prose, none of
+# which changes runtime behaviour.
+- name: build
+  description: Build System and Dependencies
+  color: "10259e"
+- name: dependencies
+  description: Pull requests that update a dependency file
+  color: "2f6feb"
+- name: documentation
+  description: Improvements or additions to documentation
+  color: "0075ca"
+- name: ci
+  description: Continuous Integration
+  color: "9ecbff"
+
+# Lifecycle gates — violet, palest at the earliest stage. An issue moves
+# needs-triage -> needs-spec -> spec as its shape is settled.
+- name: needs-triage
+  description: Surfaced during other work; needs scoping/triage before actioning
+  color: "c8b0f0"
+- name: needs-spec
+  description: Triaged, but the solution shape is undecided; needs a written spec
+  color: "a371f7"
+- name: spec
+  description: Carries the agreed specification for a body of work
+  color: "6f42c1"
+
+# Inbound and community — orchid, palest where the barrier to entry is
+# lowest.
+- name: good first issue
+  description: Good for newcomers
+  color: "ef9fdb"
+- name: question
+  description: Further information is requested
+  color: "d876e3"
+- name: help wanted
+  description: Extra attention is needed
+  color: "a01d7a"
+
+# No action, or deliberately absent from the release notes — grey, darkest
+# where the decision is most final.
 - name: wontfix
   description: This will not be worked on
-  color: ffffff
+  color: "ffffff"
+- name: duplicate
+  description: This issue or pull request already exists
+  color: "cfd3d7"
+- name: invalid
+  description: This doesn't seem right
+  color: "9aa0a6"
 - name: skip-changelog
   description: This will not be added to release notes
-  color: "dddddd"
+  color: "6a737d"
