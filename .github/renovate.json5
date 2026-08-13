@@ -2,11 +2,15 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 
   // Full Dependabot replacement, scoped to the managers this repo actually
-  // uses.
+  // uses. Native pip-compile is the sole owner of the compiled dependency
+  // graph: it delegates pyproject.toml to Renovate's PEP 621 extractor and
+  // the .in inputs to its requirements extractor, then attaches the
+  // regenerated compiled lock to every one of those source updates.
+  // Running standalone pep621 / pip_requirements alongside it would create
+  // duplicate source ownership and let a source update land without its
+  // lock.
   enabledManagers: [
-    "pep621",
     "pip-compile",
-    "pip_requirements",
     "github-actions",
     "dockerfile",
     "devcontainer",
@@ -19,12 +23,24 @@
   semanticCommitType: "fix",
   semanticCommitScope: "deps",
 
-  // Scoped to the one file it's meant for (deliberate transitive pins);
-  // without this it can also match generated requirements/*.txt files
-  // (constraints.txt, dev.txt) and edit pins directly, bypassing the
-  // pip-compile regeneration contract.
-  pip_requirements: {
-    fileMatch: ["^requirements/overrides\\.in$"],
+  dependencyDashboard: true,
+
+  // Only the compiled output. The source inputs are read from its generated
+  // header (pyproject.toml, requirements/dev-compile.in,
+  // requirements/overrides.in), so they must not be matched here.
+  "pip-compile": {
+    managerFilePatterns: ["requirements/constraints.txt"],
+  },
+
+  // Artifact-update toolchain, kept exact so a Renovate-regenerated lock
+  // resolves the same way tools/lock.py does locally and in CI.
+  // NOTE: `constraints.pipTools` is deprecated upstream. It stays
+  // load-bearing until a future Renovate migration supplies a replacement;
+  // do not drop it before then, and re-check this key whenever the pinned
+  // Renovate core version moves.
+  constraints: {
+    python: "==3.12",
+    pipTools: "7.6.1",
   },
 
   lockFileMaintenance: {
@@ -33,28 +49,38 @@
     schedule: ["at any time"],
   },
 
+  // Policies are keyed by source file because every Python dependency is
+  // now reported through pip-compile ownership. Later rules win.
   packageRules: [
     {
       // Runtime deps stay expressed as ranges in pyproject.toml; Renovate
       // widens the floor instead of pinning.
-      matchManagers: ["pep621"],
+      matchFileNames: ["pyproject.toml"],
       rangeStrategy: "bump",
     },
     {
       // Runtime patch/minor/digest: tested, automerged. Majors fall
       // through with no automerge rule below — manual review.
-      matchManagers: ["pep621"],
+      matchFileNames: ["pyproject.toml"],
       matchUpdateTypes: ["patch", "minor", "digest"],
       automerge: true,
     },
     {
-      // requirements/dev-compile.in is the pip-compile manager's input for
-      // the dev side of the lock; automerge at every severity.
-      matchManagers: ["pip-compile"],
+      // requirements/dev-compile.in is the dev-side source input of the
+      // compiled lock; automerge at every severity.
       matchFileNames: ["requirements/dev-compile.in"],
       automerge: true,
       semanticCommitType: "chore",
       semanticCommitScope: "deps-dev",
+    },
+    {
+      // The compiler pin is exact on both sides. Completing an upgrade means
+      // bumping constraints.pipTools above, bumping the pin in
+      // requirements/dev-compile.in, and regenerating the compiled lock with
+      // `python tools/lock.py` — so it stays manual.
+      matchFileNames: ["requirements/dev-compile.in"],
+      matchPackageNames: ["pip-tools"],
+      automerge: false,
     },
     // github-actions, dockerfile (python base image), devcontainer, and
     // requirements/overrides.in updates keep the default automerge:false —
