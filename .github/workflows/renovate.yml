@@ -6,9 +6,22 @@ name: Renovate
     paths:
       - .github/renovate.json5
       - .github/workflows/renovate.yml
+      - pyproject.toml
+      - requirements/constraints.txt
+      - requirements/dev-compile.in
+      - requirements/overrides.in
+      - tools/lock.py
+      - tools/renovate_guard.py
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
+
+env:
+  # Renovate core is pinned independently of the action wrapper so the
+  # scheduled run, the schema validation, and the extraction smoke test all
+  # agree. Bumping it means re-checking the deprecated `constraints.pipTools`
+  # key in .github/renovate.json5.
+  RENOVATE_CORE_VERSION: "44.26.0"
 
 jobs:
   validate:
@@ -23,10 +36,60 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Renovate 44.26.0 requires a Node runtime in ^24.11.0 and exits
+          # non-zero on anything older.
+          node-version: "24"
 
       - name: Validate Renovate config
-        run: npx --yes --package renovate -c renovate-config-validator
+        run: npx --yes --package "renovate@${RENOVATE_CORE_VERSION}" -c renovate-config-validator
+
+  extraction_smoke_test:
+    # Narrow proof that Renovate still sees the compiled-lock ownership graph.
+    # Not a repository-wide required check — it runs only when a
+    # dependency-integration file changes.
+    if: github.event_name == 'pull_request'
+    name: "Renovate extraction smoke test"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+        with:
+          # The extraction reads the working tree only; no later step needs
+          # the checkout token in Git configuration.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Renovate 44.26.0 requires a Node runtime in ^24.11.0 and exits
+          # non-zero on anything older.
+          node-version: "24"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Extract the dependency graph with Renovate
+        shell: bash
+        env:
+          RENOVATE_PLATFORM: local
+          RENOVATE_REPORT_TYPE: file
+          RENOVATE_REPORT_PATH: ${{ runner.temp }}/renovate-report.json
+          # Only lifts the unauthenticated api.github.com rate limit for
+          # lookups; extraction itself reads the checkout.
+          GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOG_LEVEL: info
+        run: npx --yes "renovate@${RENOVATE_CORE_VERSION}"
+
+      - name: Verify pip-compile owns the compiled lock
+        shell: bash
+        run: >-
+          python tools/renovate_guard.py
+          --report "${{ runner.temp }}/renovate-report.json"
+          --lock requirements/constraints.txt
 
   renovate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -43,6 +106,8 @@ jobs:
 
       - name: Run Renovate
         uses: renovatebot/github-action@v46.1.21
+        with:
+          renovate-version: ${{ env.RENOVATE_CORE_VERSION }}
         env:
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
