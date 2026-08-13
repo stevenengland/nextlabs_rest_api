@@ -16,7 +16,7 @@ jobs:
       statuses: write
     runs-on: ubuntu-latest
     steps:
-      - uses: aslafy-z/conventional-pr-title-action@v3
+      - uses: aslafy-z/conventional-pr-title-action@2ce59b07f86bd51b521dd088f0acfb0d7fdac55e  # v3
         with:
           preset: conventional-changelog-conventionalcommits@5.0.0
         env:
@@ -30,7 +30,7 @@ jobs:
     needs:
       - pr_title_check
     steps:
-      - uses: release-drafter/release-drafter/autolabeler@v7
+      - uses: release-drafter/release-drafter/autolabeler@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
         with:
           config-name: pr_autolabeling_config.yml
         env:
@@ -45,7 +45,7 @@ jobs:
     needs:
       - pr_auto_labeling
     steps:
-      - uses: danielchabr/pr-labels-checker@v3.3
+      - uses: danielchabr/pr-labels-checker@7145ecb81a69104f99767cb133bf856e749f7e73  # v3.3
         with:
           hasSome: "\
             breaking,\
