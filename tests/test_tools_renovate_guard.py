@@ -1,22 +1,11 @@
 from __future__ import annotations
 
-from importlib import util as importlib_util
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
+from tool_modules import load_tool_module
 
-def _load_guard() -> ModuleType:
-    repo_root = Path(__file__).resolve().parent.parent
-    module_path = repo_root / "tools" / "renovate_guard.py"
-    spec = importlib_util.spec_from_file_location("_tools_renovate_guard", module_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib_util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-guard = _load_guard()
+guard = load_tool_module("renovate_guard")
 
 COMPILED_LOCK = "requirements/constraints.txt"
 HEADER_WITH_ALL_INPUTS = (
