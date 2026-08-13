@@ -74,13 +74,17 @@
   color: "9ecbff"
 
 # Lifecycle gates — violet, palest at the earliest stage. An issue moves
-# needs-triage -> needs-spec -> spec as its shape is settled.
+# needs-triage -> needs-spec -> spec as its shape is settled, and a spec
+# is broken into slices.
 - name: needs-triage
   description: Surfaced during other work; needs scoping/triage before actioning
   color: "c8b0f0"
 - name: needs-spec
   description: Triaged, but the solution shape is undecided; needs a written spec
   color: "a371f7"
+- name: slice
+  description: Child slice of a parent spec
+  color: "8b5cf6"
 - name: spec
   description: Carries the agreed specification for a body of work
   color: "6f42c1"
