@@ -31,16 +31,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install the lock compiler
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
-          python -m pip install -e . --no-deps
+          python -m pip install pip-tools==7.6.1
 
       - name: Verify the dependency lock is up to date
         shell: bash
         run: "python tools/lock.py --check"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install -r requirements/dev.txt -c requirements/constraints.txt
+          python -m pip install -e . --no-deps
 
       - name: Perform code checks
         shell: bash
