@@ -21,7 +21,7 @@ PINNING_EXCEPTIONS = frozenset(("pypa/gh-action-pypi-publish@release/v1",))
 
 COMMIT_SHA = re.compile("^[0-9a-f]{40}$")
 PINNED_USES = re.compile(
-    r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+@[0-9a-f]{40})(?P<trailer>.*)$",
+    r'^\s*(?:-\s*)?uses:\s*(?P<quote>["\']?)(?P<ref>\S+?@[0-9a-f]{40})(?P=quote)(?P<trailer>.*)$',
 )
 # A version tag, with the `v` prefix upstream projects usually but not always
 # carry. Anything else — a bare `# pinned`, a sentence — names no release and
@@ -90,6 +90,14 @@ jobs:
     steps:
       # - uses: some-vendor/some-action@{SOME_SHA}
       - uses: some-vendor/some-action@{SOME_SHA}  # v1
+"""
+
+QUOTED_PIN_WORKFLOW = f"""
+jobs:
+  build:
+    steps:
+      - uses: "some-vendor/some-action@{SOME_SHA}"  # v1
+      - uses: 'other-vendor/other-action@{SOME_SHA}'
 """
 
 
@@ -222,3 +230,9 @@ def test_a_pinned_third_party_action_with_a_non_version_comment_is_reported() ->
 
 def test_a_commented_out_action_reference_is_not_reported() -> None:
     assert unversioned_pins(COMMENTED_OUT_WORKFLOW) == []
+
+
+def test_a_quoted_pin_is_read_without_its_quotes() -> None:
+    assert unversioned_pins(QUOTED_PIN_WORKFLOW) == [
+        "other-vendor/other-action@{0}".format(SOME_SHA),
+    ]
