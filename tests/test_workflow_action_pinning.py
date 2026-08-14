@@ -20,7 +20,9 @@ FIRST_PARTY_OWNERS = frozenset(("actions",))
 PINNING_EXCEPTIONS = frozenset(("pypa/gh-action-pypi-publish@release/v1",))
 
 COMMIT_SHA = re.compile("^[0-9a-f]{40}$")
-PINNED_USES = re.compile(r"uses:\s*(?P<ref>\S+@[0-9a-f]{40})(?P<trailer>.*)$")
+PINNED_USES = re.compile(
+    r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+@[0-9a-f]{40})(?P<trailer>.*)$",
+)
 # A version tag, with the `v` prefix upstream projects usually but not always
 # carry. Anything else — a bare `# pinned`, a sentence — names no release and
 # leaves the SHA unreviewable, which is what the trailing comment exists for.
@@ -80,6 +82,14 @@ jobs:
   build:
     steps:
       - uses: some-vendor/some-action@{SOME_SHA}  # pinned
+"""
+
+COMMENTED_OUT_WORKFLOW = f"""
+jobs:
+  build:
+    steps:
+      # - uses: some-vendor/some-action@{SOME_SHA}
+      - uses: some-vendor/some-action@{SOME_SHA}  # v1
 """
 
 
@@ -208,3 +218,7 @@ def test_a_pinned_third_party_action_with_a_non_version_comment_is_reported() ->
     assert unversioned_pins(NON_VERSION_COMMENT_WORKFLOW) == [
         "some-vendor/some-action@{0}".format(SOME_SHA),
     ]
+
+
+def test_a_commented_out_action_reference_is_not_reported() -> None:
+    assert unversioned_pins(COMMENTED_OUT_WORKFLOW) == []
