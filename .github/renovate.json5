@@ -82,6 +82,17 @@
       matchPackageNames: ["pip-tools"],
       automerge: false,
     },
+    {
+      // Third-party GitHub Actions run inside privileged CI jobs, so their
+      // refs are a supply-chain boundary rather than a version preference: a
+      // mutable tag lets upstream change which bytes execute here without a
+      // reviewable diff. Renovate therefore pins every action to a commit
+      // digest and keeps the tag as a trailing comment, so an action added by
+      // an update cannot reintroduce an unpinned ref. The same invariant is
+      // asserted at test time by tests/test_workflow_action_pinning.py.
+      matchManagers: ["github-actions"],
+      pinDigests: true,
+    },
     // github-actions, dockerfile (python base image), devcontainer, and
     // requirements/overrides.in updates keep the default automerge:false —
     // manual review.

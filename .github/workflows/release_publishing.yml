@@ -27,7 +27,7 @@ jobs:
       - name: Detect and tag new version
         id: check-for-new-version
         if: steps.check-parent-commit.outputs.sha
-        uses: salsify/action-detect-and-tag-new-version@v2
+        uses: salsify/action-detect-and-tag-new-version@b1778166f13188a9d478e2d1198f993011ba9864  # v2
         with:
           tag-template: "{VERSION}"
           version-command: |
@@ -156,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish the release notes
-        uses: release-drafter/release-drafter@v7
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9  # v7
         with:
           publish: ${{ needs.detect-and-tag-new-version.outputs.new_tag != '' }}
           tag: ${{ needs.detect-and-tag-new-version.outputs.new_tag }}
