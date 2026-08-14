@@ -21,6 +21,10 @@ PINNING_EXCEPTIONS = frozenset(("pypa/gh-action-pypi-publish@release/v1",))
 
 COMMIT_SHA = re.compile("^[0-9a-f]{40}$")
 PINNED_USES = re.compile(r"uses:\s*(?P<ref>\S+@[0-9a-f]{40})(?P<trailer>.*)$")
+# A version tag, with the `v` prefix upstream projects usually but not always
+# carry. Anything else — a bare `# pinned`, a sentence — names no release and
+# leaves the SHA unreviewable, which is what the trailing comment exists for.
+VERSION_COMMENT = re.compile(r"^\s*#\s*v?\d\S*\s*$")
 NON_REGISTRY_PREFIXES = ("./", "docker://")
 
 SOME_SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -38,6 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: some-vendor/some-action@{SOME_SHA}  # v1
+      - uses: other-vendor/other-action@{SOME_SHA}  # 2.1.0
       - uses: ./.github/actions/local-thing
       - uses: docker://alpine:3.22
 """
@@ -68,6 +73,13 @@ jobs:
     steps:
       - uses: actions/checkout@{SOME_SHA}
       - uses: some-vendor/some-action@{SOME_SHA}
+"""
+
+NON_VERSION_COMMENT_WORKFLOW = f"""
+jobs:
+  build:
+    steps:
+      - uses: some-vendor/some-action@{SOME_SHA}  # pinned
 """
 
 
@@ -108,14 +120,14 @@ def unpinned_refs(document: str) -> list[str]:
 # A SHA alone says nothing about which release it is, so the tag comment is the
 # only thing that keeps a pinned ref reviewable. YAML parsing drops comments,
 # which is why this reads the source text instead.
-def uncommented_pins(document: str) -> list[str]:
+def unversioned_pins(document: str) -> list[str]:
     offenders: list[str] = []
     for line in document.splitlines():
         pinned = PINNED_USES.search(line)
         if pinned is None:
             continue
         ref = pinned.group("ref")
-        if _is_third_party(ref) and "#" not in pinned.group("trailer"):
+        if _is_third_party(ref) and not VERSION_COMMENT.match(pinned.group("trailer")):
             offenders.append(ref)
     return offenders
 
@@ -136,8 +148,8 @@ def unpinned_refs_in(directory: Path) -> dict[str, list[str]]:
     return _offenders_in(directory, unpinned_refs)
 
 
-def uncommented_pins_in(directory: Path) -> dict[str, list[str]]:
-    return _offenders_in(directory, uncommented_pins)
+def unversioned_pins_in(directory: Path) -> dict[str, list[str]]:
+    return _offenders_in(directory, unversioned_pins)
 
 
 def test_no_workflow_in_the_repository_runs_an_unpinned_third_party_action() -> None:
@@ -175,7 +187,7 @@ def test_an_undocumented_ref_of_the_excepted_action_is_reported() -> None:
 
 
 def test_no_pinned_third_party_action_in_the_repository_hides_its_version() -> None:
-    assert uncommented_pins_in(WORKFLOWS) == {}
+    assert unversioned_pins_in(WORKFLOWS) == {}
 
 
 def test_a_pinned_third_party_action_without_a_version_comment_is_reported(
@@ -183,10 +195,16 @@ def test_a_pinned_third_party_action_without_a_version_comment_is_reported(
 ) -> None:
     (tmp_path / "newly_added.yml").write_text(UNCOMMENTED_PIN_WORKFLOW)
 
-    assert uncommented_pins_in(tmp_path) == {
+    assert unversioned_pins_in(tmp_path) == {
         "newly_added.yml": ["some-vendor/some-action@{0}".format(SOME_SHA)],
     }
 
 
 def test_a_pinned_third_party_action_with_a_version_comment_is_accepted() -> None:
-    assert uncommented_pins(ACCEPTED_WORKFLOW) == []
+    assert unversioned_pins(ACCEPTED_WORKFLOW) == []
+
+
+def test_a_pinned_third_party_action_with_a_non_version_comment_is_reported() -> None:
+    assert unversioned_pins(NON_VERSION_COMMENT_WORKFLOW) == [
+        "some-vendor/some-action@{0}".format(SOME_SHA),
+    ]
