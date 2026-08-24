@@ -199,7 +199,7 @@ strip-ansi==0.1.1
     # via -r requirements/dev-compile.in
 testcontainers==4.14.2
     # via -r requirements/dev-compile.in
-typer==0.26.8
+typer==0.27.1
     # via nextlabs-sdk (pyproject.toml)
 types-pyyaml==6.0.12.20260408
     # via -r requirements/dev-compile.in
