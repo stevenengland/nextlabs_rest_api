@@ -4,6 +4,10 @@
 # The repository labels will be automatically configured using this file and
 # the GitHub Action https://github.com/marketplace/actions/github-labeler.
 #
+# This set is shared verbatim across the sibling repositories, so that a
+# label means the same thing and looks the same wherever it is used. Add a
+# label here only if it earns its place in all of them.
+#
 # The workflow runs with `skip-delete: false`, so this file is the complete
 # and authoritative set: any label missing here is deleted from the
 # repository on the next run, together with every issue assignment it holds.
@@ -32,6 +36,12 @@
 - name: enhancement
   description: New feature or request
   color: "0e8a16"
+
+# A defect that is not ours — the warm band, but browned off so it never
+# reads as one of our own alerts.
+- name: vendor
+  description: Defect or limitation in the upstream vendor API rather than in this project
+  color: "8a4b38"
 
 # Behaviour-preserving work inside the shipped code — teal, darkest where
 # the change cuts deepest.
@@ -64,13 +74,17 @@
   color: "9ecbff"
 
 # Lifecycle gates — violet, palest at the earliest stage. An issue moves
-# needs-triage -> needs-spec -> spec as its shape is settled.
+# needs-triage -> needs-spec -> spec as its shape is settled, and a spec
+# is broken into slices.
 - name: needs-triage
   description: Surfaced during other work; needs scoping/triage before actioning
   color: "c8b0f0"
 - name: needs-spec
   description: Triaged, but the solution shape is undecided; needs a written spec
   color: "a371f7"
+- name: slice
+  description: Child slice of a parent spec
+  color: "8b5cf6"
 - name: spec
   description: Carries the agreed specification for a body of work
   color: "6f42c1"
