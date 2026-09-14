@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "nextlabs-sdk"
 dynamic = ["version"]
 description = "A typed Python SDK wrapping the NextLabs CloudAz Console API and PDP REST API"
-requires-python = ">=3.11"
+requires-python = ">=3.14.7"
 dependencies = [
     "httpx>=0.28.1,<1.0",
     "pydantic>=2.13.4,<3.0",
