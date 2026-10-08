@@ -54,7 +54,9 @@
 | **Component revision** | A single snapshot of a **Component** at a specific revision number, represented as `ComponentRevision` (inherits all `ComponentHistoryEntry` metadata and adds the full `component_detail` body). Read via `get_revision(revision_id, revision)`. | component snapshot, component version |
 | **ComponentGroup** | A boolean grouping (with an `operator`) of **Components** of a single **ComponentGroupType**. | group |
 | **ComponentGroupType** | The role a **ComponentGroup** plays: `SUBJECT`, `RESOURCE`, or `ACTION`. | category, kind |
-| **ComponentCondition** | A predicate inside a **Component**. Often an `attribute operator value` triple, but may instead be member-object shaped (`operator` + `member` + `notFound`, with no top-level `attribute`/`value`). | rule, expression |
+| **ComponentCondition** | An ordinary predicate in a **Component**'s `conditions`: an `attribute operator value` triple with optional `attribute`/`value` and optional right-hand-side metadata (`rhs_type`, `rhsvalue`). Separate from composite membership. | rule, expression |
+| **MemberCondition** | A composite membership condition in a **Component**'s `member_conditions`, also used in policy-embedded component references: an operator (typically `IN` or `NOT`) over a plural `members` list of **MemberDTO** entries. | member predicate |
+| **MemberDTO** | One member's identity and metadata inside a **MemberCondition**, including `id`, `name`, `type`, `status`, `description`, `member_type`, `uid`, `unique_name`, `domain_name`, and the per-member `not_found` flag (wire alias `notFound`). | member blob |
 | **PolicyObligation** | A named side-effect parameterized by a **Policy Model**, attached to allow/deny outcomes of a **Policy**. | obligation rule |
 | **Tag** | A typed label (`POLICY_MODEL`, `COMPONENT`, `POLICY`, `FOLDER`) attached to policy artifacts for organization. | label |
 | **Folder** | The hierarchical container in which **Policies** and **Components** live. | directory |

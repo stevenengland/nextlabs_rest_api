@@ -114,6 +114,27 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+### Composite component membership
+
+Composite components expose `member_conditions`, separate from ordinary
+`conditions` predicates. Each `MemberCondition` contains an operator and
+a plural `members` list of `MemberDTO` objects. Both models are available
+from `nextlabs_sdk.cloudaz` and retain optional member metadata.
+
+```python
+from nextlabs_sdk.cloudaz import CloudAzClient
+
+with CloudAzClient(
+    base_url="https://cloudaz.example.com",
+    username="<username>",
+    password="<password>",
+) as client:
+    component = client.components.get(101)
+    for condition in component.member_conditions:
+        for member in condition.members:
+            print(condition.operator, member.id, member.name, member.not_found)
+```
+
 ### Quick start — PDP
 
 ```python
