@@ -18,7 +18,18 @@ from nextlabs_sdk._cloudaz._component_models import (
     PredicateData,
     PushResult,
 )
-from nextlabs_sdk.cloudaz import Component, ComponentLite, TagType
+from nextlabs_sdk.cloudaz import (
+    Component,
+    ComponentLite,
+    ComponentRevision,
+    Member,
+    MemberCondition,
+    TagType,
+)
+from tests.cloudaz.membership_helpers import (
+    composite_component_data,
+    dump_member_condition,
+)
 
 
 def _deployment_request_data() -> dict[str, object]:
@@ -176,6 +187,14 @@ def test_enum_values(enum_cls, expected):
             id="component-condition",
         ),
         pytest.param(
+            MemberCondition,
+            {"operator": "IN"},
+            "operator",
+            "NOT",
+            id="member-condition",
+        ),
+        pytest.param(Member, {"id": 87}, "id", 88, id="member"),
+        pytest.param(
             DeploymentRequestInfo,
             _deployment_request_data(),
             "id",
@@ -245,25 +264,197 @@ def test_component_condition_minimal():
     assert cond.rhsvalue is None
 
 
-def test_component_condition_accepts_member_object_shape():
-    cond = ComponentCondition.model_validate(
-        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
-    )
-    assert cond.operator == "IN"
-    assert cond.attribute is None
-    assert cond.value is None
-    assert cond.member == {"id": 7, "name": "Eng"}
-    assert cond.not_found is False
-
-
-def test_component_accepts_member_object_member_conditions():
-    data = _make_full_component_data()
-    data["memberConditions"] = [
-        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
+def test_component_preserves_all_member_fields():
+    members = [
+        {
+            "id": 87,
+            "name": "Team",
+            "type": "MEMBER",
+            "status": "APPROVED",
+            "notFound": False,
+            "description": "First member",
+            "memberType": "USER_GROUP",
+            "uid": "u87",
+            "uniqueName": "team-87",
+            "domainName": "example",
+        },
+        {
+            "id": 88,
+            "name": "User",
+            "type": "SUBJECT",
+            "status": "DELETED",
+            "notFound": True,
+            "description": "Second member",
+            "memberType": "USER",
+            "uid": "u88",
+            "uniqueName": "user-88",
+            "domainName": "example",
+        },
     ]
-    comp = Component.model_validate(data)
-    assert comp.member_conditions[0].member == {"id": 7, "name": "Eng"}
-    assert comp.member_conditions[0].not_found is False
+    result = Component.model_validate(
+        composite_component_data("IN", members),
+    )
+
+    actual = dump_member_condition(result)
+    assert actual["members"] == members
+    assert actual["operator"] == "IN"
+    assert set(actual) == {"operator", "members"}
+
+
+@pytest.mark.parametrize("operator", ["IN", "NOT"])
+def test_component_revision_preserves_plural_members(operator):
+    members = [
+        {"id": 87, "name": "Member", "notFound": False},
+        {"id": 88, "name": "Other", "notFound": True},
+    ]
+    result = ComponentRevision.model_validate(
+        {
+            "id": 555,
+            "revision": "1",
+            "componentDetail": composite_component_data(operator, members),
+        },
+    )
+
+    actual = dump_member_condition(result)
+    assert actual["operator"] == operator
+    assert [member["id"] for member in actual["members"]] == [87, 88]
+    assert [member["notFound"] for member in actual["members"]] == [False, True]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"operator": "="},
+        {"attribute": None, "operator": "=", "value": None},
+        {
+            "attribute": "name",
+            "operator": "=",
+            "value": "finance",
+            "rhsType": "CONSTANT",
+            "rhsvalue": "finance",
+        },
+    ],
+)
+def test_component_predicates_have_no_membership_fields(condition):
+    result = Component.model_validate(
+        {
+            "id": 101,
+            "name": "Ordinary",
+            "type": "SUBJECT",
+            "status": "DRAFT",
+            "conditions": [condition],
+        },
+    )
+
+    actual = result.model_dump(by_alias=True, mode="json")["conditions"][0]
+    assert actual["attribute"] == condition.get("attribute")
+    assert actual["operator"] == condition["operator"]
+    assert actual["value"] == condition.get("value")
+    assert actual["rhsType"] == condition.get("rhsType")
+    assert actual["rhsvalue"] == condition.get("rhsvalue")
+    assert "member" not in actual
+    assert "notFound" not in actual
+    assert not hasattr(result.conditions[0], "member")
+    assert not hasattr(result.conditions[0], "not_found")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"operator": "IN", "members": []},
+        {
+            "operator": None,
+            "members": [
+                {
+                    "id": None,
+                    "name": None,
+                    "type": None,
+                    "status": None,
+                    "notFound": None,
+                    "description": None,
+                    "memberType": None,
+                    "uid": None,
+                    "uniqueName": None,
+                    "domainName": None,
+                },
+            ],
+        },
+        {
+            "operator": "NOT",
+            "members": [
+                {
+                    "id": 87,
+                    "name": "Member",
+                    "type": "MEMBER",
+                    "status": "DRAFT",
+                    "notFound": False,
+                    "description": "Public DTO",
+                    "memberType": "USER",
+                    "uid": "u87",
+                    "uniqueName": "member-87",
+                    "domainName": "example",
+                },
+                {},
+            ],
+        },
+    ],
+    ids=["omitted", "empty", "optional-null", "filled"],
+)
+def test_public_membership_dtos_handle_optional_fields(payload):
+    result = MemberCondition.model_validate(payload)
+
+    serialized = result.model_dump(by_alias=True, mode="json")
+    assert serialized["operator"] == payload.get("operator")
+    assert len(serialized["members"]) == len(payload.get("members", []))
+    assert all(isinstance(member, Member) for member in result.members)
+    for supplied, actual in zip(payload.get("members", []), serialized["members"]):
+        assert all(
+            actual[key] == supplied_value for key, supplied_value in supplied.items()
+        )
+
+
+def test_public_membership_dtos_preserve_out_of_spec_values():
+    member_values = {
+        "id": 87,
+        "type": "FUTURE_TYPE",
+        "status": "OBSOLETE",
+        "memberType": "CONTACT",
+        "notFound": False,
+    }
+    payload = {
+        "operator": "FUTURE_OPERATOR",
+        "members": [member_values],
+    }
+    result = MemberCondition.model_validate(payload)
+
+    actual = result.model_dump(by_alias=True, mode="json")
+    assert actual["operator"] == "FUTURE_OPERATOR"
+    assert all(
+        actual["members"][0][key] == supplied_value
+        for key, supplied_value in member_values.items()
+    )
+
+
+def test_public_membership_dtos_accept_python_field_names():
+    member = Member(
+        id=87,
+        not_found=False,
+        member_type="USER",
+        unique_name="member-87",
+        domain_name="example",
+    )
+    condition = MemberCondition(operator="IN", members=[member])
+
+    actual = condition.model_dump(by_alias=True, mode="json")["members"][0]
+    assert actual["notFound"] is False
+    assert actual["memberType"] == "USER"
+    assert actual["uniqueName"] == "member-87"
+    assert actual["domainName"] == "example"
+    assert "not_found" not in actual
+    assert "member_type" not in actual
+    assert "unique_name" not in actual
+    assert "domain_name" not in actual
 
 
 def test_component_accepts_string_actions():

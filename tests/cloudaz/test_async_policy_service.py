@@ -11,6 +11,10 @@ from nextlabs_sdk._cloudaz._component_models import Dependency, DeploymentResult
 from nextlabs_sdk._cloudaz._policy_models import ExportOptions, ImportResult
 from nextlabs_sdk.cloudaz import AsyncPolicyService, Policy, PolicyRevision
 from nextlabs_sdk.exceptions import ApiError, NotFoundError
+from tests.cloudaz.membership_helpers import (
+    composite_policy_data,
+    dump_member_condition,
+)
 
 BASE_URL = "https://cloudaz.example.com"
 MGMT = "/console/api/v1/policy/mgmt"
@@ -96,6 +100,23 @@ def _make_revision_data() -> dict[str, Any]:
         "submittedDate": 1761133292266,
         "actionType": None,
     }
+
+
+def test_async_policy_revision_retrieval_preserves_plural_members(client_and_service):
+    client, service = client_and_service
+    data = {
+        "id": 555,
+        "revision": "3",
+        "policyDetail": composite_policy_data("IN"),
+    }
+    when(client).get(f"{MGMT}/viewRevision/555/3").thenReturn(_make_envelope(data=data))
+
+    result = _run(service.get_revision(555, 3))
+
+    actual = dump_member_condition(result)
+    assert actual["operator"] == "IN"
+    assert actual["members"][0]["id"] == 87
+    assert actual["members"][0]["notFound"] is False
 
 
 def _run(coro: Awaitable[T]) -> T:

@@ -24,10 +24,13 @@ traceback included. Defects in this script keep raising normally.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
+from difflib import unified_diff
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -113,6 +116,26 @@ def _without_traceback_frames(output: str) -> str:
 
 
 def _compile(output_file: Path) -> None:
+    arguments = [
+        "--all-extras",
+        f"--output-file={output_file}",
+        "--strip-extras",
+        str(Path("pyproject.toml")),
+        DEV_COMPILE_INPUT.relative_to(ROOT).as_posix(),
+        OVERRIDES.relative_to(ROOT).as_posix(),
+    ]
+    recipe_arguments = [
+        (
+            f"--output-file={CONSTRAINTS.relative_to(ROOT).as_posix()}"
+            if argument.startswith("--output-file=")
+            else argument
+        )
+        for argument in arguments
+    ]
+    environment = {
+        **os.environ,
+        "CUSTOM_COMPILE_COMMAND": shlex.join(["pip-compile", *recipe_arguments]),
+    }
     completed = subprocess.run(
         [
             sys.executable,
@@ -120,14 +143,10 @@ def _compile(output_file: Path) -> None:
             "piptools",
             "compile",
             "--quiet",
-            "--strip-extras",
-            "--all-extras",
-            f"--output-file={output_file}",
-            str(Path("pyproject.toml")),
-            str(DEV_COMPILE_INPUT.relative_to(ROOT)),
-            str(OVERRIDES.relative_to(ROOT)),
+            *arguments,
         ],
         cwd=ROOT,
+        env=environment,
         check=False,
         text=True,
         stderr=subprocess.PIPE,
@@ -165,6 +184,18 @@ def check() -> int:
         return 0
     print(
         "requirements/constraints.txt is stale; run `python tools/lock.py` to refresh.",
+        file=sys.stderr,
+    )
+    print(
+        "".join(
+            unified_diff(
+                committed.splitlines(keepends=True),
+                fresh.splitlines(keepends=True),
+                fromfile=f"{CONSTRAINTS} (committed)",
+                tofile="compiled requirements/constraints.txt",
+            )
+        ),
+        end="",
         file=sys.stderr,
     )
     return 1

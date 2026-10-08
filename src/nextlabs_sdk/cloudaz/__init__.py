@@ -30,6 +30,8 @@ __all__: list[str] = [
     "ExportAuditLogsRequest",
     "FilterCriteria",
     "FilterField",
+    "Member",
+    "MemberCondition",
     "MonitorTagAlert",
     "Policy",
     "PolicyActivity",
@@ -114,6 +116,8 @@ from nextlabs_sdk._cloudaz import EnforcementTimeBucket as EnforcementTimeBucket
 from nextlabs_sdk._cloudaz import ExportAuditLogsRequest as ExportAuditLogsRequest
 from nextlabs_sdk._cloudaz import FilterCriteria as FilterCriteria
 from nextlabs_sdk._cloudaz import FilterField as FilterField
+from nextlabs_sdk._cloudaz import Member as Member
+from nextlabs_sdk._cloudaz import MemberCondition as MemberCondition
 from nextlabs_sdk._cloudaz import MonitorTagAlert as MonitorTagAlert
 from nextlabs_sdk._cloudaz import Operator as Operator
 from nextlabs_sdk._cloudaz import Policy as Policy

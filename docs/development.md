@@ -116,6 +116,17 @@ python tools/lock.py            # regenerate requirements/constraints.txt
 python tools/lock.py --check    # verify it matches the source inputs
 ```
 
+If `--check` reports a stale lock, it also prints the committed-versus-compiled
+diff. Inspect that diff before regenerating, especially when local and CI
+compiler environments disagree.
+
+The generated header keeps a canonical `pip-compile` recipe built from the
+actual source arguments, with POSIX paths on every platform. Environment-only
+index defaults cannot change that recipe; dependency pins and source metadata
+are still compared byte-for-byte.
+The header retains every source input so Renovate can associate them with the
+compiled lock.
+
 `--check` is what CI runs. If the compiler cannot resolve the inputs it exits
 non-zero with the compiler's own diagnostic plus a one-line repair
 instruction — no traceback. Read that diagnostic to tell the two causes
