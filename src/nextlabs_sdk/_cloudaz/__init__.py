@@ -27,6 +27,8 @@ __all__: list[str] = [
     "ExportAuditLogsRequest",
     "FilterCriteria",
     "FilterField",
+    "MemberCondition",
+    "MemberDTO",
     "MonitorTagAlert",
     "Policy",
     "PolicyActivity",
@@ -110,6 +112,8 @@ from nextlabs_sdk._cloudaz._components import (
     AsyncComponentService as AsyncComponentService,
 )
 from nextlabs_sdk._cloudaz._components import ComponentService as ComponentService
+from nextlabs_sdk._cloudaz._member_condition import MemberCondition as MemberCondition
+from nextlabs_sdk._cloudaz._member_dto import MemberDTO as MemberDTO
 from nextlabs_sdk._cloudaz._models import Operator as Operator
 from nextlabs_sdk._cloudaz._models import Tag as Tag
 from nextlabs_sdk._cloudaz._models import TagType as TagType

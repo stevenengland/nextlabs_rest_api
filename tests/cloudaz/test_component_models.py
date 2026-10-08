@@ -18,7 +18,14 @@ from nextlabs_sdk._cloudaz._component_models import (
     PredicateData,
     PushResult,
 )
-from nextlabs_sdk.cloudaz import Component, ComponentLite, ComponentRevision, TagType
+from nextlabs_sdk.cloudaz import (
+    Component,
+    ComponentLite,
+    ComponentRevision,
+    MemberCondition,
+    MemberDTO,
+    TagType,
+)
 
 
 def _deployment_request_data() -> dict[str, object]:
@@ -358,6 +365,110 @@ def test_component_predicates_have_no_membership_fields(condition):
     assert "notFound" not in actual
     assert not hasattr(result.conditions[0], "member")
     assert not hasattr(result.conditions[0], "not_found")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"operator": "IN", "members": []},
+        {
+            "operator": None,
+            "members": [
+                {
+                    "id": None,
+                    "name": None,
+                    "type": None,
+                    "status": None,
+                    "notFound": None,
+                    "description": None,
+                    "memberType": None,
+                    "uid": None,
+                    "uniqueName": None,
+                    "domainName": None,
+                },
+            ],
+        },
+        {
+            "operator": "NOT",
+            "members": [
+                {
+                    "id": 87,
+                    "name": "Member",
+                    "type": "MEMBER",
+                    "status": "DRAFT",
+                    "notFound": False,
+                    "description": "Public DTO",
+                    "memberType": "USER",
+                    "uid": "u87",
+                    "uniqueName": "member-87",
+                    "domainName": "example",
+                },
+                {},
+            ],
+        },
+    ],
+    ids=["omitted", "empty", "optional-null", "filled"],
+)
+def test_public_membership_dtos_handle_optional_fields(payload):
+    result = MemberCondition.model_validate(payload)
+
+    serialized = result.model_dump(by_alias=True, mode="json")
+    assert serialized["operator"] == payload.get("operator")
+    assert len(serialized["members"]) == len(payload.get("members", []))
+    assert all(isinstance(member, MemberDTO) for member in result.members)
+    for supplied, actual in zip(payload.get("members", []), serialized["members"]):
+        assert all(
+            actual[key] == supplied_value for key, supplied_value in supplied.items()
+        )
+    assert result.model_config.get("frozen") is True
+    assert result.model_config.get("populate_by_name") is True
+    assert MemberDTO.model_config.get("frozen") is True
+    assert MemberDTO.model_config.get("populate_by_name") is True
+    assert MemberCondition().members is not MemberCondition().members
+
+
+def test_public_membership_dtos_preserve_out_of_spec_values():
+    member_values = {
+        "id": 87,
+        "type": "FUTURE_TYPE",
+        "status": "OBSOLETE",
+        "memberType": "CONTACT",
+        "notFound": False,
+    }
+    payload = {
+        "operator": "FUTURE_OPERATOR",
+        "members": [member_values],
+    }
+    result = MemberCondition.model_validate(payload)
+
+    actual = result.model_dump(by_alias=True, mode="json")
+    assert actual["operator"] == "FUTURE_OPERATOR"
+    assert all(
+        actual["members"][0][key] == supplied_value
+        for key, supplied_value in member_values.items()
+    )
+
+
+def test_public_membership_dtos_accept_python_field_names():
+    member = MemberDTO(
+        id=87,
+        not_found=False,
+        member_type="USER",
+        unique_name="member-87",
+        domain_name="example",
+    )
+    condition = MemberCondition(operator="IN", members=[member])
+
+    actual = condition.model_dump(by_alias=True, mode="json")["members"][0]
+    assert actual["notFound"] is False
+    assert actual["memberType"] == "USER"
+    assert actual["uniqueName"] == "member-87"
+    assert actual["domainName"] == "example"
+    assert "not_found" not in actual
+    assert "member_type" not in actual
+    assert "unique_name" not in actual
+    assert "domain_name" not in actual
 
 
 def test_component_accepts_string_actions():
