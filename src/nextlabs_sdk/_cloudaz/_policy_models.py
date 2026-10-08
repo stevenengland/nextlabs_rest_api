@@ -10,6 +10,7 @@ from nextlabs_sdk._cloudaz._component_models import (
     DeploymentRequestInfo,
     PolicyModelRef,
 )
+from nextlabs_sdk._cloudaz._member_condition import MemberCondition
 from nextlabs_sdk._cloudaz._models import Tag
 
 _CREATED_DATE_ALIAS = "createdDate"
@@ -34,7 +35,7 @@ class PolicyComponentRef(BaseModel):
     )
     actions: list[str | dict[str, Any]] = Field(default_factory=list)
     conditions: list[ComponentCondition] = Field(default_factory=list)
-    member_conditions: list[ComponentCondition] = Field(
+    member_conditions: list[MemberCondition] = Field(
         default_factory=list,
         alias="memberConditions",
     )

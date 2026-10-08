@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from nextlabs_sdk._cloudaz._member_condition import MemberCondition
 from nextlabs_sdk._cloudaz._models import Tag
 
 
@@ -36,8 +37,6 @@ class ComponentCondition(BaseModel):
     value: str | None = None  # noqa: WPS110
     rhs_type: str | None = Field(default=None, alias="rhsType")
     rhsvalue: str | None = None
-    member: dict[str, Any] | None = None
-    not_found: bool | None = Field(default=None, alias="notFound")
 
 
 class Authority(BaseModel):
@@ -72,7 +71,7 @@ class Component(BaseModel):
     )
     actions: list[str | dict[str, Any]] = Field(default_factory=list)
     conditions: list[ComponentCondition] = Field(default_factory=list)
-    member_conditions: list[ComponentCondition] = Field(
+    member_conditions: list[MemberCondition] = Field(
         default_factory=list,
         alias="memberConditions",
     )

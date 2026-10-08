@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import get_args, get_origin
 
 import pytest
 from pydantic import BaseModel
 
+from nextlabs_sdk.cloudaz import Component, Policy
 from tests.openapi._openapi import parity_allowlist
 from tests.openapi._openapi.model_parity import (
     enum_diffs,
     inner_data_schema,
     property_diff,
     required_diff,
+    resolve_ref,
 )
 from tests.openapi._openapi.model_registry import iter_entries
 from tests.openapi._openapi.spec import load_spec
@@ -61,6 +64,53 @@ def _resolved_entries() -> list[_ResolvedEntry]:
 
 _ENTRIES: tuple[_ResolvedEntry, ...] = tuple(_resolved_entries())
 _IDS: tuple[str, ...] = tuple(entry.id for entry in _ENTRIES)
+
+
+def _bound_item_model(model: type[BaseModel], field: str) -> type[BaseModel]:
+    annotation = model.model_fields[field].annotation
+    assert get_origin(annotation) is list
+    arguments = get_args(annotation)
+    assert len(arguments) == 1
+    item = arguments[0]
+    assert isinstance(item, type)
+    assert issubclass(item, BaseModel)
+    return item
+
+
+_POLICY_COMPONENT = _bound_item_model(
+    _bound_item_model(Policy, "subject_components"),
+    "components",
+)
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [Component, _POLICY_COMPONENT],
+    ids=["component", "policy-component"],
+)
+@pytest.mark.parametrize(
+    ("path", "schema_name"),
+    [
+        (("member_conditions",), "MemberCondition"),
+        (("member_conditions", "members"), "MemberDTO"),
+        (("conditions",), "ComponentConditionDTORes"),
+    ],
+    ids=["membership", "member", "predicate"],
+)
+def test_component_item_models_match_spec(
+    owner: type[BaseModel],
+    path: tuple[str, ...],
+    schema_name: str,
+):
+    model = owner
+    for field in path:
+        model = _bound_item_model(model, field)
+    schema = resolve_ref(load_spec(), f"#/components/schemas/{schema_name}")
+
+    diff = property_diff(model, schema)
+
+    assert not diff.only_in_sdk
+    assert not diff.only_in_spec
 
 
 def _subtract_allowed(

@@ -120,6 +120,36 @@ def _revision_data() -> dict[str, object]:
     }
 
 
+def test_async_component_revision_retrieval_preserves_plural_members(ctx):
+    client, service = ctx
+    data = {
+        "id": 555,
+        "revision": "1",
+        "componentDetail": {
+            "id": 101,
+            "name": "Composite",
+            "type": "SUBJECT",
+            "status": "DRAFT",
+            "memberConditions": [
+                {
+                    "operator": "NOT",
+                    "members": [{"id": 87, "name": "Member", "notFound": False}],
+                },
+            ],
+        },
+    }
+    when(client).get(f"{MGMT}/viewRevision/555/1").thenReturn(_envelope(data=data))
+
+    result = _run(service.get_revision(555, 1))
+
+    actual = result.model_dump(by_alias=True, mode="json")["componentDetail"][
+        "memberConditions"
+    ][0]
+    assert actual["operator"] == "NOT"
+    assert actual["members"][0]["id"] == 87
+    assert actual["members"][0]["notFound"] is False
+
+
 @pytest.fixture
 def ctx() -> tuple[httpx.AsyncClient, AsyncComponentService]:
     client = cast(httpx.AsyncClient, mock(httpx.AsyncClient))

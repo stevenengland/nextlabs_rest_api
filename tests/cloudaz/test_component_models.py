@@ -18,7 +18,7 @@ from nextlabs_sdk._cloudaz._component_models import (
     PredicateData,
     PushResult,
 )
-from nextlabs_sdk.cloudaz import Component, ComponentLite, TagType
+from nextlabs_sdk.cloudaz import Component, ComponentLite, ComponentRevision, TagType
 
 
 def _deployment_request_data() -> dict[str, object]:
@@ -245,25 +245,119 @@ def test_component_condition_minimal():
     assert cond.rhsvalue is None
 
 
-def test_component_condition_accepts_member_object_shape():
-    cond = ComponentCondition.model_validate(
-        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
+def test_component_preserves_all_member_fields():
+    condition = {
+        "operator": "IN",
+        "members": [
+            {
+                "id": 87,
+                "name": "Team",
+                "type": "MEMBER",
+                "status": "APPROVED",
+                "notFound": False,
+                "description": "First member",
+                "memberType": "USER_GROUP",
+                "uid": "u87",
+                "uniqueName": "team-87",
+                "domainName": "example",
+            },
+            {
+                "id": 88,
+                "name": "User",
+                "type": "SUBJECT",
+                "status": "DELETED",
+                "notFound": True,
+                "description": "Second member",
+                "memberType": "USER",
+                "uid": "u88",
+                "uniqueName": "user-88",
+                "domainName": "example",
+            },
+        ],
+    }
+    result = Component.model_validate(
+        {
+            "id": 101,
+            "name": "Composite",
+            "type": "SUBJECT",
+            "status": "DRAFT",
+            "memberConditions": [condition],
+        },
     )
-    assert cond.operator == "IN"
-    assert cond.attribute is None
-    assert cond.value is None
-    assert cond.member == {"id": 7, "name": "Eng"}
-    assert cond.not_found is False
+
+    actual = result.model_dump(by_alias=True, mode="json")["memberConditions"][0]
+    assert actual["members"] == condition["members"]
+    assert actual["operator"] == "IN"
+    assert set(actual) == {"operator", "members"}
 
 
-def test_component_accepts_member_object_member_conditions():
-    data = _make_full_component_data()
-    data["memberConditions"] = [
-        {"operator": "IN", "member": {"id": 7, "name": "Eng"}, "notFound": False},
-    ]
-    comp = Component.model_validate(data)
-    assert comp.member_conditions[0].member == {"id": 7, "name": "Eng"}
-    assert comp.member_conditions[0].not_found is False
+@pytest.mark.parametrize("operator", ["IN", "NOT"])
+def test_component_revision_preserves_plural_members(operator):
+    result = ComponentRevision.model_validate(
+        {
+            "id": 555,
+            "revision": "1",
+            "componentDetail": {
+                "id": 101,
+                "name": "Composite",
+                "type": "SUBJECT",
+                "status": "DRAFT",
+                "memberConditions": [
+                    {
+                        "operator": operator,
+                        "members": [
+                            {"id": 87, "name": "Member", "notFound": False},
+                            {"id": 88, "name": "Other", "notFound": True},
+                        ],
+                    },
+                ],
+            },
+        },
+    )
+
+    actual = result.model_dump(by_alias=True, mode="json")["componentDetail"][
+        "memberConditions"
+    ][0]
+    assert actual["operator"] == operator
+    assert [member["id"] for member in actual["members"]] == [87, 88]
+    assert [member["notFound"] for member in actual["members"]] == [False, True]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        {"operator": "="},
+        {"attribute": None, "operator": "=", "value": None},
+        {
+            "attribute": "name",
+            "operator": "=",
+            "value": "finance",
+            "rhsType": "CONSTANT",
+            "rhsvalue": "finance",
+        },
+    ],
+)
+def test_component_predicates_have_no_membership_fields(condition):
+    result = Component.model_validate(
+        {
+            "id": 101,
+            "name": "Ordinary",
+            "type": "SUBJECT",
+            "status": "DRAFT",
+            "conditions": [condition],
+        },
+    )
+
+    actual = result.model_dump(by_alias=True, mode="json")["conditions"][0]
+    assert actual["attribute"] == condition.get("attribute")
+    assert actual["operator"] == condition["operator"]
+    assert actual["value"] == condition.get("value")
+    assert actual["rhsType"] == condition.get("rhsType")
+    assert actual["rhsvalue"] == condition.get("rhsvalue")
+    assert "member" not in actual
+    assert "notFound" not in actual
+    assert not hasattr(result.conditions[0], "member")
+    assert not hasattr(result.conditions[0], "not_found")
 
 
 def test_component_accepts_string_actions():

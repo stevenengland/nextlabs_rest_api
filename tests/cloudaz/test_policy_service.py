@@ -98,6 +98,48 @@ def _make_revision_data() -> dict[str, Any]:
     }
 
 
+def test_policy_revision_retrieval_preserves_plural_members(client_service):
+    client, service = client_service
+    data = {
+        "id": 555,
+        "revision": "3",
+        "policyDetail": {
+            "id": 82,
+            "name": "Policy",
+            "status": "DRAFT",
+            "effectType": "ALLOW",
+            "subjectComponents": [
+                {
+                    "operator": "IN",
+                    "components": [
+                        {
+                            "id": 42,
+                            "memberConditions": [
+                                {
+                                    "operator": "IN",
+                                    "members": [
+                                        {"id": 87, "name": "Member", "notFound": False},
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+    when(client).get(f"{MGMT}/viewRevision/555/3").thenReturn(_make_envelope(data=data))
+
+    result = service.get_revision(555, 3)
+
+    actual = result.model_dump(by_alias=True, mode="json")["policyDetail"][
+        "subjectComponents"
+    ][0]["components"][0]["memberConditions"][0]
+    assert actual["operator"] == "IN"
+    assert actual["members"][0]["id"] == 87
+    assert actual["members"][0]["notFound"] is False
+
+
 def _history_entry_data() -> dict[str, Any]:
     return {
         "id": 770,

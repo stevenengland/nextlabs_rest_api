@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -213,6 +214,99 @@ def test_policy_component_ref_minimal():
     assert ref.policy_model is None
     assert ref.deployment_request is None
     assert ref.version is None
+
+
+def test_policy_preserves_member_only_identity_changes():
+    left: dict[str, Any] = {
+        "id": 82,
+        "name": "Policy",
+        "status": "DRAFT",
+        "effectType": "ALLOW",
+        "subjectComponents": [
+            {
+                "operator": "IN",
+                "components": [
+                    {
+                        "id": 42,
+                        "memberConditions": [
+                            {
+                                "operator": "IN",
+                                "members": [
+                                    {"id": 87, "name": "Member", "notFound": False},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    right = deepcopy(left)
+    right["subjectComponents"][0]["components"][0]["memberConditions"][0]["members"][0][
+        "id"
+    ] = 88
+
+    results = [Policy.model_validate(payload) for payload in (left, right)]
+
+    conditions = [
+        result.model_dump(by_alias=True, mode="json")["subjectComponents"][0][
+            "components"
+        ][0]["memberConditions"][0]
+        for result in results
+    ]
+    assert [condition["members"][0]["id"] for condition in conditions] == [87, 88]
+    assert all(condition["members"][0]["notFound"] is False for condition in conditions)
+    assert conditions[0] != conditions[1]
+
+
+@pytest.mark.parametrize("operator", ["IN", "NOT"])
+def test_policy_revision_preserves_plural_members(operator):
+    result = PolicyRevision.model_validate(
+        {
+            "id": 555,
+            "revision": "3",
+            "policyDetail": {
+                "id": 82,
+                "name": "Policy",
+                "status": "DRAFT",
+                "effectType": "ALLOW",
+                "subjectComponents": [
+                    {
+                        "operator": "IN",
+                        "components": [
+                            {
+                                "id": 42,
+                                "memberConditions": [
+                                    {
+                                        "operator": operator,
+                                        "members": [
+                                            {
+                                                "id": 87,
+                                                "name": "Member",
+                                                "notFound": False,
+                                            },
+                                            {
+                                                "id": 88,
+                                                "name": "Other",
+                                                "notFound": True,
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    )
+
+    actual = result.model_dump(by_alias=True, mode="json")["policyDetail"][
+        "subjectComponents"
+    ][0]["components"][0]["memberConditions"][0]
+    assert actual["operator"] == operator
+    assert [member["id"] for member in actual["members"]] == [87, 88]
+    assert [member["notFound"] for member in actual["members"]] == [False, True]
 
 
 def test_policy_component_ref_full():
@@ -475,19 +569,6 @@ def test_policy_component_ref_accepts_string_actions():
         {"id": 42, "actions": ["DELETE", "CONFIGURE"]},
     )
     assert ref.actions == ["DELETE", "CONFIGURE"]
-
-
-def test_policy_component_ref_accepts_member_object_conditions():
-    ref = PolicyComponentRef.model_validate(
-        {
-            "id": 42,
-            "memberConditions": [
-                {"operator": "IN", "member": {"id": 7}, "notFound": False},
-            ],
-        },
-    )
-    assert ref.member_conditions[0].member == {"id": 7}
-    assert ref.member_conditions[0].not_found is False
 
 
 def test_policy_accepts_null_owner_display_name():
