@@ -118,7 +118,7 @@ asyncio.run(main())
 
 Composite components expose `member_conditions`, separate from ordinary
 `conditions` predicates. Each `MemberCondition` contains an operator and
-a plural `members` list of `MemberDTO` objects. Both models are available
+a plural `members` list of `Member` objects. Both models are available
 from `nextlabs_sdk.cloudaz` and retain optional member metadata.
 
 ```python

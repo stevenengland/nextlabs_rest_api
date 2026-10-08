@@ -55,8 +55,8 @@
 | **ComponentGroup** | A boolean grouping (with an `operator`) of **Components** of a single **ComponentGroupType**. | group |
 | **ComponentGroupType** | The role a **ComponentGroup** plays: `SUBJECT`, `RESOURCE`, or `ACTION`. | category, kind |
 | **ComponentCondition** | An ordinary predicate in a **Component**'s `conditions`: an `attribute operator value` triple with optional `attribute`/`value` and optional right-hand-side metadata (`rhs_type`, `rhsvalue`). Separate from composite membership. | rule, expression |
-| **MemberCondition** | A composite membership condition in a **Component**'s `member_conditions`, also used in policy-embedded component references: an operator (typically `IN` or `NOT`) over a plural `members` list of **MemberDTO** entries. | member predicate |
-| **MemberDTO** | One member's identity and metadata inside a **MemberCondition**, including `id`, `name`, `type`, `status`, `description`, `member_type`, `uid`, `unique_name`, `domain_name`, and the per-member `not_found` flag (wire alias `notFound`). | member blob |
+| **MemberCondition** | A composite membership condition in a **Component**'s `member_conditions`, also used in policy-embedded component references: an operator (typically `IN` or `NOT`) over a plural `members` list of **Member** entries. | member predicate |
+| **Member** | One member's identity and metadata inside a **MemberCondition**, including `id`, `name`, `type`, `status`, `description`, `member_type`, `uid`, `unique_name`, `domain_name`, and the per-member `not_found` flag (wire alias `notFound`). | member blob |
 | **PolicyObligation** | A named side-effect parameterized by a **Policy Model**, attached to allow/deny outcomes of a **Policy**. | obligation rule |
 | **Tag** | A typed label (`POLICY_MODEL`, `COMPONENT`, `POLICY`, `FOLDER`) attached to policy artifacts for organization. | label |
 | **Folder** | The hierarchical container in which **Policies** and **Components** live. | directory |

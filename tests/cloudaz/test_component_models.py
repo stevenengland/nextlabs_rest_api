@@ -22,8 +22,8 @@ from nextlabs_sdk.cloudaz import (
     Component,
     ComponentLite,
     ComponentRevision,
+    Member,
     MemberCondition,
-    MemberDTO,
     TagType,
 )
 from tests.cloudaz.membership_helpers import (
@@ -193,7 +193,7 @@ def test_enum_values(enum_cls, expected):
             "NOT",
             id="member-condition",
         ),
-        pytest.param(MemberDTO, {"id": 87}, "id", 88, id="member-dto"),
+        pytest.param(Member, {"id": 87}, "id", 88, id="member"),
         pytest.param(
             DeploymentRequestInfo,
             _deployment_request_data(),
@@ -407,7 +407,7 @@ def test_public_membership_dtos_handle_optional_fields(payload):
     serialized = result.model_dump(by_alias=True, mode="json")
     assert serialized["operator"] == payload.get("operator")
     assert len(serialized["members"]) == len(payload.get("members", []))
-    assert all(isinstance(member, MemberDTO) for member in result.members)
+    assert all(isinstance(member, Member) for member in result.members)
     for supplied, actual in zip(payload.get("members", []), serialized["members"]):
         assert all(
             actual[key] == supplied_value for key, supplied_value in supplied.items()
@@ -437,7 +437,7 @@ def test_public_membership_dtos_preserve_out_of_spec_values():
 
 
 def test_public_membership_dtos_accept_python_field_names():
-    member = MemberDTO(
+    member = Member(
         id=87,
         not_found=False,
         member_type="USER",

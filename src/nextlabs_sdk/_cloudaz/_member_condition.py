@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nextlabs_sdk._cloudaz._member_dto import MemberDTO
+from nextlabs_sdk._cloudaz._member import Member
 
 
 class MemberCondition(BaseModel):
@@ -14,4 +14,4 @@ class MemberCondition(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     operator: str | None = None
-    members: list[MemberDTO] = Field(default_factory=list)
+    members: list[Member] = Field(default_factory=list)

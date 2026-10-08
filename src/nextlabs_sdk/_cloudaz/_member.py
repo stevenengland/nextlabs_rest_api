@@ -3,7 +3,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MemberDTO(BaseModel):
+class Member(BaseModel):
     """A member of a composite component.
 
     Known ``type`` values are ACTION, MEMBER, RESOURCE, and SUBJECT;
