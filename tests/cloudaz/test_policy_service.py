@@ -16,6 +16,10 @@ from nextlabs_sdk._cloudaz._policy_models import (
 )
 from nextlabs_sdk.cloudaz import Policy, PolicyRevision, PolicyService
 from nextlabs_sdk.exceptions import ApiError, NotFoundError
+from tests.cloudaz.membership_helpers import (
+    composite_policy_data,
+    dump_member_condition,
+)
 
 BASE_URL = "https://cloudaz.example.com"
 MGMT = "/console/api/v1/policy/mgmt"
@@ -103,38 +107,13 @@ def test_policy_revision_retrieval_preserves_plural_members(client_service):
     data = {
         "id": 555,
         "revision": "3",
-        "policyDetail": {
-            "id": 82,
-            "name": "Policy",
-            "status": "DRAFT",
-            "effectType": "ALLOW",
-            "subjectComponents": [
-                {
-                    "operator": "IN",
-                    "components": [
-                        {
-                            "id": 42,
-                            "memberConditions": [
-                                {
-                                    "operator": "IN",
-                                    "members": [
-                                        {"id": 87, "name": "Member", "notFound": False},
-                                    ],
-                                },
-                            ],
-                        },
-                    ],
-                },
-            ],
-        },
+        "policyDetail": composite_policy_data("IN"),
     }
     when(client).get(f"{MGMT}/viewRevision/555/3").thenReturn(_make_envelope(data=data))
 
     result = service.get_revision(555, 3)
 
-    actual = result.model_dump(by_alias=True, mode="json")["policyDetail"][
-        "subjectComponents"
-    ][0]["components"][0]["memberConditions"][0]
+    actual = dump_member_condition(result)
     assert actual["operator"] == "IN"
     assert actual["members"][0]["id"] == 87
     assert actual["members"][0]["notFound"] is False

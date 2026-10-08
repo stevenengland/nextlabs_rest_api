@@ -21,6 +21,10 @@ from nextlabs_sdk.cloudaz import (
     PolicyRevision,
     TagType,
 )
+from tests.cloudaz.membership_helpers import (
+    composite_policy_data,
+    dump_member_condition,
+)
 
 
 def _make_full_policy_data() -> dict[str, Any]:
@@ -217,30 +221,7 @@ def test_policy_component_ref_minimal():
 
 
 def test_policy_preserves_member_only_identity_changes():
-    left: dict[str, Any] = {
-        "id": 82,
-        "name": "Policy",
-        "status": "DRAFT",
-        "effectType": "ALLOW",
-        "subjectComponents": [
-            {
-                "operator": "IN",
-                "components": [
-                    {
-                        "id": 42,
-                        "memberConditions": [
-                            {
-                                "operator": "IN",
-                                "members": [
-                                    {"id": 87, "name": "Member", "notFound": False},
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            },
-        ],
-    }
+    left = composite_policy_data("IN")
     right = deepcopy(left)
     right["subjectComponents"][0]["components"][0]["memberConditions"][0]["members"][0][
         "id"
@@ -248,12 +229,7 @@ def test_policy_preserves_member_only_identity_changes():
 
     results = [Policy.model_validate(payload) for payload in (left, right)]
 
-    conditions = [
-        result.model_dump(by_alias=True, mode="json")["subjectComponents"][0][
-            "components"
-        ][0]["memberConditions"][0]
-        for result in results
-    ]
+    conditions = [dump_member_condition(result) for result in results]
     assert [condition["members"][0]["id"] for condition in conditions] == [87, 88]
     assert all(condition["members"][0]["notFound"] is False for condition in conditions)
     assert conditions[0] != conditions[1]
@@ -261,49 +237,19 @@ def test_policy_preserves_member_only_identity_changes():
 
 @pytest.mark.parametrize("operator", ["IN", "NOT"])
 def test_policy_revision_preserves_plural_members(operator):
+    members = [
+        {"id": 87, "name": "Member", "notFound": False},
+        {"id": 88, "name": "Other", "notFound": True},
+    ]
     result = PolicyRevision.model_validate(
         {
             "id": 555,
             "revision": "3",
-            "policyDetail": {
-                "id": 82,
-                "name": "Policy",
-                "status": "DRAFT",
-                "effectType": "ALLOW",
-                "subjectComponents": [
-                    {
-                        "operator": "IN",
-                        "components": [
-                            {
-                                "id": 42,
-                                "memberConditions": [
-                                    {
-                                        "operator": operator,
-                                        "members": [
-                                            {
-                                                "id": 87,
-                                                "name": "Member",
-                                                "notFound": False,
-                                            },
-                                            {
-                                                "id": 88,
-                                                "name": "Other",
-                                                "notFound": True,
-                                            },
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            },
+            "policyDetail": composite_policy_data(operator, members),
         },
     )
 
-    actual = result.model_dump(by_alias=True, mode="json")["policyDetail"][
-        "subjectComponents"
-    ][0]["components"][0]["memberConditions"][0]
+    actual = dump_member_condition(result)
     assert actual["operator"] == operator
     assert [member["id"] for member in actual["members"]] == [87, 88]
     assert [member["notFound"] for member in actual["members"]] == [False, True]

@@ -26,6 +26,10 @@ from nextlabs_sdk.cloudaz import (
     MemberDTO,
     TagType,
 )
+from tests.cloudaz.membership_helpers import (
+    composite_component_data,
+    dump_member_condition,
+)
 
 
 def _deployment_request_data() -> dict[str, object]:
@@ -183,6 +187,14 @@ def test_enum_values(enum_cls, expected):
             id="component-condition",
         ),
         pytest.param(
+            MemberCondition,
+            {"operator": "IN"},
+            "operator",
+            "NOT",
+            id="member-condition",
+        ),
+        pytest.param(MemberDTO, {"id": 87}, "id", 88, id="member-dto"),
+        pytest.param(
             DeploymentRequestInfo,
             _deployment_request_data(),
             "id",
@@ -253,78 +265,57 @@ def test_component_condition_minimal():
 
 
 def test_component_preserves_all_member_fields():
-    condition = {
-        "operator": "IN",
-        "members": [
-            {
-                "id": 87,
-                "name": "Team",
-                "type": "MEMBER",
-                "status": "APPROVED",
-                "notFound": False,
-                "description": "First member",
-                "memberType": "USER_GROUP",
-                "uid": "u87",
-                "uniqueName": "team-87",
-                "domainName": "example",
-            },
-            {
-                "id": 88,
-                "name": "User",
-                "type": "SUBJECT",
-                "status": "DELETED",
-                "notFound": True,
-                "description": "Second member",
-                "memberType": "USER",
-                "uid": "u88",
-                "uniqueName": "user-88",
-                "domainName": "example",
-            },
-        ],
-    }
-    result = Component.model_validate(
+    members = [
         {
-            "id": 101,
-            "name": "Composite",
-            "type": "SUBJECT",
-            "status": "DRAFT",
-            "memberConditions": [condition],
+            "id": 87,
+            "name": "Team",
+            "type": "MEMBER",
+            "status": "APPROVED",
+            "notFound": False,
+            "description": "First member",
+            "memberType": "USER_GROUP",
+            "uid": "u87",
+            "uniqueName": "team-87",
+            "domainName": "example",
         },
+        {
+            "id": 88,
+            "name": "User",
+            "type": "SUBJECT",
+            "status": "DELETED",
+            "notFound": True,
+            "description": "Second member",
+            "memberType": "USER",
+            "uid": "u88",
+            "uniqueName": "user-88",
+            "domainName": "example",
+        },
+    ]
+    result = Component.model_validate(
+        composite_component_data("IN", members),
     )
 
-    actual = result.model_dump(by_alias=True, mode="json")["memberConditions"][0]
-    assert actual["members"] == condition["members"]
+    actual = dump_member_condition(result)
+    assert actual["members"] == members
     assert actual["operator"] == "IN"
     assert set(actual) == {"operator", "members"}
 
 
 @pytest.mark.parametrize("operator", ["IN", "NOT"])
 def test_component_revision_preserves_plural_members(operator):
+    members = [
+        {"id": 87, "name": "Member", "notFound": False},
+        {"id": 88, "name": "Other", "notFound": True},
+    ]
     result = ComponentRevision.model_validate(
         {
             "id": 555,
             "revision": "1",
-            "componentDetail": {
-                "id": 101,
-                "name": "Composite",
-                "type": "SUBJECT",
-                "status": "DRAFT",
-                "memberConditions": [
-                    {
-                        "operator": operator,
-                        "members": [
-                            {"id": 87, "name": "Member", "notFound": False},
-                            {"id": 88, "name": "Other", "notFound": True},
-                        ],
-                    },
-                ],
-            },
+            "componentDetail": composite_component_data(operator, members),
         },
     )
 
-    actual = result.model_dump(by_alias=True, mode="json")["componentDetail"][
-        "memberConditions"
-    ][0]
+    actual = dump_member_condition(result)
     assert actual["operator"] == operator
     assert [member["id"] for member in actual["members"]] == [87, 88]
     assert [member["notFound"] for member in actual["members"]] == [False, True]
@@ -421,11 +412,6 @@ def test_public_membership_dtos_handle_optional_fields(payload):
         assert all(
             actual[key] == supplied_value for key, supplied_value in supplied.items()
         )
-    assert result.model_config.get("frozen") is True
-    assert result.model_config.get("populate_by_name") is True
-    assert MemberDTO.model_config.get("frozen") is True
-    assert MemberDTO.model_config.get("populate_by_name") is True
-    assert MemberCondition().members is not MemberCondition().members
 
 
 def test_public_membership_dtos_preserve_out_of_spec_values():

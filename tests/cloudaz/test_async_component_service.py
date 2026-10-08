@@ -15,6 +15,10 @@ from nextlabs_sdk.cloudaz import (
     ComponentRevision,
 )
 from nextlabs_sdk.exceptions import ApiError, NotFoundError
+from tests.cloudaz.membership_helpers import (
+    composite_component_data,
+    dump_member_condition,
+)
 
 BASE_URL = "https://cloudaz.example.com"
 MGMT = "/console/api/v1/component/mgmt"
@@ -125,26 +129,13 @@ def test_async_component_revision_retrieval_preserves_plural_members(ctx):
     data = {
         "id": 555,
         "revision": "1",
-        "componentDetail": {
-            "id": 101,
-            "name": "Composite",
-            "type": "SUBJECT",
-            "status": "DRAFT",
-            "memberConditions": [
-                {
-                    "operator": "NOT",
-                    "members": [{"id": 87, "name": "Member", "notFound": False}],
-                },
-            ],
-        },
+        "componentDetail": composite_component_data("NOT"),
     }
     when(client).get(f"{MGMT}/viewRevision/555/1").thenReturn(_envelope(data=data))
 
     result = _run(service.get_revision(555, 1))
 
-    actual = result.model_dump(by_alias=True, mode="json")["componentDetail"][
-        "memberConditions"
-    ][0]
+    actual = dump_member_condition(result)
     assert actual["operator"] == "NOT"
     assert actual["members"][0]["id"] == 87
     assert actual["members"][0]["notFound"] is False
