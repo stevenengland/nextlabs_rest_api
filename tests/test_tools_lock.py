@@ -123,3 +123,41 @@ def test_stale_lock_reports_the_compiled_diff(
     assert f"-{requirement}" in stderr
     assert "+example==2.0" in stderr
     assert "python tools/lock.py" in stderr
+
+
+def test_lock_check_preserves_the_recipe_across_compiler_environments(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _allow_any_python_minor()
+    committed = lock.CONSTRAINTS.read_text()
+    recipe = next(
+        line.removeprefix("#    ")
+        for line in committed.splitlines()
+        if line.startswith("#    pip-compile")
+    )
+    environment_recipe = recipe.replace("--all-extras", "--all-extras --no-index")
+
+    def run_compiler(
+        arguments: list[str],
+        **kwargs: object,
+    ) -> CompletedProcess[str]:
+        output_file = Path(
+            next(
+                argument.removeprefix("--output-file=")
+                for argument in arguments
+                if argument.startswith("--output-file=")
+            )
+        )
+        environment = kwargs.get("env", {})
+        assert isinstance(environment, dict)
+        command = environment.get("CUSTOM_COMPILE_COMMAND", environment_recipe)
+        assert isinstance(command, str)
+        output_file.write_text(committed.replace(recipe, command))
+        return CompletedProcess(args=arguments, returncode=0, stderr="")
+
+    when(lock.subprocess).run(...).thenAnswer(run_compiler)
+
+    exit_code = lock.main(["--check"])
+
+    assert exit_code == 0
+    assert capsys.readouterr().err == ""

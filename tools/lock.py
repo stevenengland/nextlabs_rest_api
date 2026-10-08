@@ -24,7 +24,9 @@ traceback included. Defects in this script keep raising normally.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -114,6 +116,26 @@ def _without_traceback_frames(output: str) -> str:
 
 
 def _compile(output_file: Path) -> None:
+    arguments = [
+        "--all-extras",
+        f"--output-file={output_file}",
+        "--strip-extras",
+        str(Path("pyproject.toml")),
+        str(DEV_COMPILE_INPUT.relative_to(ROOT)),
+        str(OVERRIDES.relative_to(ROOT)),
+    ]
+    recipe_arguments = [
+        (
+            f"--output-file={CONSTRAINTS.relative_to(ROOT)}"
+            if argument.startswith("--output-file=")
+            else argument
+        )
+        for argument in arguments
+    ]
+    environment = {
+        **os.environ,
+        "CUSTOM_COMPILE_COMMAND": shlex.join(["pip-compile", *recipe_arguments]),
+    }
     completed = subprocess.run(
         [
             sys.executable,
@@ -121,14 +143,10 @@ def _compile(output_file: Path) -> None:
             "piptools",
             "compile",
             "--quiet",
-            "--strip-extras",
-            "--all-extras",
-            f"--output-file={output_file}",
-            str(Path("pyproject.toml")),
-            str(DEV_COMPILE_INPUT.relative_to(ROOT)),
-            str(OVERRIDES.relative_to(ROOT)),
+            *arguments,
         ],
         cwd=ROOT,
+        env=environment,
         check=False,
         text=True,
         stderr=subprocess.PIPE,
