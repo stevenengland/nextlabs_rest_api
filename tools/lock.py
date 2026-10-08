@@ -121,12 +121,12 @@ def _compile(output_file: Path) -> None:
         f"--output-file={output_file}",
         "--strip-extras",
         str(Path("pyproject.toml")),
-        str(DEV_COMPILE_INPUT.relative_to(ROOT)),
-        str(OVERRIDES.relative_to(ROOT)),
+        DEV_COMPILE_INPUT.relative_to(ROOT).as_posix(),
+        OVERRIDES.relative_to(ROOT).as_posix(),
     ]
     recipe_arguments = [
         (
-            f"--output-file={CONSTRAINTS.relative_to(ROOT)}"
+            f"--output-file={CONSTRAINTS.relative_to(ROOT).as_posix()}"
             if argument.startswith("--output-file=")
             else argument
         )

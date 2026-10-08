@@ -121,8 +121,9 @@ diff. Inspect that diff before regenerating, especially when local and CI
 compiler environments disagree.
 
 The generated header keeps a canonical `pip-compile` recipe built from the
-actual source arguments. Environment-only index defaults cannot change that
-recipe; dependency pins and source metadata are still compared byte-for-byte.
+actual source arguments, with POSIX paths on every platform. Environment-only
+index defaults cannot change that recipe; dependency pins and source metadata
+are still compared byte-for-byte.
 The header retains every source input so Renovate can associate them with the
 compiled lock.
 
