@@ -28,6 +28,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from difflib import unified_diff
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -165,6 +166,18 @@ def check() -> int:
         return 0
     print(
         "requirements/constraints.txt is stale; run `python tools/lock.py` to refresh.",
+        file=sys.stderr,
+    )
+    print(
+        "".join(
+            unified_diff(
+                committed.splitlines(keepends=True),
+                fresh.splitlines(keepends=True),
+                fromfile=f"{CONSTRAINTS} (committed)",
+                tofile="compiled requirements/constraints.txt",
+            )
+        ),
+        end="",
         file=sys.stderr,
     )
     return 1

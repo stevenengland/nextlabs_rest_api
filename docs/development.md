@@ -116,6 +116,10 @@ python tools/lock.py            # regenerate requirements/constraints.txt
 python tools/lock.py --check    # verify it matches the source inputs
 ```
 
+If `--check` reports a stale lock, it also prints the committed-versus-compiled
+diff. Inspect that diff before regenerating, especially when local and CI
+compiler environments disagree.
+
 `--check` is what CI runs. If the compiler cannot resolve the inputs it exits
 non-zero with the compiler's own diagnostic plus a one-line repair
 instruction — no traceback. Read that diagnostic to tell the two causes
