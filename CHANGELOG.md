@@ -1,5 +1,89 @@
 # Changelog
 
+## 1.00.0 - 2026-10-08
+
+### nextlabs-sdk 1.0.0
+
+#### Breaking Changes
+
+- fix(cloudaz)!: preserve plural composite membership @stevenengland ([#409](https://github.com/stevenengland/nextlabs_rest_api/pull/409))
+
+#### Features
+
+- feat(deps): activate pip-compile as the sole compiled-lock owner (#<!---->381) @stevenengland ([#383](https://github.com/stevenengland/nextlabs_rest_api/pull/383))
+- feat(cloudaz): paginated-endpoint engine core + migrate component search (298/1) @stevenengland ([#318](https://github.com/stevenengland/nextlabs_rest_api/pull/318))
+
+#### Bug Fixes
+
+- fix(cloudaz)!: preserve plural composite membership @stevenengland ([#409](https://github.com/stevenengland/nextlabs_rest_api/pull/409))
+- fix(deps): update dependency cryptography to >=50.0.0,<51 @stevenengland ([#395](https://github.com/stevenengland/nextlabs_rest_api/pull/395))
+- fix(ci): pin third-party github actions to commit shas (#<!---->388) @stevenengland ([#392](https://github.com/stevenengland/nextlabs_rest_api/pull/392))
+- fix(deps): update dependency pydantic to >=2.13.4,<3.0 @stevenengland ([#374](https://github.com/stevenengland/nextlabs_rest_api/pull/374))
+- fix(deps): update dependency scim2-filter-parser to >=0.7.0,<1.0 @stevenengland ([#376](https://github.com/stevenengland/nextlabs_rest_api/pull/376))
+- fix(deps): update dependency setuptools to >=68.2.2 @stevenengland ([#377](https://github.com/stevenengland/nextlabs_rest_api/pull/377))
+- fix(deps): update renovatebot/github-action action to v46.1.21 @stevenengland ([#356](https://github.com/stevenengland/nextlabs_rest_api/pull/356))
+- fix(deps): update dependency keyring to >=24.3.1,<26 @stevenengland ([#357](https://github.com/stevenengland/nextlabs_rest_api/pull/357))
+- fix(devcontainer): make sudo hardening failure-safe @stevenengland ([#347](https://github.com/stevenengland/nextlabs_rest_api/pull/347))
+- fix(cli): name active account in inline re-auth prompt (#<!---->321) @stevenengland ([#332](https://github.com/stevenengland/nextlabs_rest_api/pull/332))
+- fix(PRD): #<!---->298 cleanup — capstone findings @stevenengland ([#331](https://github.com/stevenengland/nextlabs_rest_api/pull/331))
+- fix(deps): update renovatebot/github-action action to v46.1.20 @stevenengland ([#325](https://github.com/stevenengland/nextlabs_rest_api/pull/325))
+- fix(deps): update dependency httpx to >=0.28.1,<1.0 @stevenengland ([#326](https://github.com/stevenengland/nextlabs_rest_api/pull/326))
+- fix(deps): update dependency cryptography to >=42.0.8,<50 @stevenengland ([#310](https://github.com/stevenengland/nextlabs_rest_api/pull/310))
+- fix(deps): update dependency pyyaml to >=6.0.3 @stevenengland ([#313](https://github.com/stevenengland/nextlabs_rest_api/pull/313))
+- fix(deps): update renovatebot/github-action action to v46.1.19 @stevenengland ([#314](https://github.com/stevenengland/nextlabs_rest_api/pull/314))
+- fix(deps): update dependency defusedxml to >=0.7.1,<1.0 @stevenengland ([#311](https://github.com/stevenengland/nextlabs_rest_api/pull/311))
+
+#### Maintenance
+
+<details>
+<summary>25 changes</summary>
+- ci: adopt the shared label taxonomy @stevenengland ([#390](https://github.com/stevenengland/nextlabs_rest_api/pull/390))
+- ci: declare the lifecycle labels and regroup label colours by family @stevenengland ([#389](https://github.com/stevenengland/nextlabs_rest_api/pull/389))
+- build(deps): raise cryptography to 50.0.0 for PYSEC-2026-3552 @stevenengland ([#379](https://github.com/stevenengland/nextlabs_rest_api/pull/379))
+- ci(deps): enforce compiled-lock integrity in the required check (#<!---->382) @stevenengland ([#384](https://github.com/stevenengland/nextlabs_rest_api/pull/384))
+- test: hook-clean remaining flat tests and finalize allowlist (#<!---->343) @stevenengland ([#358](https://github.com/stevenengland/nextlabs_rest_api/pull/358))
+- test(architecture): hook-clean architecture invariant tests @stevenengland ([#355](https://github.com/stevenengland/nextlabs_rest_api/pull/355))
+- test(openapi): reorg openapi test tooling under tests/openapi/ (#<!---->341) @stevenengland ([#353](https://github.com/stevenengland/nextlabs_rest_api/pull/353))
+- test(transport): reorg + hook-clean transport tests (#<!---->340) @stevenengland ([#352](https://github.com/stevenengland/nextlabs_rest_api/pull/352))
+- test(search): reorg + hook-clean search tests (#<!---->339) @stevenengland ([#351](https://github.com/stevenengland/nextlabs_rest_api/pull/351))
+- test(pagination): move pagination and engine tests into tests/pagination (#<!---->338) @stevenengland ([#350](https://github.com/stevenengland/nextlabs_rest_api/pull/350))
+- test(pdp): reorg + hook-clean pdp tests (#<!---->337) @stevenengland ([#349](https://github.com/stevenengland/nextlabs_rest_api/pull/349))
+- refactor(tests): reorg + hook-clean cloudaz tests (#<!---->336) @stevenengland ([#348](https://github.com/stevenengland/nextlabs_rest_api/pull/348))
+- test(auth): prove env passphrase beats a viable keyring source @stevenengland ([#346](https://github.com/stevenengland/nextlabs_rest_api/pull/346))
+- refactor(tests): reorg + hook-clean auth/token-cache tests (#<!---->335) @stevenengland ([#345](https://github.com/stevenengland/nextlabs_rest_api/pull/345))
+- refactor(tests): reorg + hook-clean CLI tests (#<!---->334) @stevenengland ([#344](https://github.com/stevenengland/nextlabs_rest_api/pull/344))
+- test(architecture): pin engine contracts across migrated cloudaz services (#<!---->304) @stevenengland ([#330](https://github.com/stevenengland/nextlabs_rest_api/pull/330))
+- refactor(cloudaz): migrate reports onto paginated engine @stevenengland ([#329](https://github.com/stevenengland/nextlabs_rest_api/pull/329))
+- refactor(cloudaz): migrate audit logs and activity logs onto paginated engine @stevenengland ([#328](https://github.com/stevenengland/nextlabs_rest_api/pull/328))
+- refactor(cloudaz): migrate reporter audit logs onto paginated engine @stevenengland ([#327](https://github.com/stevenengland/nextlabs_rest_api/pull/327))
+- refactor(cloudaz): migrate component-type, policy, and tag search onto paginated engine @stevenengland ([#322](https://github.com/stevenengland/nextlabs_rest_api/pull/322))
+- refactor(cli): extract policy detail renderer (#<!---->278) @stevenengland ([#317](https://github.com/stevenengland/nextlabs_rest_api/pull/317))
+- refactor(cli): extract diff orchestration into _diff/_orchestrate (#<!---->277) @stevenengland ([#316](https://github.com/stevenengland/nextlabs_rest_api/pull/316))
+- refactor(cli): extract search-criteria assembly into _policy_search_args (#<!---->276) @stevenengland ([#315](https://github.com/stevenengland/nextlabs_rest_api/pull/315))
+- build(deps): adopt pip-compile compiled lock @stevenengland ([#312](https://github.com/stevenengland/nextlabs_rest_api/pull/312))
+- ci(deps): add Renovate configuration and workflow @stevenengland ([#309](https://github.com/stevenengland/nextlabs_rest_api/pull/309))
+
+</details>
+#### Dependencies
+
+<details>
+<summary>12 changes</summary>
+- fix(deps): update dependency cryptography to >=50.0.0,<51 @stevenengland ([#395](https://github.com/stevenengland/nextlabs_rest_api/pull/395))
+- fix(deps): update dependency pydantic to >=2.13.4,<3.0 @stevenengland ([#374](https://github.com/stevenengland/nextlabs_rest_api/pull/374))
+- fix(deps): update dependency scim2-filter-parser to >=0.7.0,<1.0 @stevenengland ([#376](https://github.com/stevenengland/nextlabs_rest_api/pull/376))
+- fix(deps): update dependency setuptools to >=68.2.2 @stevenengland ([#377](https://github.com/stevenengland/nextlabs_rest_api/pull/377))
+- fix(deps): update renovatebot/github-action action to v46.1.21 @stevenengland ([#356](https://github.com/stevenengland/nextlabs_rest_api/pull/356))
+- fix(deps): update dependency keyring to >=24.3.1,<26 @stevenengland ([#357](https://github.com/stevenengland/nextlabs_rest_api/pull/357))
+- fix(deps): update renovatebot/github-action action to v46.1.20 @stevenengland ([#325](https://github.com/stevenengland/nextlabs_rest_api/pull/325))
+- fix(deps): update dependency httpx to >=0.28.1,<1.0 @stevenengland ([#326](https://github.com/stevenengland/nextlabs_rest_api/pull/326))
+- fix(deps): update dependency cryptography to >=42.0.8,<50 @stevenengland ([#310](https://github.com/stevenengland/nextlabs_rest_api/pull/310))
+- fix(deps): update dependency pyyaml to >=6.0.3 @stevenengland ([#313](https://github.com/stevenengland/nextlabs_rest_api/pull/313))
+- fix(deps): update renovatebot/github-action action to v46.1.19 @stevenengland ([#314](https://github.com/stevenengland/nextlabs_rest_api/pull/314))
+- fix(deps): update dependency defusedxml to >=0.7.1,<1.0 @stevenengland ([#311](https://github.com/stevenengland/nextlabs_rest_api/pull/311))
+
+</details>
+**Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.14.1...1.0.0
+
 ## 0.14.1 - 2026-07-08
 
 ### nextlabs-sdk 0.14.1
@@ -50,7 +134,6 @@
 </details>
 **Full Changelog**: https://github.com/stevenengland/nextlabs_rest_api/compare/0.13.0...0.14.0
 ## 0.13.0 - 2026-06-26
-
 ### nextlabs-sdk 0.13.0
 
 #### Features
