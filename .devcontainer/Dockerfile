@@ -1,5 +1,5 @@
 # Use the official Python 3.12 image
-FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
+FROM mcr.microsoft.com/devcontainers/python:3.14-bookworm
 
 # Pre-seed so Docker initializes the volume with correct ownership
 RUN mkdir -p /home/vscode/.vscode-server /home/vscode/.claude /home/vscode/.copilot \
